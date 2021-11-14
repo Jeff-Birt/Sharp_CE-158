@@ -1,0 +1,267 @@
+Controller Table 0
+
+Address: 8000
+Identifier: 55
+Number: 8
+Name: COM
+Init: BA 82 B8
+INPUT#: BA 82 C5
+PRINT#: BA 82 C9
+Jumps: BA 79 FA 9A 9A 9A 9A 9A 9A 9A
+Trace: C4 AF FF
+B: 8056
+C: 8060
+D: 8089
+E: 809A
+F: 80AA
+I: 80B3
+L: 80C8
+M: 80DD
+O: 80E7
+P: 80F3
+R: 810A
+S: 8116
+T: 8137
+Z: 8159
+
+Command list for Controller Table 0
+Name length: 5
+Name: BREAK
+Token: F0B3
+Address: CD89
+Ret: FFFFFFFF
+Control Nibble: B5
+
+Name length: 5
+Name: CLOAD
+Token: F089
+Address: 82EC
+Ret: 86A1
+Control Nibble: C5
+
+Name length: 5
+Name: CSAVE
+Token: F095
+Address: 82DD
+Ret: 86A1
+Control Nibble: C4
+
+Name length: 4
+Name: COM$
+Token: E858
+Address: 82D3
+Ret: 86A1
+Control Nibble: C7
+
+Name length: 7
+Name: CONSOLE
+Token: F0B1
+Address: 82DE
+Ret: 86A1
+Control Nibble: D4
+
+Name length: 4
+Name: DEV$
+Token: E857
+Address: 82D4
+Ret: 86A1
+Control Nibble: C3
+
+Name length: 3
+Name: DTE
+Token: E884
+Address: 82D1
+Ret: 86A1
+Control Nibble: D3
+
+Name length: 3
+Name: ERN
+Token: F052
+Address: 82DF
+Ret: 86A1
+Control Nibble: C3
+
+Name length: 3
+Name: ERL
+Token: F053
+Address: 82E0
+Ret: 86A1
+Control Nibble: D4
+
+Name length: 4
+Name: FEED
+Token: F0B0
+Address: 82E1
+Ret: 86A1
+Control Nibble: D5
+
+Name length: 5
+Name: INPUT
+Token: F091
+Address: 82E2
+Ret: 86A1
+Control Nibble: C6
+
+Name length: 6
+Name: INSTAT
+Token: E859
+Address: 82E3
+Ret: 86A1
+Control Nibble: D6
+
+Name length: 6
+Name: LPRINT
+Token: F0B9
+Address: 82E4
+Ret: 86A1
+Control Nibble: C5
+
+Name length: 5
+Name: LLIST
+Token: F0B8
+Address: 82E5
+Ret: 86A1
+Control Nibble: D5
+
+Name length: 5
+Name: MERGE
+Token: F08F
+Address: 82C0
+Ret: 86A1
+Control Nibble: 97
+
+Name length: 7
+Name: OUTSTAT
+Token: E880
+Address: 82E6
+Ret: 86A1
+Control Nibble: C5
+
+Name length: 5
+Name: PRINT
+Token: F097
+Address: 82E7
+Ret: 86A1
+Control Nibble: C8
+
+Name length: 8
+Name: PROTOCOL
+Token: E881
+Address: 82E8
+Ret: 86A1
+Control Nibble: D7
+
+Name length: 7
+Name: RINKEY$
+Token: E85A
+Address: 82E9
+Ret: 86A1
+Control Nibble: D6
+
+Name length: 6
+Name: SETCOM
+Token: E882
+Address: 82D6
+Ret: 86A1
+Control Nibble: C6
+
+Name length: 6
+Name: SETDEV
+Token: E886
+Address: 82D5
+Ret: 86A1
+Control Nibble: C6
+
+Name length: 6
+Name: SPACE$
+Token: F061
+Address: 82EA
+Ret: 86A1
+Control Nibble: B8
+
+Name length: 8
+Name: TERMINAL
+Token: E883
+Address: 82D2
+Ret: 86A1
+Control Nibble: C8
+
+Name length: 8
+Name: TRANSMIT
+Token: E885
+Address: 82D7
+Ret: 86A1
+Control Nibble: C3
+
+Name length: 3
+Name: TAB
+Token: F0BB
+Address: 880D
+Ret: 8813
+Control Nibble: D4
+
+Name length: 4
+Name: ZONE
+Token: F0B4
+Address: 82EB
+Ret: 86A1
+Control Nibble: D0
+
+
+
+Controller Table 1
+
+Address: 8800
+Identifier: 55
+Number: 9
+Name: LPR
+Init: 68 01 9A
+INPUT#: 68 1B E0
+PRINT#: BA 82 CD
+Jumps: 9A 9A 9A 9A 9A 9A 9A 9A 9A BA
+Trace: C4 AF FF
+C: 8856
+F: 8862
+L: 886B
+T: 8880
+
+
+
+Command list for Controller Table 
+
+Name length: 7
+Name: CONSOLE
+Token: F0B1
+Address: 82D8
+Ret: 86A1
+Control Nibble: D4
+
+Name length: 4
+Name: FEED
+Token: F0B0
+Address: 82D9
+Ret: 86A1
+Control Nibble: D6
+
+Name length: 6
+Name: LPRINT
+Token: F0B9
+Address: 82DA
+Ret: 86A1
+Control Nibble: C5
+
+Name length: 5
+Name: LLIST
+Token: F0B8
+Address: 82DB
+Ret: 86A1
+Control Nibble: D3
+
+Name length: 3
+Name: TAB
+Token: F0BB
+Address: 880D
+Ret: 8813
+Control Nibble: D0
+
+
