@@ -152,13 +152,13 @@ SEPARATOR_8161:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8169 - Sends charecter in A to LPT
+; CHAR2LPT - Sends charecter in A to LPT
 ; Same as High Bank
 ; Called from 826E, 9307, 956D
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
-SUB_8169:
+CHAR2LPT:
 8169	FD C8               PSH	    A                           ; A is the ASCII charecter from input buffer?
 816B	B5 7F               LDI	    A,7F                        ; 
 816D	FD AE D0 0D         STA     #(CE158_PRT_B_DIR)          ; Bit 7 Read (BUSY), (ME1)
@@ -356,7 +356,7 @@ BRANCH_8265: ; Branched to from 8275, 8279
 8265	FD ED F0 0B 02      BII	    #(PC1500_IF_REG),02         ; (IF1) Set on rising edge of PB7 input
 826A	89 45               BZR+    BRANCH_82B1                 ; If Bit 1 was set = done?, return path.
 826C	FD C8               PSH	    A                           ; 
-826E	BE 81 69            SJP     SUB_8169                    ; Sends charecter in A to LPT, Returns A as failure type
+826E	BE 81 69            SJP     CHAR2LPT                    ; Sends charecter in A to LPT, Returns A as failure type
 8271	89 0D               BZR+    BRANCH_8280                 ; A = 20 Low Battery, A = 00 is could not send?
 8273	FD 8A               POP	    A                           ;
 8275	88 12               LOP     UL,BRANCH_8265              ; UL = UL - 1, loop back e if Borrow Flag not set
@@ -522,24 +522,24 @@ SPACE$:
 82EA	F9                  REC                         ; Reset Carry Flag, does nothing drop through
 
 ZONE:
-82EB	F9                  sREC                         ; Reset Carry Flag, does nothing drop through
+82EB	F9                  REC                         ; Reset Carry Flag, does nothing drop through
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; MAIN_ENTRY/CLOAD - Called from 82BE, 82C3, 82C7, 82CB, 82CF
-; Arguments: XL = INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF
+; Arguments: XL = INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF, MERGE=F0
 ; Outputs:
 ; RegMod: U, A, X
 MAIN_ENTRY/CLOAD:
 82EC	FD BE           RIE                         ; Disable interrupts
 82EE	E9 78 50 F7     ANI     (OUTSTAT_REG),F7    ; Clear Bit 3 = DCD
-82F2	68 7A           LDI	    UH,7A               ; Load UH, UL with MATH_REG_Wa_B1
-82F4	6A 28           LDI	    UL,28               ; U = 7A23
+82F2	68 7A           LDI	    UH,7A               ; Point U to AR-W (MATH_REG_Wa_B1)
+82F4	6A 28           LDI	    UL,28               ; U = 7A28
 82F6	B5 E1           LDI	    A,E1                ; Intialize $7A28-$7A31 to: 
 82F8	61              SIN     U                   ; $E1 $BA $82 $F0 ->
 82F9	B5 BA           LDI	    A,BA                ; SPU, JMP $82F0
-82FB	61              SIN     U                   ; This code segent sets PU to 
+82FB	61              SIN     U                   ; This code segment sets PU to 
 82FC	B5 82           LDI	    A,82                ; bank in upper half of
 82FE	61              SIN     U                   ; the CE-158 ROM
 82FF	B5 F0           LDI	    A,F0                ; 
@@ -547,21 +547,41 @@ MAIN_ENTRY/CLOAD:
 8302	BA 7A 28        JMP	    MATH_REG_Wa_B1      ; poked in above, swtiches to HI bank.
 
 
-BACK_FROM_HI_BANK:
+BACK_FROM_HI_BANK:                                  ; X = INIT=880A, INPUT#=9660, PRINT=#93D0, PRINT#2=93D4, MERGE=901C
 8305	FD 81           SIE                         ; Enable interrupts, X = new address passed from high bank
-8307	FD 5E           STX     P                   ; *** where will this take us?
+8307	FD 5E           STX     P                   ; *** where will this take us? ***JMP
 
-; not sure how reached
+
+;------------------------------------------------------------------------------------------------------------
+; ERL - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+ERL:
 8309	F4 78 B4        VEJ     (F4),ERR_LINE_H     ; Loads U-Reg with 16-bit value from address of ($78B4) 
 830C	4A 6C           LDI     XL,6C               ; X = DA6C?
 830E	48 DA           LDI     XH,DA               ; 
 8310	8E 51           BCH+	BRANCH_8363         ; Branch unconditional, hit anohter branch to a SJP
 
-; not sure how reached
+
+
+;------------------------------------------------------------------------------------------------------------
+; ERN - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+; Branched to via High Bank
+ERN:
 8312	A5 78 9B        LDA     (ERRORNUM)          ; *** How reached? Load error #, if any, into Accumulator
 8315	8E 19           BCH+	BRANCH_8330         ; Branch unconditional
 
-; not sure how reached
+
+;------------------------------------------------------------------------------------------------------------
+; PROTOCOL - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+PROTOCOL:
 8317	C2 F1 9C 05     VEJ     (C2),ON,BRANCH_8320 ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
 831B	E9 78 56 7F     ANI	    (ZONE_REG),7F       ; AND ZONE_REG (&7856) with $7F
 831F	E2              VEJ     (E2)                ; Start of Basic Interpreter
@@ -573,6 +593,15 @@ BRANCH_8320: ;branched to from 8317
 
 BRANCH_8329: ;branched to from 8320
 8329	E4              VEJ     (E4)                ; Output error 1 and return to the editor
+
+
+
+;------------------------------------------------------------------------------------------------------------
+; INSTAT - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+INSTAT:
 832A	FD A5 D0 0E     LDA     #(CE158_PRT_A)      ; 
 832E	B9 1F           ANI     A,1F                ; Clear bits 5-7, Low Battery / 2 of Baud Rate Select Bits
 
@@ -580,6 +609,13 @@ BRANCH_8330: ;branched to from 8315
 8330	4A E4	        LDI     XL,E4               ;
 8332	8E 2C	        BCH+	BRANCH_8360         ; Branch forward unconditional
 
+
+;------------------------------------------------------------------------------------------------------------
+; OUTSTAT - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+OUTSTAT:
 8334	DE 20	        VEJ     (DE),BRANCH_8356    ; Calc formula Y-reg points to, res to AR-X, Branch fwd 20 to 8356 on error
 8336	D0 04 1D	    VEJ     (D0),04,BRANCH_8356 ; Convert AR-X to INT send to U, range of 4, branch fwd 1D to 8356 on error
 8339	E9 7A 06 03	    ANI	    (MATH_REG_Xa_B7),03 ; keep bits 0-1
@@ -595,6 +631,14 @@ BRANCH_8330: ;branched to from 8315
 
 BRANCH_8356: ; branched to from 8334, 8336
 8356	E0	            VEJ     (E0)                ; Indicates if UH is not "00" error message
+
+
+;------------------------------------------------------------------------------------------------------------
+; RINKY$ - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+RINKY$:
 8357	BE 81 E6	    SJP 	SUB_81E6            ; Manipulates LPT/UART registers
 835A	81 02	        BCR+    BRANCH_835E         ; REC = Success, A = Failure type or UART data read
 835C	B5 00	        LDI	    A,00                ; 
@@ -608,6 +652,14 @@ BRANCH_8360: ; branched to from 8332
 
 BRANCH_8363: ;branched to from 8310
 8363	8E 97	        BCH+	BRANCH_83FC         ; Branch forward unconditional
+
+
+;------------------------------------------------------------------------------------------------------------
+; CONSOLE - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+CONSOLE:
 8365	C8 5F	        VEJ     (C8),BRANCH_83C6    ; Syntax check: Jump fwd 5F (83C6) if not end of line/sequence 
 
 8367	6A 00	        LDI     UL,00               ;
@@ -693,6 +745,15 @@ BRANCH_83D6: ;branched to from 8382, 8384, 839A, 839C, 83C7, 83C9
 
 BRANCH_83D7: ;branched to from 837F, 8397
 83D7	E4	            VEJ     (E4)                ; Output error 1 and return to the editor
+
+
+
+;------------------------------------------------------------------------------------------------------------
+; SPACE$_ZONE - Branched to via High Bank
+; Arguments:
+; Outputs:
+; RegMod:
+SPACE$_ZONE:
 83D8	D0 08 1D	    VEJ     (D0),08,BRANCH_83F8 ; Convert AR-X to INT send to U, range of 8, branch fwd 1D to 83F8 on error
 83DB	6E 21	        CPI	    UL,21               ;
 83DD	68 19	        LDI	    UH,19               ; 
@@ -732,7 +793,7 @@ BRANCH_840A:
 840D	B5 24           LDI	    A,24                ; SPU swtiches to High Bank of ROM
 840F	AE 7A 31        STA	    (7A31)              ; next opcode
 8412	B5 FD           LDI     A,FD                ; then: (24)      LDA UL
-8414	AE 7A 32        STA	    (7A32)              ;       (FD 5E)   STX P
+8414	AE 7A 32        STA	    (7A32)              ;       (FD 5E)   STX P ***JMP
 8417	B5 5E           LDI	    A,5E                ; Which saves X-Reg (8013) to PC (X set in 83F8)
 8419	AE 7A 33        STA	    (7A33)              ; i.e. this is destination address
 841C	BA 7A 30        JMP	    SREG                ; 8013 == B_TBL_8000_JMPS, low ROM is just (9A) RET
@@ -1064,23 +1125,36 @@ TABLE_8887:
 ; RegMod:
 8FFD	F9                REC                                   ; Reset Carry
 8FFE	C5 C2 23 23       VHR       (C2),23,BRANCH_9025         ; If Half-Carry Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+
+INPUT:
+8FFF
+
 9002	B5 84             LDI	    A,84                        ;
 9004	AE 78 79          STA	    (7879)                      ;
 9007	C2 2D 1A          VEJ       (C2),2D,BRANCH_9024         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
 
 BRANCH_900A: ; branched to from 9018
 900A	BA E4 F6          JMP	    E4F6                        ;
+
+
+PRINT:
 900D	C2 23 12          VEJ       (C2),23,BRANCH_9022         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
 9010	B5 04             LDI	    A,04                        ;
 9012	AE 78 79          STA	    (7879)                      ;
 9015	C2 2D 0B          VEJ       (C2),2D,BRANCH_9023         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
 9018	9E 10             BCH-	    BRANCH_900A                 ;
 
+CSAVE:
 901A	F9                REC                                   ; Reset Carry
+
+CLOAD:
 901B	F9                REC                                   ; Reset Carry
+
+MERGE:
 901C	F9                REC                                   ; Reset Carry
 
-BRANCH_901D: ; branched to from 905C, 905F
+
+LLIST: ; branched to from 905C, 905F
 901D	C0                VEJ       (C0)                        ; Load next character/token to U-Reg
 901E	B5 04             LDI	    A,04                        ;
 9020	FD CA             ADR	    X                           ; X = X + A + Carry
@@ -1131,6 +1205,8 @@ BRANCH_904E: ; branched to from 9043
 9052	05                LDA	    (X)                         ;
 9053	BA 7A 00          JMP	    XREG                        ;
 
+
+LPRINT:
 9056	4A 18             LDI	    XL,18                       ;
 9058	ED 78 56 40       BII	    (ZONE_REG),40               ;
 905C	9B 41             BZS-      BRANCH_901D                 ;
@@ -1140,7 +1216,7 @@ BRANCH_904E: ; branched to from 9043
 9063	FD 28             LDX       U                           ; X = U
 9065	68 1B             LDI	    UH,1B                       ;
 9067	C9 E0             VZR       (E0)                        ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
-9069	FD 5E             STX       P                           ; P = X.  Program_Counter = X
+9069	FD 5E             STX       P                           ; P = X.  Program_Counter = X ***JMP
 
 906B	04                LDA	    XL                          ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg  
 906C	B2                ADC	    VH                          ; bogus
@@ -1557,7 +1633,7 @@ BRANCH_926F: ; branched to from 9269
 
 BRANCH_927B: ; branched to from 9276
 927B	FD 28             LDX       U                       ; X=U
-927D	FD 5E             STX       P                       ; X to Program Counter
+927D	FD 5E             STX       P                       ; X to Program Counter ***JMP
 
 BRANCH_927F: ; branched to from 9270
 927F	4B FF             ORI	    (X),FF                  ;
@@ -1816,9 +1892,18 @@ BRANCH_93C3: ; branched to from 93CD
 
 93CF	FF                .BYTE FF                          ; unused byte
 
+
+;------------------------------------------------------------------------------------------------------------
+; PRINT#, PRINT#2 Jumped to from 8307 
+; 
+; Arguments:
+; Output:
+; RegMod:
+PRINT#
 93D0	B5 C0             LDI	    A,C0                    ; Not reached?
 93D2	8E 07             BCH+	    BRANCH_93DB             ;
 
+PRINT#2: Jumped to from 8307 
 93D4	B5 C4             LDI	    A,C4                    ; Not reached?
 93D6	8E 03             BCH+	    BRANCH_93DB             ;
 
@@ -2214,11 +2299,12 @@ SEPARATOR_9651:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9660 - Called from 
+; INPUT# - Called from 8307
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
+INPUT#:
 9660	B5 C0             LDI	    A,C0                    ;
 9662	AE 7B 9E          STA	    (7B9E)                  ;
 9665	C2 25 46          VEJ	    (C2),25,BRANCH_96AE     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
@@ -2497,14 +2583,19 @@ SEPARATOR_981B:
 981B	FF 00 FF 01
 
 
+
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_981F - Called from 
+; FEED - Called from 
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_981F:
 981F	BF A5             BII	    A,A5                    ;
+
+FEED:
+9020
+
 9821	79 D1             ANI	    (V),D1                  ; bugus?
 9823	AE 7B 9E          STA	    (7B9E)                  ;
 9826	B5 6C             LDI	    A,6C                    ;
@@ -2551,6 +2642,7 @@ BRANCH_985E: ; branched to from 9832, 9834, 984C, 9851
 SEPARATOR_9862:
 9862	00 FF 00 FF 45 F7 00 FF   00 FF 00 FF 02 FF
 
+
 9870	DE 14             VEJ	    (DE),BRANCH_9886        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 9872	D0 09 11          VEJ       (D0),09,BRANCH_9886     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
 9875	68 35             LDI	    UH,35                   ;
@@ -2563,6 +2655,7 @@ SEPARATOR_9862:
 
 BRANCH_9886: ; branched to from 9870, 9872
 9886	E0                VEJ       (E0)                    ; Indicates if UH is not "00" error message
+
 
 
 TBL_9887:

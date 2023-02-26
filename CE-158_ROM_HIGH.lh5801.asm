@@ -3,6 +3,7 @@
 .ORG $8000
 
 ;------------------------------------------------------------------------------------------------------------
+; BASIC Table 8000 - (Second table at 8800)
 B_TBL_8000:
 8000	55                  .BYTE   55                          ; Marker that BASIC Table follows 
 
@@ -31,7 +32,7 @@ B_TBL_8000_TRACE:
 801D	C4 AF FF            VEJ     (C4),AF,811F                ; Correct per book. Not used?
 
 B_TBL_8000_A_KW:
-8020	00 00               .BYTE   00 00
+8020	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_B_KW:
 8022	80 56               .BYTE   80 56                       ; $8056
@@ -49,19 +50,19 @@ B_TBL_8000_F_KW:
 802A	80 AA               .BYTE   80 AA                       ; $80AA
 
 B_TBL_8000_G_KW:
-802C	00 00               .BYTE   00 00  
+802C	00 00               .BYTE   00 00                        ; N/A
 
 B_TBL_8000_H_KW:
-802E	00 00               .BYTE   00 00 
+802E	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_I_KW:
 8030	80 B3               .BYTE   80 B3                       ; $80B3
 
 B_TBL_8000_J_KW:
-8032	00 00               .BYTE   00 00  
+8032	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_K_KW:
-8034	00 00               .BYTE   00 00  
+8034	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_L_KW:
 8036	80 C8               .BYTE   80 C8                       ; $80C8
@@ -70,7 +71,7 @@ B_TBL_8000_M_KW:
 8038	80 DD               .BYTE   80 DD                       ; $80DD
 
 B_TBL_8000_N_KW:
-803A	00 00               .BYTE   00 00 
+803A	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_O_KW:
 803C	80 E7               .BYTE   80 E7                       ; $80E7
@@ -79,7 +80,7 @@ B_TBL_8000_P_KW:
 803E	80 F3               .BYTE   80 F3                       ; $80F3
 
 B_TBL_8000_Q_KW:
-8040	00 00               .BYTE   00 00 
+8040	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_R_KW:
 8042	81 0A               .BYTE   81 0A                       ; $810A
@@ -91,19 +92,19 @@ B_TBL_8000_T_KW:
 8046	81 37               .BYTE   81 37                       ; $8137
 
 B_TBL_8000_U_KW:
-8048	00 00               .BYTE   00 00
+8048	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_V_KW:
-804A	00 00               .BYTE   00 00 
+804A	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_W_KW:
-804C	00 00               .BYTE   00 00
+804C	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_X_KW:
-804E	00 00               .BYTE   00 00  
+804E	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_Y_KW:
-8050	00 00               .BYTE   00 00 
+8050	00 00               .BYTE   00 00                       ; N/A
 
 B_TBL_8000_Z_KW:
 8052	81 59               .BYTE   81 59                       ; $8159
@@ -148,12 +149,12 @@ SEPARATOR_8161:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8169 - Sends charecter in A to LPT
+; CHAR2LPT - Sends charecter in A to LPT
 ; Called from SUB_PRINT#:9307, SUB_PRINT#:956D, 826E
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
-SUB_8169:
+CHAR2LPT:
 8169	FD C8               PSH	    A                           ; A is the ASCII charecter from input buffer?
 816B	B5 7F               LDI	    A,7F                        ; 
 816D	FD AE D0 0D         STA     #(CE158_PRT_B_DIR)          ; Bit 7 Read (BUSY), (ME1)
@@ -205,21 +206,21 @@ BRANCH_81B8: ; Branced from 817E                                ; Return here if
 
 
 ; -----------------------------------------------------------------------------------------------------------
-; SUB_81BC - Sends charecter in A to RS232 Port
-; Called from SUB_8745:875B, UNKNOWN_87DE:87EA, JMP_90B1:90B1, JMP_9ED0:9EF0, 8247
+; CHAR2COM - Sends charecter in A to RS232 Port
+; Called from STRNG_2COM:875B, NULL2COM, JMP_90B1:90B1, JMP_9ED0:9EF0, 8247
 ; Arguments: A charecter to send
 ; Outputs: REC = Success, A = #(CE158_PRT_A) Bits 5-2  on failure
 ; RegMod: A
-SUB_81BC:
+CHAR2COM:
 81BC	FB                  SEC                                 ; Set Carry Flag
 81BD	FD A8               PSH     U                           ; Save U.
-81BF	2A                  STA	    UL                          ; A is cahrecter to send
+81BF	2A                  STA	    UL                          ; A is charecter to send
 81C0	FD A5 D0 0E         LDA	    #(CE158_PRT_A)              ; #(CE158_PRT_A) is LPT/RS232 I/F Ctrl (ME1)
 81C4	FD A9 D0 0E         AND	    #(CE158_PRT_A)              ; Filter out changes (ME1)
 81C8	B9 3C               ANI	    A,3C                        ; Keep Bits 2->CTS, 3->CD 
                                                                 ; 4->DSR, 5->Low Battery
 81CA	89 17               BZR+    BRANCH_81E3                 ; Branch fwd if any bit 5-2 is set
-81CC	A5 78 57            LDA	    (SETDEV_VAL)                ; (SETDEV_VAL) = What device directed to RS232
+81CC	A5 78 57            LDA	    (SETDEV_REG)                ; (SETDEV_REG) = What device directed to RS232
 81CF	B9 C0               ANI	    A,C0                        ; Keep Bits 7-6, not sure waht these two are
 81D1	D9                  SHL                                 ; A = A < 1. Left through Carry, 0 carried into MSB
 81D2	83 02               BCS+    BRANCH_81D6                 ; Branch fwd if Bit 7 was set
@@ -240,26 +241,26 @@ BRANCH_81E3: ; Branched to from 81DB
 
 
 ;-------------------------------------------------------------------------------------------------------------
-; SUB_81E6 - Manipulates LPT/UART registers
+; IOCFG - Configures LPT/UART registers
 ; called from 8CBD, 99BC.  Alt entry at 822C, 8CBD
 ; Arguments: None
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
-SUB_81E6: 
+IOCFG: 
 81E6	FD A5 D0 0E         LDA	    #(CE158_PRT_A)              ; #(CE158_PRT_A) is LPT/RS232 control (ME1)
 81EA	FD A9 D0 0E         AND     #(CE158_PRT_A)              ; Filter out changes
 81EE	B9 3C               ANI     A,3C                        ; Keep Bits 2->CTS, 3->CD 
                                                                 ; 4->DSR, 5->Low Battery
 81F0	89 3E               BZR+    BRANCH_8230                 ; Branch fwd if any bits 5-2 were set
 81F2	FD A5 D2 03         LDA     #(UART_REG_R)               ; A = #(UART_REG_R) (ME1)
-81F6	ED 78 57 40         BII	    (SETDEV_VAL),40             ; Keep Bit 6 (BREAK), not sure what bits 5-6-7 are
+81F6	ED 78 57 40         BII	    (SETDEV_REG),40             ; Keep Bit 6 (BREAK), not sure what bits 5-6-7 are
 81FA	8B 01               BZS+    BRANCH_81FD                 ; Branch fwd if Bit 6 was not set
 81FC	D9                  SHL                                 ; A = A << 1. Left through Carry, 0 into MSB
 
 BRANCH_81FD: ; Branched to from 81FA
 81FD	BF 02               BII	    A,02                        ; FLAGS = (#(UART_REG_R) << 1) & 02. Keep original Bit 0
 81FF	8B 2B               BZS+    BRANCH_822C                 ; Branch fwd if Bit 1 (Orig Bit 0) not set
-8201	ED 78 57 80         BII	    (SETDEV_VAL),80             ; Keep Bit 7, not sure what bits 5, 6, 7 are
+8201	ED 78 57 80         BII	    (SETDEV_REG),80             ; Keep Bit 7, not sure what bits 5, 6, 7 are
 8205	8B 01               BZS+    BRANCH_8208                 ; Branch fwd if Bit 7 not set 
 8207	D9                  SHL                                 ; A = (#(UART_REG_R) << 2)
 
@@ -267,7 +268,7 @@ BRANCH_8208: ; Branched to from 8205
 8208	BF 70               BII	    A,70                        ; Keep bit 6-4, Bits 4-2 from original #(UART_REG_R)
 820A	8B 1A               BZS+    BRANCH_8226                 ; Branch fwd if any Bits 6-4 were not set (Orig Bits 4-2)
 820C	FD A5 D2 02         LDA     #(UART_DATA_R)              ; (ME1)
-8210	ED 78 57 20         BII	    (SETDEV_VAL),20             ; Not sure what bits 5, 6, 7 are
+8210	ED 78 57 20         BII	    (SETDEV_REG),20             ; Not sure what bits 5, 6, 7 are
 8214	8B 0C               BZS+    BRANCH_8222                 ; Branch fwd if Bit 5 not set
 8216	B5 15               LDI	    A,15                        ;
 8218	FD AE D2 01         STA     #(UART_REG_W)               ; Writing UART control reg (ME1)
@@ -301,7 +302,7 @@ BRANCH_8237: ; Branched to from 824A to borrow return
 
 
 ;------------------------------------------------------------------------------------------------------------
-; Called from ?? - Sends charecter in A to RS232 Port.
+; Called from ?? - Sends charecter in A to RS232 Port. ***
 ; not sure what calls into this sub yet
 ; Arguments: A charecter to send
 ; Outputs:
@@ -313,7 +314,7 @@ BRANCH_823E: ; Branched to from 8250, 8256
 823E	FD ED F0 0B 02      BII	    #(PC1500_IF_REG),02         ; PC-1500 - IF Register Input / Output, keep Bit 1 (Key Strobe?)
 8243	89 6E               BZR+    BRANCH_82B3                 ; If Bit 1 was set branch fwd to an exit
 8245	FD C8               PSH	    A                           ; Save A
-8247	BE 81 BC            SJP     SUB_81BC                    ; Sends charecter in A to RS232 Port
+8247	BE 81 BC            SJP     CHAR2COM                    ; Sends charecter in A to RS232 Port
 824A	91 15               BCR-    BRANCH_8237                 ; Carry Reset = success
 824C	D5                  SHR                                 ;  returns A = #(PRT_A_IO) Bits 5-2 on failure
 824D	D5                  SHR                                 ; A = A >> 2. Through carry. 0 into MSB
@@ -331,7 +332,8 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_825B - Sends data to LPT output function
+; SUB_825B - Sends data to LPT output function 
+; Called from? ***
 ; Arguments: A = charecter to send
 ; Outputs: A: Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
@@ -347,7 +349,7 @@ BRANCH_8265: ; Branched to from 8275, 8279
 8265	FD ED F0 0B 02      BII	    #(PC1500_IF_REG),02         ; (IF1) Set on rising edge of PB7 input
 826A	89 45               BZR+    BRANCH_82B1                 ; If Bit 1 was set = done?, return path.
 826C	FD C8               PSH	    A                           ; 
-826E	BE 81 69            SJP     SUB_8169                    ; Sends charecter in A to LPT, Returns A as failure type
+826E	BE 81 69            SJP     CHAR2LPT                    ; Sends charecter in A to LPT, Returns A as failure type
 8271	89 0D               BZR+    BRANCH_8280                 ; A = 20 Low Battery, A = 00 is could not send?
 8273	FD 8A               POP	    A                           ;
 8275	88 12               LOP     UL,BRANCH_8265              ; UL = UL - 1, loop back e if Borrow Flag not set
@@ -370,7 +372,7 @@ BRANCH_8280: ; Branched to from 8271,                           ; Got here becau
 BRANCH_8292: ; Branched to from 82A0, 82A9
 8292	FD ED F0 0B 02      BII	    #(PC1500_IF_REG),02         ; (IF1) Set on rising edge of PB7 input
 8297	89 1A               BZR+    BRANCH_82B3                 ; If PB7 was set ON key input?
-8299	BE 81 E6            SJP     SUB_81E6                    ; Manipulates LPT/UART registers
+8299	BE 81 E6            SJP     IOCFG                    ; Manipulates LPT/UART registers
 829C	81 12               BCR+    BRANCH_82B0                 ; REC = Success, A = Failure type or UART data read
 829E	B9 60               ANI	    A,60                        ; A = A & 60.
 82A0	9B 10               BZS-    BRANCH_8292                 ; If Bits 5 or 6 not set
@@ -396,24 +398,27 @@ BRANCH_82B3: ; Branched to from 8243, 8297
 82B6	9A                  RTN                                 ;
 
 
-; Not sure this is reached, but 8303 is a valid line in MAIN_ENTRY
+; Not sure this is reached, but 8303 is a valid line in MAIN_ENTRY ***
 82B7	8E 4A               BCH+    8303                        ; Unconditional fwd branch
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; COM_TBL_INIT - Called from BASIC table init vector 800A
+; Called from BASIC Table 8000 INIT, changes XL which is used to calc index into vector table
 ; Arguments:
 ; Outputs:
 ; RegMod: XL
 COM_TBL_INIT:
-82B8	4A D0               LDI	    XL,D0                       ; D0 is command code
+82B8	4A D0               LDI	    XL,D0                       ; D0 is command code for INIT
 82BA	E9 79 DE EF         ANI	    (UNDEF_REG_79DE),EF         ; (UNDEF_REG_79DE) = (UNDEF_REG_79DE) & EF
 82BE	8E 2C               BCH+    MAIN_ENTRY/CLOAD            ; Branch fwd unconditional
 
 
 ;------------------------------------------------------------------------------------------------------------
-; Following called via BASIC Command List vectors
+; Following called via BASIC Table 8000 Command List vectors
+; X-REG contains address of function below. Some stubs below change XL. Most drop through.
+; XL used to calculate index into vector table
 ; Arguments:
 ; Outputs:
 ; RegMod: UL, XL
@@ -456,19 +461,15 @@ TRANSMIT:
 82D7	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 
 CONSOLE:
-CONSOLE_2:
 82D8	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 
 FEED:
-FEED_2:
 82D9	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 
 LPRINT:
-LPRINT_2:
 82DA	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 
 LLIST:
-LLIST_2:
 82DB	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 82DC	F9                  REC                                 ; Reset Carry Flag, does nothing drop through
 
@@ -521,45 +522,78 @@ ZONE:
 
 ;------------------------------------------------------------------------------------------------------------
 ; MAIN_ENTRY/CLOAD - Called from 82BE, 82C3, 82C7, 82CB, 82CF
-; Arguments: XL = INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF
-; Outputs:
+; Arguments: X-REG=Address BASIC Table pointed to. Y-REG Token
+; Outputs: Calculates offset into Command Vector Table at $8331 based on LB address given in BASIC Table.
+; A few commands alter the value in XL before reacing here. For some functions, low ROM banked back in.
+; Function jumped to be setting its address in P. Table of calcualted vectors below.
 ; RegMod: U, A, X
+;                           Mofified
+; Command     Token   Addr  Address    ; PTR   VECT   Bank
+; "BREAK"     F0B3    CD89             ; Ignore has a real address 
+; "CLOAD"     F089    82EC             ; 8339 (901B)  Low 
+; "CSAVE"     F095    82DD             ; 8357 (901A)  Low
+; "COM$"      E858    82D3             ; 836B (8893)  High
+; "CONSOLE"   F0B1    82DE             ; 8355 (8365)  Low
+; "DEV$"      E857    82D4             ; 8369 (8899)  High
+; "DTE"       E884    82D1             ; 836F (8C8E)  High
+; "ERN"       F052    82DF             ; 8353 (8312)  Low
+; "ERL"       F053    82E0             ; 8351 (8309)  Low
+; "FEED"      F0B0    82E1             ; 834F (9820)  Low
+; "INPUT"     F091    82E2             ; 834D (8FFF)  Low
+; "INSTAT"    E859    82E3             ; 834B (832A)  Low
+; "LPRINT"    F0B9    82E4             ; 8349 (9056)  Low
+; "LLIST"     F0B8    82E5             ; 8347 (901D)  Low
+; "MERGE"     F08F    82C0  (82F0)     ; 8331 (901C)  Low
+; "OUTSTAT"   E880    82E6             ; 8345 (8334)  Low
+; "PRINT"     F097    82E7             ; 8343 (900D)  Low
+; "PROTOCOL"  E881    82E8             ; 8341 (8317)  Low
+; "RINKEY$"   E85A    82E9             ; 833F (8357)  Low
+; "SETCOM"    E882    82D6             ; 8365 (8907)  High
+; "SETDEV"    E886    82D5             ; 8367 (8968)  High
+; "SPACE$"    F061    82EA             ; 833D (83D8)  Low
+; "TERMINAL"  E883    82D2             ; 836D (8C88)  High
+; "TRANSMIT"  E885    82D7             ; 8363 (89F5)  High
+; "TAB"       F0BB    880D             ; Ignore has a real address
+; "ZONE"      F0B4    82EB             ; 843D (83D8)  Low
+; "INPUT#"    NNNN    82CE  (82ED)     ; 8337 (9660)  Low
+; "PRINT#"    NNNN    82C9  (82EE)     ; 8335 (93D0)  Low 
+; "PRINT#2"   NNNN    82CD  (82EF)     ; 8333 (93D4)  Low 
+; "INIT"      NNNN    82B8  (82D0)     ; 8371 (880A)  High
 MAIN_ENTRY/CLOAD:
 82EC	EB 78 50 08         ORI     (OUTSTAT_REG),08            ; Bit_3 = ??, Bit_0 = DCD, Bit_1 = DSR
 
 ME_FRM_LOW_BANK: ; Entry point from Low Bank
-82F0	EB 78 55 08         ORI     (CR/LF_REG),08              ; Entry from low bank, set bit 4 in (CR/LF_REG)
+82F0	EB 78 55 08         ORI     (CR/LF_REG),08              ; Entry from low bank, set bit 3 in (CR/LF_REG)
 82F4	FD 81               SIE                                 ; Enable interrupts. XL set to values for: 
-82F6	FD 88               PSH     X                           ;   INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF
-82F8	BE 8A 2A            SJP     MAIN_ENTRY_2                ; Call sub, what does it do?
-82FB	FD 2A               POP	    U                           ; Original X or has ME2 given us a new one?
-82FD	68 83               LDI	    UH,83                       ; Setting up pointer, UL is original XL D0, ED, EE, EF
+82F6	FD 88               PSH     X                           ;   INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF, MERGE=F0
+82F8	BE 8A 2A            SJP     PORTS_UPDATE                ; Call sub(s) that configure CE-158
+82FB	FD 2A               POP	    U                           ; Original X now in U
+82FD	68 83               LDI	    UH,83                       ; Setting up pointer, UL is original XL: D0, ED, EE, EF, F0
 82FF	FB                  SEC                                 ; Set Carry flag, for SBC below
-8300	B5 D7               LDI	    A,D7                        ; Used to calculate offset into vecotr table
-8302	20                  SBC	    UL                          ; A = A - UL. D7-D0=07, D7-ED=EA, D7-EE=E9, D7-EF=E8
-8303	6A 63               LDI	    UL,63                       ; U = 8363. If UL < D7, i.e. INIT command skip ahead.
-8305	83 08               BCS+    BRANCH_830F:                ;  else command is: INPUT#, PRINT#, PRINT#2
+8300	B5 D7               LDI	    A,D7                        ; Used to calculate offset into vector table
+8302	20                  SBC	    UL                          ; A = A - UL. 
+8303	6A 63               LDI	    UL,63                       ; U = 8363   
+8305	83 08               BCS+    BRANCH_830F:                ; If UL > D7, skip ahead.
 8307	FD 62               DEC	    UH                          ; DEC UH 83 -> 82, U = 8263
 8309	FD BE               RIE                                 ; Disable interrupts
 830B	E9 78 55 F7         ANI	    (CR/LF_REG),F7              ; (CR/LF_REG) = (CR/LF_REG) & F7. Clear Bit 3
+                                                                ; Used as flag to swtich back to Low Bank
 
 BRANCH_830F: ;Branched to by 8305.                              ; Calc index into Command Vector Table @ 8331
-830F	D9                  SHL                                 ; Before: A = INIT=07, INPUT#=EA, PRINT#=E9, PRINT#2=E8
-                                                                ; A << 1: A = INIT=A0, INPUT#=D4, PRINT#=D2, PRINT#2=D0
-8310	FD EA               ADR	    U                           ; U = U + A. If cmd is INIT U=8363, else U=8263
-                                                                ; U = INIT=8371, INPUT#=8337, PRINT#=8335, PRINT#2=8333
+830F	D9                  SHL                                 ; A << 1: Before: A = INIT=07, A = INIT=A0
+8310	FD EA               ADR	    U                           ; U = U + A. U-REG is pointer into vector table
 8312	65                  LIN	    U                           ; A = (U) then INC U
 8313	08                  STA	    XH                          ; XH = A. i.e. INIT A=88
 8314	25                  LDA	    (U)                         ; A = (U). i.e. INIT A=0A
-8315	0A                  STA	    XL                          ; X = INIT=880A, INPUT#=9660, PRINT=#93D0, PRINT#2=93D4
+8315	0A                  STA	    XL                          ; X-REG now has address of function
 8316	ED 78 55 08         BII	    (CR/LF_REG),08              ; FLAGS = (CR/LF_REG) & 08. Keep bit 3 only.
-                                                                ;   This bit cleared in 830B to signal command type
-831A	8B 02               BZS+    BRANCH_831E                 ; If Bit 3 not set, not INIT command so
+                                                                ;   This bit cleared in 830B above to signal Low Bank function
+831A	8B 02               BZS+    BRANCH_831E                 ; If Bit 3 not set, we dropped through to 8307 so
                                                                 ;   skip ahead to go back to Low Bank.
-831C	FD 5E               STX     P                           ; P = X, Program counter = X. Jump to 1 of 4 commands above
+831C	FD 5E               STX     P                           ; P = X, Sets prg Cntr to jump to High Bank function ***JMP
 
-BRANCH_831E: ; Branched to from 831A                            ; Go back to low bank
-831E	68 7A               LDI	    UH,7A                       ; U = $7A28 =  MATH_REG_Wa_B1
+BRANCH_831E: ; Branched to from 831A                            ; Go back to low bank to handle some functions
+831E	68 7A               LDI	    UH,7A                       ; U = $7A28 =  AR-W
 8320	6A 28               LDI	    UL,28                       ; 
 8322	B5 E3               LDI	    A,E3                        ; Intialize $7A28-$7A31 to:
 8324	61                  SIN     U                           ; $E3  $BA  $83 $05, which is
@@ -569,110 +603,111 @@ BRANCH_831E: ; Branched to from 831A                            ; Go back to low
 832A	61                  SIN     U                           ;   bank in lower half of the CE-158 ROM
 832B	B5 05               LDI	    A,05                        ;
 832D	2E                  STA	    (U)                         ; 
-832E	BA 7A 28            JMP	    MATH_REG_Wa_B1              ; Jumps to $7A28, runs code segment poked in above
+832E	BA 7A 28            JMP	    AR-W                        ; Jumps to $7A28, runs code segment poked in above
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; Command Vector Table
 ; Used as a vector jump table by MAIN_ENTRY/CLOAD
-UNKNOWN_VECTOR_8331:                                            ; Bogus
-8331	90 1C               .BYTE   90 1C                       ; 901C - Lands inside line 901A
+; 813C Pokes value into program counter to jump to function/command handler
+MERGE_VECTOR_8331:
+8331	90 1C               .BYTE   90 1C                       ; 901C - MERGE - Low Bank
 
-PRINT#2_VECTOR:                                                 ; Bogus - Called via 831C
-8333	93 D4               .BYTE   93 D4                       ; 93D4 - lands inside SUB_PRINT# line on 8A = RTI
+PRINT#2_VECTOR: 
+8333	93 D4               .BYTE   93 D4                       ; 93D4 - PRINT#2 - Low Bank
 
-PRINT#_VECTOR:                                                  ; Called via 831C
-8335	93 D0               .BYTE   93 D0                       ; 93D0 - Calls SUB_PRINT#
+PRINT#_VECTOR:  
+8335	93 D0               .BYTE   93 D0                       ; 93D0 - PRINT# - Low Bank
 
-INPUT#_VECTOR:                                                  ; Called via 831C
-8337	96 60               .BYTE   96 60                       ; 9660 - Calls SUB_INPUT#
+INPUT#_VECTOR: 
+8337	96 60               .BYTE   96 60                       ; 9660 - INPUT# - Low Bank
 
-UNKNOWN_VECTOR_8339:                                            ; Bogus
-8339	90 1B               .BYTE   90 1B                       ; 901B - Lands inside line 901A
+CLOAD_VECTOR_8339:                                            
+8339	90 1B               .BYTE   90 1B                       ; 901B - CLOAD - Low Bank
 
-UNKNOWN_VECTOR_833B:                                            ; 9870 is unconditional branch
-833B	98 70               .BYTE   98 70                       ; 9870 - to BRANCH_988D
+UNKNOWN_VECTOR_833B:
+833B	98 70               .BYTE   98 70                       ; 9870 -  Unknown
 
-UNKNOWN_VECTOR_833D:                                            ; Bogus?
-833D	83 D8               .BYTE   83 D8                       ; 83D8 - Seems like nonsense when dissasembled
+SPACE$_VECTOR_833D:
+833D	83 D8               .BYTE   83 D8                       ; 83D8 - SPACE$ ZONE - Low Bank
 
-UNKNOWN_VECTOR_833F:                                            ; Bogus?
-833F	83 57               .BYTE   83 57                       ; 8357-  is in this table
+RINKY$_VECTOR_833F:    
+833F	83 57               .BYTE   83 57                       ; 8357-  RINKY$ - Low Bank
 
-UNKNOWN_VECTOR_8341:                                            ; Bogus?
-8341	83 17               .BYTE   83 17                       ; 8317 - is in middle of line in MAIN_ENTRY
+PROTOCOL_VECTOR_8341:
+8341	83 17               .BYTE   83 17                       ; 8317 - PROTOCOL - Low Bank
 
-UNKNOWN_VECTOR_8343:                                            ; Bogus
-8343	90 0D               .BYTE   90 0D                       ; 900D - Lands inside line 900A
+PRINT_VECTOR_8343:
+8343	90 0D               .BYTE   90 0D                       ; 900D - PRINT - Low Bank
 
-UNKNOWN_VECTOR_8345:                                            ; Bogus?
-8345	83 34               .BYTE   83 34                       ; 8334 - is in this table
+OUTSTAT_VECTOR_8345:
+8345	83 34               .BYTE   83 34                       ; 8334 - OUTSTAT - Low Bank
 
-UNKNOWN_VECTOR_8347:                                            ; 
-8347	90 1D               .BYTE   90 1D                       ; 901D - Calls into SUB_8FED
+LLIST_VECTOR_8347:
+8347	90 1D               .BYTE   90 1D                       ; 901D - LLIST - Low Bank
 
-UNKNOWN_VECTOR_8349:                                            ;
-8349	90 56               .BYTE   90 56                       ; 9056 - Calls into SUB_8FED
+LPRINT_VECTOR_8349: 
+8349	90 56               .BYTE   90 56                       ; 9056 - LPRINT - Low Bank
 
-UNKNOWN_VECTOR_834B:                                            ;
-834B	83 2A               .BYTE   83 2A                       ; 832A - inside main entry
+INSTAT_VECTOR_834B:
+834B	83 2A               .BYTE   83 2A                       ; 832A - INSTAT - Low Bank
 
-UNKNOWN_VECTOR_834D:                                            ; Bogus
-834D	8F FF               .BYTE   8F FF                       ; 8FFF - Lands inside line 8FFE
+INPUT_VECTOR_834D:
+834D	8F FF               .BYTE   8F FF                       ; 8FFF - INPUT - Low Bank
 
-UNKNOWN_VECTOR_834F:                                            ; Bogus
-834F	98 20               .BYTE   98 20                       ; 9820 - lands inside line 981E
+FEED_VECTOR_834F:
+834F	98 20               .BYTE   98 20                       ; 9820 - FEED - Low Bank
 
-UNKNOWN_VECTOR_8351:                                            ;
-8351	83 09               .BYTE   83 09                       ; 8309 - inside main entry
+ERL_VECTOR_8351: 
+8351	83 09               .BYTE   83 09                       ; 8309 - ERL - Low Bank
 
-UNKNOWN_VECTOR_8353:                                            ;
-8353	83 12               .BYTE   83 12                       ; 8312 - inside main entry
+ERN_VECTOR_8353:
+8353	83 12               .BYTE   83 12                       ; 8312 - ERN - Low Bank
 
-UNKNOWN_VECTOR_8355:                                            ; Bogus
-8355	83 65               .BYTE   83 65                       ; 8365 - is in this table
+CONSOLE_VECTOR_8355: 
+8355	83 65               .BYTE   83 65                       ; 8365 - CONSOLE - Low Bank
 
-UNKNOWN_VECTOR_8357:                                            ; 
-8357	90 1A               .BYTE   90 1A                       ; 901A - Inside SUB_8FED
+CSAVE_VECTOR_8357: 
+8357	90 1A               .BYTE   90 1A                       ; 901A - CSAVE - Low Banks
 
-UNKNOWN_VECTOR_8359:                                            ; 
+UNKNOWN_VECTOR_8359: 
 8359	98 70               .BYTE   98 70                       ; 9870-  is in SUB_9845
 
-UNKNOWN_VECTOR_835B:                                            ; 
+UNKNOWN_VECTOR_835B: 
 835B	93 50               .BYTE   93 50                       ; 9350 - is in SUB_PRINT#
 
-UNKNOWN_VECTOR_835D:                                            ; 
+UNKNOWN_VECTOR_835D:  
 835D	93 D8               .BYTE   93 D8                       ; 93D8 - inside SUB_PRINT#
 
-UNKNOWN_VECTOR_835F:                                            ; Bogus
-835F	98 20               .BYTE   98 20                       ; 9820 - Inside SUB_9811 line
+FEED_DUP_835F: 
+835F	98 20               .BYTE   98 20                       ; 9820 - FEED duplicate - Low Bank
 
-UNKNOWN_VECTOR_8361:                                            ; Bogus
-8361	83 65               .BYTE   83 65                       ; 8365 - is in this table
+CONSOLE_DUP_8361: 
+8361	83 65               .BYTE   83 65                       ; 8365 - CONSOLE duplicate - Low Bank
 
-UNKNOWN_VECTOR_8363:                                            ; 
-8363	89 F5               .BYTE   89 F5                       ; 89F5 - UNKNOWN_CMD_89F5
+TRANSMIT_8363:
+8363	89 F5               .BYTE   89 F5                       ; 89F5 - TRANSMIT - High Bank
 
-UNKNOWN_VECTOR_8365:                                            ; 
-8365	89 07               .BYTE   89 07                       ; 8907 - UNKNOWN_CMD_8907
+SETCOM_VECTOR_8365:                                             ; 
+8365	89 07               .BYTE   89 07                       ; 8907 - SETCOM - High Bank
 
-UNKNOWN_VECTOR_8367:                                            ; 
-8367	89 68               .BYTE   89 68                       ; 8968 - UNKNOWN_CMD_8968
+SETDEV_VECTOR_8367:                                             ; 
+8367	89 68               .BYTE   89 68                       ; 8968 - SETDEV - High Bank
 
-UNKNOWN_VECTOR_8369:                                            ; 
-8369	88 99               .BYTE   88 99                       ; 8899 - UNKNOWN_CMD_8899
+DEV$_VECTOR_8369:                                               ; 
+8369	88 99               .BYTE   88 99                       ; 8899 - DEV$ - High Bank
 
-UNKNOWN_VECTOR_836B:                                            ; 
-836B	88 93               .BYTE   88 93                       ; 8893 - UNKNOWN_CMD_8893. In UNKNOWN_VECTOR_8369 
+COM$_VECTOR_836B:                                               ; 
+836B	88 93               .BYTE   88 93                       ; 8893 - COM$ - High Bank
 
-UNKNOWN_VECTOR_836D:                                            ; 
-836D	8C 88               .BYTE   8C 88                       ; 8C88 - UNKNOWN_CMD_8C88
+TERMINAL_VECTOR_836D:                                           ; 
+836D	8C 88               .BYTE   8C 88                       ; 8C88 - Terminal - High Bank
 
-UNKNOWN_VECTOR_836F:                                            ; 
-836F	8C 8E               .BYTE   8C 8E                       ; 8C88 - UNKNOWN_CMD_8C8E
+DTE_VECTOR_836F:                                                ; 
+836F	8C 8E               .BYTE   8C 8E                       ; 8C8E - DTE - High Bank
 
-INIT_VECTOR:                                                    ; Called via 831C
+INIT_VECTOR: 
 8371	88 0A               .BYTE   88 0A                       ; 880A - Points to 8800 BASIC Table Init code
 
 ;------------------------------------------------------------------------------------------------------------
@@ -687,25 +722,25 @@ SEPARATOR_8373:
 
 ;-------------------------------------------------------------------------------------------------------------
 ; JMP_8380 - Jumped to from SUB_8D04:8E52, jumps back to SUB_8D04:8E55
-; If Japanese market and SETCOM configured for 7 Data Bits then A = 0A, else A = UL
-; Arguments: UL = 02 
+; If Japanese market A = UL. If SETCOM configured for 7 Data Bits then A = 0A
+; Arguments: UL
 ; Output: UL = 02 or 0A
 ; RegMod: A, UL
 8380	ED 78 55 80         BII	    (CR/LF_REG),80              ; Not sure what this register does
 8384	8B 17               BZS+    BRANCH_839D                 ; If Bit 7 was set
 8386	FD ED F0 0F 08      BII     #(PC1500_PRT_B),08          ; Test Bit 3. (ME1)
 838B	89 10               BZR+    BRANCH_839D                 ; If PC-1500 Export model. (Vcc export, Gnd Japanese)
-838D	A5 78 BE            LDA	    (78BE)                      ; DATA POINTER (H)
+838D	A5 78 BE            LDA	    (DATA_PTR_H)                ; Normally used for DATA statement pointer
 8390	89 0B               BZR+    BRANCH_839D                 ; If A > 0 branch fwd
 8392	A5 78 58            LDA	    (SETCOM_REG)                ; Bits 3,4 are Word Length
 8395	B9 18               ANI	    A,18                        ; Keep Bits 3-4
 8397	B7 10               CPI	    A,10                        ; Only Bit 4 set = 7 data bits
 8399	89 02               BZR+    BRANCH_839D                 ; If A != 10, i.e. 7 data bits, branch fwd
-839B	6A 0A               LDI	    UL,0A                       ; If Japanese market and 7 Data Bits
+839B	6A 0A               LDI	    UL,0A                       ; If 7 Data Bits
 
 BRANCH_839D: ; Branched to from 8384, 838B, 8390, 8399
 839D	24                  LDA	    UL                          ; Jump directly here if PC-1500 export model
-839E	AE 78 B0            STA	    (78B0)                      ; (78B0) = A. BREAK TOP (H)
+839E	AE 78 B0            STA	    (BRK_TOP_H)                 ; Beginning of program containing BREAK line
 83A1	BA 8E 55            JMP	    JMP_8E55                    ; Jumping back into SUB_8D04
 
 
@@ -739,7 +774,7 @@ TBL_BAUD:                    ;C7                       ;CF
 83C0	00 32 00 64 00 6E 00 C8   01 2C 02 58 04 B0 09 60 
 
 TBL_CDP1854ACE_BAUD:
-84D0	99 0D 85 0A 09 85 18 0B
+83D0	99 0D 85 0A 09 85 18 0B
 
 
 
@@ -767,7 +802,7 @@ TBL_CDP1854ACE_CFG:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; 84E7~84EE unknown table. Used by SUB_9A9E_ALT1 copies bytes into 7A00
+; 84E7~84EE unknown table. Used by SUB_9A9E_ALT1 copies bytes into 7A00 (AR-X)
 TBL_8475:
 8475	00 0B 07 00 00 00 7F 41   41 00 02 04 08 10 20 00 
 8485	41 41 7F 00 04 02 7F 02   04 08 1C 2A 08 08 00 00 
@@ -782,7 +817,7 @@ TBL_8475:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; TEXT_84EF - Text for Terminal program menues?
+; TEXT_84EF - Text for Terminal program menus?
 ; Used by 870B
 TEXT_84EF:
 84EF    45 43 48 4F 20      .TEXT "ECHO "
@@ -978,9 +1013,9 @@ UNKNOWN_8636:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_86F0 - Called from 8BD4
+; SUB_86F0 - Called from 8BD4 ***
 ; Alt entry 86F6 - Called from 8AB9
-; Calculates a new address to set P to (Program Counter), how do we return to caller then?
+; Calculates a new address to set P to (Program Counter) and it is poked into P.
 ; Arguments: U = ?, A
 ; Output:
 ; RegMod: U, A, X
@@ -1001,17 +1036,17 @@ SUB_86F0_ALT_E1: ; Called from 8AB9 A >= 16 A < 0A
 8704	FD CA               ADR	    X                           ; X = X + A. (X = original U + 1 + original A)
 8706	45                  LIN	    X                           ; A = (X), then INC X. A = (original U + 1 + original A)
 8707	FD CA               ADR	    X                           ; X = X + A. (original U + 1 + original A) += A
-8709	FD 5E               STX	    P                           ; P = X. Set Program Counter to X
+8709	FD 5E               STX	    P                           ; P = X. Set Program Counter to X ***JMP
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_870B - Called from 873A
-; Copies text string from TEXT_84EF to Input Buffer (7BB0)
+; TERMTXT_2INBUF - Called from 873A
+; Copies text string from TEXT_84EF (Terminal menu text) to Input Buffer (7BB0)
 ; Arguments: A = multiple of 2, string index
 ; Outputs:
 ; RegMod: A, X, Y, U
-SUB_870B:
+TERMTXT_2INBUF:
 870B	5A B0               LDI	    YL,B0                       ; (Y)=7BB0, INPUT BUFFER Byte 0 START
 870D	58 7B               LDI	    YH,7B                       ; Setting up pointer?
 870F	4A B0               LDI	    XL,B0                       ; (X)=84B0, inside text @ TEXT_84EF
@@ -1047,15 +1082,15 @@ BRANCH_8732: ; A >= 22 and A < 2E                               ; (7BB0) = (84FA
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8736 -  Jumped to from 8D45, 8D6D. A = 2E, 02, 30, 32, 40
-; Calls SUB_870B Copies text string from TEXT_84EF to Input Buffer (7BB0)
+; TERMTXT_DISP -  Jumped to from 8D45, 8D6D. A = 2E, 02, 30, 32, 40
+; Calls TERMTXT_2INBUF Copies text string from TEXT_84EF to Input Buffer (7BB0)
 ; Then jumps to PRGMDISP (E8CA) to display content of display buffer
 ; Arguments: A = multiple of 2, string index
 ; Output:
 ; RegMod:
-SUB_8736:
+TERMTXT_DISP:
 8736	E9 78 80 00         ANI	    (7880),00                   ; Reset Display parameter, i.e. how display looks @ READY
-873A	BE 87 0B            SJP	    SUB_870B                    ; Copies text string from TEXT_84EF to Input Buffer (7BB0)
+873A	BE 87 0B            SJP	    TERMTXT_2INBUF              ; Copies text string from TEXT_84EF to Input Buffer (7BB0)
                                                                 ; A = String index
 873D	FD C1               SDP                                 ; Sets LCD ON/OFF control flip-flop
 873F	BA E8 CA            JMP	    PRGMDISP                    ; Displays contents of display buffer on LCD
@@ -1070,15 +1105,15 @@ SUB_8736:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8745 - Called from SUB_8D04:8E87
-; Sends string to RS232. X is set with source table address?
-; Arguments: X
+; STRNG_2COM - Called from SUB_8D04:8E87
+; Sends string to RS232. REG-X holds string, space $20, delimited
+; Arguments: X set to first character of string
 ; Output:
 ; RegMod: X, UL, A
 BRANCH_8744: ; Branched to from 875E
 8744	44                  INC	    X                           ; INC to next charecter
 
-SUB_8745:
+STRNG_2COM:
 8745	FD BE               RIE                                 ; Disable interrupts
 8747	6A 1F               LDI	    UL,1F                       ; Max of 32 tries to send.
 
@@ -1093,11 +1128,11 @@ BRANCH_8749: ; Branched to from 8760, 8766
 BRANCH_8754: ; Branched to from 8750
 8754	FD ED F0 0B 02      BII	    #(PC1500_IF_REG),02         ; PC-1500 - PB7 Interrupt, PB7 = ON key
 8759	89 0D               BZR+    BRANCH_8768                 ;  If ON key pressed
-875B	BE 81 BC            SJP	    SUB_81BC                    ; Sends charecter in A to RS232 Port
+875B	BE 81 BC            SJP	    CHAR2COM                    ; Sends charecter in A to RS232 Port
 875E	91 1C               BCR-    BRANCH_8744                 ;  Carry clear = success, send next charecter
 8760	9B 19               BZS-    BRANCH_8749                 ;  retry same charecter, Z set when U popped off stack in sub
 8762	BF 20               BII	    A,20                        ;  returns A = #(PRT_A_IO) Bits 5-2 on failure
-8764	89 02               BZR+    BRANCH_8768                 ; If A != 20, If not Low Battery, carry set by SUB_81BC
+8764	89 02               BZR+    BRANCH_8768                 ; If A != 20, If not Low Battery, carry set by CHAR2COM
 8766	88 1F               LOP	    UL,BRANCH_8749              ; UL = UL - 1, loop back 'e' if Borrow Flag not set, DEC try counter
 
 BRANCH_8768: ; Branched to from 874C, 8759, 8764
@@ -1108,41 +1143,38 @@ BRANCH_8768: ; Branched to from 874C, 8759, 8764
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_876C - Called from  SUB_8D04:8EC3
+; IRQ_RESET - Called from  SUB_8D04:8EC3
 ; Alt Entry at 8780 Called from SUB_8D04:8E7B
 ; Resets IRQ masks for PC-1500, CE-150, CE-158. 
 ; Resets CE-150 PB7 mask (Paper feed button), CE-158 DTR, RTS
 ; Arguments:
 ; Output:
 ; RegMod:
-SUB_876C:
+IRQ_RESET:
 876C	FD EB D0 0A 01      ORI     #(CE158_MSK_REG),01         ; Set Bit 0, Interrupt mask for IRQ
 8771	FD E9 B0 0A FD      ANI	    #(CE150_MSK_REG),FD         ; Clear Bit 1, PB7 Interrupt mask. Paper Feed Button
 8776	FD EB B0 0A 01      ORI	    #(CE150_MSK_REG),01         ; Set Bit 0. Interrupt mask for IRQ
 877B	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set Bit 0. Interrupt mask for IRQ
 
-SUB_876C_ALT_E1:
+IRQ_RESET_ALT_E1:
 8780	FD E9 D0 0E FC      ANI     #(CE158_PRT_A),FC           ; Clear Bits 1-0 (ME1) Bit 0 = DTR, Bit 1 = RTS
 8785	9A                  RTN                                 ;
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_8790 - Jumped to from 8AC3
-; Alternate entry to SUB_87A3
+; JMP_8790 - Jumped to from 8AC3 ***
 ; Seems to shuffle around BASIC line numbers, maybe for editing?
 ; Arguments: Y, X
 ; Output:
 ; RegMod: U, X
 JMP_8790:
 8790	6A 50               LDI	    UL,50                       ;
-8792	BE D1 4F            SJP	    SUB39                       ; Converts BCD value pointed to by Y, sends to AR-X
+8792	BE D1 4F            SJP	    BCD_Y2ARX                   ; Pass BCD number pointed to by Y-Reg to AR-X
 8795	42                  DEC	    XL                          ;
 8796	8E 02               BCH+    BRANCH_879A                 ; Unconditional fwd branch
-
-BRANCH_8798: ; Branched to from 8798                            ; Calculates formula to which Y points,
-8798	DE 3E               VEJ     (DE),BRANCH_8798            ; passes result to AR-X. Jump FWD (n) if error
-
+8798	DE 3E               VEJ     (DE),BRANCH_87D8            ; Evaluate formula pointed to by Y-REG,
+                                                                ; passes result to AR-X. Jump FWD (n) if error
 BRANCH_879A: ; Branched to from 8796, 87A1
 879A	D0 03 3B            VEJ     (D0),03,BRANCH_87D8         ; Convert AR-X to integer pass to U. 
                                                                 ; 03 specifies range. If exceeded branch fwd
@@ -1152,24 +1184,24 @@ BRANCH_879A: ; Branched to from 8796, 87A1
                                                                 ; the command sequence or line. C=1 if ":" 
 
 SUB_87A3: ; Called from 8BC3
-87A3	F4 78 99            VEJ	    (F4),(VAR/ARR_PTR_H)        ; Loads U with 16-bit value from (VAR/ARR_PTR_H)
+87A3	F4 78 99            VEJ	    (F4),(VAR_START_H)          ; Loads U with pointer to where variables start in RAM
 87A6	CC 67               VEJ     (CC),67                     ; Loads X-Reg with address at 78(67) 78(68)
                                                                 ; 7867/68 = End address of basic in RAM
-87A8	BE DF E2            SJP	    SUB85                       ; U = U - X. When upper limit occurs: C=0 and UH=16 
+87A8	BE DF E2            SJP	    U_MINUS_X                   ; U = U - X. When upper limit occurs: C=0 and UH=16 
 87AB	81 29               BCR+    BRANCH_87D6                 ; Branch fwd if Carry reset (If error?)
 87AD	4A 3A               LDI	    XL,3A                       ; 
 87AF	48 00               LDI	    XH,00                       ; X = 003A
-87B1	BE DF E2            SJP	    SUB85                       ; U = U - X. When upper limit occurs: C=0 and UH=16 
+87B1	BE DF E2            SJP	    U_MINUS_X                   ; U = U - X. When upper limit occurs: C=0 and UH=16 
 87B4	81 20               BCR+    BRANCH_87D6                 ; Branch fwd if Carry reset (If error?)
 87B6	FD 28               LDX	    U                           ; X = U
-87B8	F4 7A 05            VEJ	    (F4),(MATH_REG_Xa_B6)       ; Loads U with 16-bit value from address (MATH_REG_Xa_B6)
-87BB	BE DF E2            SJP	    SUB85                       ; U = U - X, When upper limit occurs: C=0 and UH=16 
+87B8	F4 7A 05            VEJ	    (F4),(ARX+5)                ; Loads U with 16-bit value from address in AR-X
+87BB	BE DF E2            SJP	    U_MINUS_X                   ; U = U - X, When upper limit occurs: C=0 and UH=16 
 87BE	83 16               BCS+    BRANCH_87D6                 ; Branch fwd if Carry set (If error?)
 87C0	CC 67               VEJ     (CC),67                     ; Loads X-Reg with address at 78(pp) 78(pp+1)
                                                                 ; 7867/68 = End address of basic in RAM
 87C2	44                  INC	    X                           ; 
 87C3	CA A0               VEJ	    (CA)(A0)                    ;  PREVIOUS ADDRESS
-87C5	F4 7A 05            VEJ	    (F4),(MATH_REG_Xa_B6)       ; Loads U with 16-bit value from address (MATH_REG_Xa_B6)
+87C5	F4 7A 05            VEJ	    (F4),(ARX+5)                ; Loads U with 16-bit value from address in AR-X
 87C8	F6 78 A2            VEJ	    (F6),(PREV_LINE_H)          ; Saves U to (PREV_LINE_H)
 87CB	CC 67               VEJ     (CC),67                     ; 7867/68 = End address of basic in RAM
 87CD	24                  LDA	    UL                          ;
@@ -1196,20 +1228,20 @@ BRANCH_87DA: ; Branched to from 87A1
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_87DE - Unconditional jump to from UNKNOWN_CMD_89F5:8A1C
-; Sends a 00 to RS232 if SETDEV_VAL Bit 6 is set
+; NULL2COM
+; Sends a 00 (NULL) to RS232 if SETDEV_REG Bit 6 is set (CO)?
 ; Arguments:
 ; Output:
 ; RegMod: UL, A
-JMP_87DE:
-87DE	ED 78 57 40         BII	    (SETDEV_VAL),40             ; FLAGS = (SETDEV_VAL) & 40. What is Bit 6?
+NULL2COM:
+87DE	ED 78 57 40         BII	    (SETDEV_REG),40             ; Test Bit 6 in SETDEV_REG. Bit 6 for CO?
 87E2	8B 0D               BZS+    BRANCH_87F1                 ; Branch fwd if Bit 6 not set
 87E4	6A 0F               LDI     UL,0F                       ; Try counter
 87E6	FD BE               RIE                                 ; Disable interrupts
 
 BRANCH_87E8: ; Branched to from 87EF
 87E8	B5 00               LDI	    A,00                        ; Charecter to send
-87EA	BE 81 BC            SJP	    SUB_81BC                    ; Sends charecter in A to RS232 Port
+87EA	BE 81 BC            SJP	    CHAR2COM                    ; Sends charecter in A to RS232 Port
 87ED	81 02               BCR+    BRANCH_87F1                 ; Branch fwd if Carry reset, Carry clear = success
 87EF	88 09               LOP	    UL,BRANCH_87E8              ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 
@@ -1229,6 +1261,7 @@ SEPARATOR_87F4:
 
 
 ;------------------------------------------------------------------------------------------------------------
+; BASIC Table 8800 - (First table at 8000)
 B_TBL_8800:
 8800	55                  .BYTE   55                          ; Marker that BASIC Table follows 
 
@@ -1359,48 +1392,50 @@ SEPARATOR_8887:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; UNKNOWN_CMD_8893 - Called from Command Vector Table
+; COM$ - Called from Command Vector Table at $8831
 ; Arguments:
 ; Output:
 ; RegMod:
-UNKNOWN_CMD_8893:
-8893	E9 78 82 00         ANI	    (STK_PTR_SBR-06/32),00      ; (STK_PTR_SBR-06/32)  = 0
-8897	8E 04               BCH+    BRANCH_89D9                 ; Unconditional branch fwd
+COM$:
+8893	E9 78 82 00         ANI	    (STK_PTR_GSB/FOR),00        ; Clear Stack pointer for GOSUB and FOR
+                                                                ; Perhaps used as mode switch?
+8897	8E 04               BCH+    BRANCH_889D                 ; Unconditional branch fwd
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; CMD_8899 - Called from Command Vector Table
+; DEV$ - Called from Command Vector Table at $8331
 ; Converts SETDEV and SETCOM settings into ASCII
 ; Then it pokes in either 'RPU, RTN' or just 'RTN' to 7A30 and calls it. 
 ; Arguments:
 ; Output:
 ; RegMod: Y, U, A
-CMD_8899:
-8899	EB 78 82 FF         ORI	    (STK_PTR_SBR-06/32),FF      ; (STK_PTR_SBR-06/32) = FF
+DEV$:
+8899	EB 78 82 FF         ORI	    (STK_PTR_GSB/FOR),FF        ; Set Stack pointer for GOSUB and FOR to $FF
+                                                                ; Perhaps used as mode switch?
 
-BRANCH_889D: ; Branched from 8897
+BRANCH_889D: ; Branched from COM$
 889D	5A 2E               LDI	    YL,2E                       ; Set up pointer?
-889F	58 7A               LDI	    YH,7A                       ; Y = 7A2E -> MATH_REG_Wa_B7
+889F	58 7A               LDI	    YH,7A                       ; Y = 7A2E -> in AR-W
 88A1	6A 15               LDI	    UL,15                       ; Loop counter, 15-0 16 bytes copied
 88A3	B5 2C               LDI	    A,2C                        ; Value to be poked in 2C = ','
 
 BRANCH_88A5: ; Branched from 88A6
 88A5	53                  SDE	    Y                           ; (Y) = A. Then DEC Y. Y=7A2E~7A18, fill with 2C ','
 88A6	88 03               LOP	    UL,BRANCH_88A5              ; DEC UL, if borrow flag not set loop back
-88A8	A5 78 82            LDA	    (STK_PTR_SBR-06/32)         ; A = (STK_PTR_SBR-06/32), Y = 7A18
+88A8	A5 78 82            LDA	    (STK_PTR_GSB/FOR)           ; Y = 7A18
 88AB	89 11               BZR+    BRANCH_88BE                 ; If A != 0 branch fwd
-88AD	BE 8C 4B            SJP	    SUB_8C4B                    ; Converts Baud Rate setting in SETCOM to ASCII?
+88AD	BE 8C 4B            SJP	    SETCOM2ASCII                    ; Converts Baud Rate setting in SETCOM to ASCII?
 88B0	54                  INC	    Y                           ; Y = 7A19
-88B1	BE 8C 71            SJP	    SUB_8C71                    ; Updates (Y) with ASCII value for Word Length, Y = 7A1A
+88B1	BE 8C 71            SJP	    WORDLEN2ASCII                    ; Updates (Y) with ASCII value for Word Length, Y = 7A1A
 88B4	54                  INC	    Y                           ; Y = 7A1B. Leaving a ',' between
-88B5	BE 8C 5F            SJP	    SUB_8C5F                    ; Updates (Y) with ASCII charecter for Parity, Y = 7A1C
+88B5	BE 8C 5F            SJP	    PARITY2ASCII                    ; Updates (Y) with ASCII charecter for Parity, Y = 7A1C
 88B8	54                  INC	    Y                           ; Y = 7A1D
-88B9	BE 8C 7D            SJP	    SUB_8C7D                    ; Updates (Y) with ASCII charecter for #Stop Bits Y = 7A1E
+88B9	BE 8C 7D            SJP	    STOPBIT2ASCII                    ; Updates (Y) with ASCII charecter for #Stop Bits Y = 7A1E
 88BC	8E 25               BCH+    BRANCH_88E3                 ; Branch fwd unconditional
 
 BRANCH_88BE: ; Branched from 88AB
-88BE	A5 78 57            LDA	    (SETDEV_VAL)                ; Which devices are redirected to RS232
+88BE	A5 78 57            LDA	    (SETDEV_REG)                ; Which devices are redirected to RS232
 88C1	2A                  STA	    UL                          ;
 88C2	A5 79 D1            LDA	    (79D1)                      ; A = (79D1), 79D1 Indicates a basic extension table. 
 88C5	B7 C0               CPI	    A,C0                        ; What does C0 mean?
@@ -1408,7 +1443,7 @@ BRANCH_88BE: ; Branched from 88AB
 88C9	6A 00               LDI	    UL,00                       ;
 
 BRANCH_88CB: ; Branched from 88C7
-88CB	24                  LDA	    UL                          ; A = UL = (SETDEV_VAL) or 00
+88CB	24                  LDA	    UL                          ; A = UL = (SETDEV_REG) or 00
 88CC	4A D8               LDI	    XL,D8                       ; X = 83D8. TBL_SETDEV_TEXT, SETDEV Command text table
 88CE	48 83               LDI	    XH,83                       ; Y = 7A1E
 88D0	6A 04               LDI	    UL,04                       ; Loop counter, 4-0 all 5 SETDEV settings
@@ -1417,7 +1452,7 @@ BRANCH_88D2: ; Branched from 88DC                               ; TBL_SETDEV_TEX
 88D2	F5                  TIN                                 ; (Y) = (X) then INC both X,Y. X = 83D9, Y = 7A1F
 88D3	F5                  TIN                                 ; (Y) = (X) then INC both X,Y. X = 83DA, Y = 7A20
 88D4	54                  INC	    Y                           ; Y = Y + 1 = 7A21, leaving a ','
-88D5	D5                  SHR                                 ; A = A >> 1. A = (SETDEV_VAL) or 00
+88D5	D5                  SHR                                 ; A = A >> 1. A = (SETDEV_REG) or 00
 88D6	83 03               BCS+    BRANCH_88DB                 ; If Bit 0 (KI?) was set branch fwd
 88D8	56                  DEC	    Y                           ; Y = 7A1F
 88D9	56                  DEC	    Y                           ; Y - 7A1E
@@ -1452,22 +1487,20 @@ BRANCH_8901:  ; Branched from 88F6
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; UNKNOWN_CMD_8907 - Called from Command Vector Table
-; Parses a BASIC line for COM related commands?
-; tied in with UNKNOWN_CMD_8968
-; Arguments:
+; SETCOM - Called by command vector table by 831C
+; Sets COM parameters, i.e. SETCOM 2400,8,N,1
+; Arguments: X
 ; Output:
 ; RegMod:
-UNKNOWN_CMD_8907:
-8907	BE 89 CB            SJP	    UNKNOWN_CMD_8968_ALT_ENTRY  ; In UNKNOWN_CMD_8968
-890A	81 02               BCR+    BRANCH_890E                 ; REC from sub = Success
-890C	FD 88               PUSH    X                           ; Where does X come from?
+SETCOM:
+8907	BE 89 CB            SJP	    TXT2STRBUF                  ; Copies string argument into string buffer
+890A	81 02               BCR+    BRANCH_890E                 ; C=0 means string not found
+890C	FD 88               PUSH    X                           ; X is pointer into current line?
 
 BRANCH_890E: ; Branched to from 890A
-890E	C8 05               VEJ     (C8),BRANCH_8915            ; If the following character? does not represent end 
-                                                                ; the command sequence or line. C=1 if ":"
-8910	BE 8A A9            SJP	    MAIN_ENTRY_2_ALT_E1         ;
-8913	8E 49               BCH+    BRANCH_895E                 ; Unconditional branch fwd
+890E	C8 05               VEJ     (C8),BRANCH_8915            ; Checks if end of command sequence or end of line. C=1 if ":"
+8910	BE 8A A9            SJP	    PORTS_UPDATE_ALT_E1         ;
+8913	8E 49               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_8915:
 8915	C4 3D 01            VEJ	    (C4),3D,BRANCH_8919         ; Check tokens/char in U-Reg if not 3D '=' branch fwd BRANCH_8919
@@ -1476,14 +1509,14 @@ BRANCH_8915:
 BRANCH_8919: ; Branched to from 8915
 8919	C4 2C 04            VEJ     (C4),2C,BRANCH_8920         ; Check tokens/char in U-Reg if not 2C ',' branch fwd BRANCH_8920
 891C	C8 10               VEJ     (C8),BRANCH_892E            ; If following character not end to command sequence/line branch fwd BRANCH_892E
-891E	8E 3E               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+891E	8E 3E               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_8920: ; Branched to from 8919
 8920	C6                  VEJ     (C6)                        ; Decrements Y-Reg by 2 bytes for tokens, 1 byte for characters in U-Reg
-8921	BE 8A CF            SJP	    MAIN_ENTRY_2_ALT_E3         ; ?
+8921	BE 8A CF            SJP	    UNKNOWN_8ACF         ; Creates an int from text?
 8924	83 96               BCS+    BRANCH_89BC                 ; Carry set in sub = Failure
 8926	C8 02               VEJ     (C8),BRANCH_892A            ; If following character not end to command sequence/line branch fwd BRANCH_892E
-8928	8E 34               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+8928	8E 34               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_892A:
 892A	C4 2C 93            VEJ     (C4),2C,BRANCH_89C0         ; Check tokens/char in U-Reg if not 2C ',' branch fwd BRANCH_89C0 
@@ -1492,14 +1525,14 @@ BRANCH_892A:
 BRANCH_892E: ; Branched to from 891C
 892E	C4 2C 04            VEJ     (C4),2C,BRANCH_8935         ; Check tokens/char in U-Reg if not ',' branch fwd BRANCH_8935
 8931	C8 10               VEJ     (C8),BRANCH_8943            ; If following character not end to command sequence/line branch fwd BRANCH_892E
-8933	8E 29               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+8933	8E 29               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_8935: ; Branched to from 892E
 8935	C6                  VEJ     (C6)                        ; Decrements Y-Reg by 2 bytes for tokens 1 byte for characters in U-Reg
-8936	BE 8B 02            SJP	    SUB_8B02                    ; Processes tokens related to setting COM parameters
+8936	BE 8B 02            SJP	    PARSE_SETCOM                    ; Processes tokens related to setting COM parameters
 8939	83 81               BCS+    BRANCH_89BC                 ; Carry set in sub = Failure
 893B	C8 02               VEJ     (C8),BRANCH_893F            ; If following character not end to command sequence/line branch fwd BRANCH_892E
-893D	8E 1F               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+893D	8E 1F               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_893F: ; Branched to from 893B
 893F	C4 2C 7E            VEJ     (C4),2C,BRANCH_89C0         ; Check tokens/char in U-Reg if not 2C ',' branch fwd BRANCH_89C0
@@ -1509,14 +1542,14 @@ BRANCH_8943: ; Branched to from 8931
 8943	C4 2C 05            VEJ     (C4),2C,BRANCH_894B         ; Check tokens/char in U-Reg if not 2C ',' branch fwd BRANCH_894B 
 8946	C8 6E               VEJ     (C8),BRANCH_89B6            ; If following character not end to command sequence/line branch fwd BRANCH_89B6
 8948	38                  NOP                                 ; Does what it says on the tin
-8949	8E 13               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+8949	8E 13               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_894B: ; Branched to from 8943
 894B	C6                  VEJ     (C6)                        ; Decrements Y-Reg by 2 bytes for tokens 1 byte for characters in U-Reg
-894C	BE 8B 1F            SJP	    MAIN_ENTRY_2_ALT_E4         ; Parity Charater parsing
+894C	BE 8B 1F            SJP	    PORTS_UPDATE_ALT_E4         ; Parity Charater parsing
 894F	83 6B               BCS+    BRANCH_89BC                 ; Carry set in sub = Failure
 8951	C8 02               VEJ     (C8),BRANCH_8955            ; If following character not end to command sequence/line branch fwd BRANCH_8955
-8953	8E 09               BCH+    BRANCH_895E                 ; Unconditional branch fwd (exit)
+8953	8E 09               BCH+    BRANCH_895E                 ; Exit, go back to Start of BASIC
 
 BRANCH_8955: ; Branched to from 8951
 8955	C4 2C 68            VEJ     (C4),2C,BRANCH_89C0         ; Check tokens/char in U-Reg if not 2C ',' branch fwd n
@@ -1543,23 +1576,22 @@ SEPARATOR_8967:
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
-; UNKNOWN_CMD_8968 tied in with UNKNOWN_CMD_8907 above
-; Something to do with parsing comamnds and copies some text into a buffer
+;-------------------------------------------------------------------------------------------------------------
+; SETDEV - Called by command vector table by 831C
 ; Arguments: X
 ; Output:
 ; RegMod: A, U, X, Y
-UNKNOWN_CMD_8968:
-8968	BE 89 CB            SJP	    UNKNOWN_CMD_8968_ALT_ENTRY  ;
-896B	E9 78 57 E0         AND	    (SETDEV_VAL),E0             ; (SETDEV_VAL) = (SETDEV_VAL) & E0
-896F	81 02               BCR+    BRANCH_8973                 ; Sub above returns REC as success
+SETDEV:
+8968	BE 89 CB            SJP	    TXT2STRBUF                  ; Copies string argument into string buffer
+896B	E9 78 57 E0         AND	    (SETDEV_REG),E0             ; (SETDEV_REG) = (SETDEV_REG) & E0
+896F	81 02               BCR+    BRANCH_8973                 ; C=0 means string not found
 8971	FD 88               PSH     X                           ; Save X
 
 BRANCH_8973: ; Branched to from 896F
 8973	C8 07               VEJ     (C8),BRANCH_897C            ; If following character not end to command sequence/line branch fwd BRANCH_897C
 8975	B5 60               LDI	    A,60                        ;
 8977	AE 79 D1            STA	    (79D1)                      ; (79D1) Indicates a basic extension table
-897A	9E 1E               BCH-    BRANCH_895E                 ; Unconditional branch back
+897A	9E 1E               BCH-    BRANCH_895E                 ; Unconditional branch back, borrow exit from SETCOM
 
 BRANCH_897C: ; Branched to from 8973
 897C	C4 3D 01            VEJ     (C4),3D,BRANCH_8980         ; Check tokens/char in U-Reg if not 3D '=' branch fwd BRANCH_8980
@@ -1588,8 +1620,8 @@ BRANCH_8991: ; Branched to from 89B2
 8996	F7                  CIN                                 ; FLAGS = A compared to (X), then INC X
 8997	89 16               BZR+    BRANCH_89AF                 ; If A != (X) branch fwd
 8999	05                  LDA	    (X)                         ; Pulls SETDEV bit value from table
-899A	AB 78 57            ORA	    (SETDEV_VAL)                ; ORs it in
-899D	AE 78 57            STA	    (SETDEV_VAL)                ; and saves it
+899A	AB 78 57            ORA	    (SETDEV_REG)                ; ORs it in
+899D	AE 78 57            STA	    (SETDEV_REG)                ; and saves it
 89A0	B5 C0               LDI	    A,C0                        ;
 89A2	AE 79 D1            STA	    (79D1)                      ; Indicates a basic extension table.
 89A5	C8 02               VEJ     (C8),BRANCH_89A9            ; If following character not end to command sequence/line branch fwd BRANCH_89A9
@@ -1628,34 +1660,40 @@ BRANCH_89C2: ; Branched to from 89BE
 89C8	FD 1A               POP	    Y                           ; Does FFE0 use Y?
 89CA	E0                  VEJ     (E0)                        ; Indicates if UH is not "00" error message
 
-UNKNOWN_CMD_8968_ALT_ENTRY: ; called from 8907, 8968
-89CB	CD 36               VMJ	    (36)                        ; Stores CSI of a text constant or text prediction in the AR-X (C=1). 
-                                                                ; If no string from Y-Reg is detected, C=0 
+
+;------------------------------------------------------------------------------------------------------------
+; TXT2STRBUF - copies text from constant or string variable to the string buffer
+; Arguments:
+; Output: Text into String Buffer, 0D delimited. C=0 if string not found.
+; RegMod: A,X,Y
+TXT2STRBUF: ; called from 8907, 8968
+89CB	CD 36               VMJ	    (36)                        ; Stores CSI of a text constant or text variable in AR-X (C=1). 
+                                                                ; If no string is detected, C=0 
 89CD	E9 78 8E 00         ANI	    (TRACE_ON),00               ; (TRACE_ON) = Zero 
-89D1	81 1B               BCR+    BRANCH_89EE                 ; Carry reset from sub = success
-89D3	FD 98               PSH	    Y                           ; Save Y
+89D1	81 1B               BCR+    BRANCH_89EE                 ; Carry reset - No string
+89D3	FD 98               PSH	    Y                           ; Save Y. Y-REG is pointer into current line?
 89D5	EB 78 8E FF         ORI	    (TRACE_ON),FF               ; Set all bits
 89D9	DC                  VEJ     (DC)                        ; Loads CSI from AR-X: (X) is Address, UL & A is length. CSI = 'Character String Information' 
 89DA	5A 10               LDI	    YL,10                       ; 
 89DC	58 7B               LDI     YH,7B                       ; 7B10 - STRING BUFFER Byte 0 Start
-89DE	8B 05               BZS+    BRANCH_89E5                 ; Not sure if Z flag set by VEJ (DC)
+89DE	8B 05               BZS+    BRANCH_89E5                 ; Skip if length in UL is zero
 89E0	DF                  DEC	    A                           ; A = A - 1
 89E1	2A                  STA	    UL                          ; Loop counter
 
-BRANCH_89E2: ; Branched to from 89E3                            ; Not sure what X is here
+BRANCH_89E2: ; Branched to from 89E3                            ; Copies string from AR-X to String Buffer
 89E2	F5                  TIN                                 ; (Y) = (X) then X = X + 1, Y = Y + 1
 89E3	88 03               LOP	    UL,BRANCH_89E2              ; UL = UL - 1, loop back 'e' if Borrow Flag not s
 
 BRANCH_89E5: ; Branched to from 89DE
 89E5	B5 0D               LDI	    A,0D                        ; 0D = CR
-89E7	1E                  STA	    (Y)                         ; (Y) = A, add CR to string
+89E7	1E                  STA	    (Y)                         ; (Y) = A, add CR to end of string
 89E8	5A 10               LDI	    YL,10                       ; Set Y back to start of buffer
-89EA	FD 0A               POP	    X                           ; X pushed at beggining of this sub
+89EA	FD 0A               POP	    X                           ; X=Y pushed at beggining of this sub
 89EC	FB                  SEC                                 ; Set Carry Flag
 89ED	9A                  RTN                                 ; Return
 
-BRANCH_89EE: ; Branched to from 89D1
-89EE	FD 5A               STX     Y                           ; Y = X
+BRANCH_89EE: ; Branched to from 89D1                            ; We got here if no string was found
+89EE	FD 5A               STX     Y                           ; Y = X. Y-REG is pointer into current line?
 89F0	9A                  RTN                                 ; Return
 
 
@@ -1668,14 +1706,14 @@ SEPARATOR_89F1:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; UNKNOWN_CMD_89F5 - Callled from Command Vector Table
+; TRANSMIT - Called from Command Vector Table
 ; Alt entry at 8A07 - Called from JMP_9ED0:9F13
 ; Parses something and resets UART?
 ; Arguments:
 ; Output:
 ; RegMod: A
-UNKNOWN_CMD_89F5:
-89F5	C2 F0 B3 0C         VEJ	    (C2),F0B3,BRANCH_8A05       ; If next character is not 'F0 B3', branch fwd BRANCH_8A05
+TRANSMIT:
+89F5	C2 F0 B3 0C         VEJ	    (C2),F0B3,BRANCH_8A05       ; If next character is not 'F0 B3' (BREAK), branch fwd BRANCH_8A05
 89F9	C2 2C 09            VEJ	    (C2),2C,BRANCH_8A05         ; If next character is not 2C ',', branch fwd BRANCH_8A05
 89FC	DE 08               VEJ	    (DE),BRANCH_8A06            ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 89FE	D0 09 05            VEJ	    (D0),09,BRANCH_8A06         ; Convert AR-X to integer & load to U-Reg. 09 specifies the range. If range exceeded: Branch fwd BRANCH_8A06
@@ -1691,13 +1729,13 @@ BRANCH_8A06: ; Branched to from 89FC, 89FE
 
 UNKNOWN_CMD_89F5_ALT_E1: ; Called from 8A01, 9F13
 8A07	B5 0D               LDI	    A,0D                        ; 0D = CR
-8A09	AE 78 82            STA	    (STK_PTR_SBR-06/32)         ;
-8A0C	BE 8B 72            SJP	    SUB_8B72                    ; Sets D201 which is UART config register
-8A0F	F4 7A 05            VEJ	    (F4),(MATH_REG_Xa_B6)       ; Loads U-Reg with 16-bit value from address of (MATH_REG_Xa_B6)
+8A09	AE 78 82            STA	    (STK_PTR_GSB/FOR)           ;
+8A0C	BE 8B 72            SJP	    CFG_UART_LPT                    ; Sets D201 which is UART config register
+8A0F	F4 7A 05            VEJ	    (F4),(ARX + 5)              ; Loads U-Reg with 16-bit value from address of (ARX + 5)
 8A12	BE E8 8C            SJP	    SBRAC                       ; Time delay 15,625 ms * Number from U-Reg.BREAK is possible.
-8A15	E9 78 82 00         ANI	    (STK_PTR_SBR-06/32),00      ; (STK_PTR_SBR-06/32) = (STK_PTR_SBR-06/32) & 00. CLear (STK_PTR_SBR-06/32)?
-8A19	BE 8B 72            SJP	    SUB_8B72                    ; Sets D201 which is UART config register
-8A1C	BA 87 DE            JMP	    JMP_87DE                    ; Sends a 00 to RS232 if SETDEV_VAL Bit is set, then RTN
+8A15	E9 78 82 00         ANI	    (STK_PTR_GSB/FOR),00        ; (STK_PTR_GSB/FOR) = (STK_PTR_GSB/FOR) & 00. CLear (STK_PTR_GSB/FOR)?
+8A19	BE 8B 72            SJP	    CFG_UART_LPT                    ; Sets D201 which is UART config register
+8A1C	BA 87 DE            JMP	    NULL2COM                    ; Sends a 00 to RS232 if SETDEV_REG Bit is set, then RTN
 
 
 
@@ -1709,7 +1747,7 @@ SEPARATOR_8A1F:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; RELOC_CODE_8A20 - Poked into Sytem RAM by MAIN_ENTRY_2 to read a value in from (A297) with SPC reset
+; RELOC_CODE_8A20 - Poked into Sytem RAM by PORTS_UPDATE to read a value in from (A297) with SPC reset
 ;                   A297 is Something in CE-150?
 ; Arguments:
 ; Output: A = (A297)
@@ -1725,44 +1763,45 @@ RELOC_CODE_8A20:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; MAIN_ENTRY_2 - Called from 82F8, 8E02, 8E34
-; Pokes code above into 7A26 and calls it
-; Initializes CE-158?
+; PORTS_UPDATE - Called from 82F8, 8E02, 8E34
+; Pokes code from RELOC_CODE_8A20 above into 7A26 and calls it. Checks for something in CE-150
+; May update lh5811 ports and do other INIT realted stuff
+; Seems to set BAUD and/or DTR/RTS each time too
 ; Arguments:
 ; Output:
 ; RegMod: A, UH
-MAIN_ENTRY_2:
+PORTS_UPDATE:
 8A2A	B5 9A               LDI	    A,9A                        ; RTN?
 8A2C	AE 79 FA            STA	    (UNDEF_REG_79FA)            ; 79FA~79FE used by CE-158
 8A2F	FD EB D0 08 80      ORI	    #(CE158_PRT_C),80           ; Paper Feed key (ME1)
-8A34	FD 88               PSH	    X                           ; X already pushed in MAIN_ENTRY
+8A34	FD 88               PSH	    X                           ; Command Code in X already pushed in MAIN_ENTRY
 8A36	4A 29               LDI	    XL,29                       ; RELOC_CODE_8A20 end address (copies backwards)
 8A38	48 8A               LDI	    XH,8A                       ; X = 8A29. Set up to copy to sytem RAM
 8A3A	6A 2F               LDI	    UL,2F                       ; End address of destination System RAM address
-8A3C	68 7A               LDI	    UH,7A                       ; U = 7A2F. 7A26 to 7A2F MATH_REG_VA_B7 to MATH_REG_Wa_B8
+8A3C	68 7A               LDI	    UH,7A                       ; U = 7A2F. 7A26 to 7A2F in AR-W
 
 BRANCH_83AE: ; Branched to from 8A43
-8A3E	47                  LDE	    X                           ; A = (X) then X = X - 1.
-8A3F	2E                  STA	    (U)                         ; Copies 8A20->8A29 from ROM to 7A26 to 7A2F System RAM 
-8A40	62                  DEC	    UL                          ;  values: FD BE, B8,  A5 A2 97,   A8,  FD 81, 9A
-8A41	6E 26               CPI	    UL,26                       ;          REI,   RPV, LDA (A297), SPV, SEI, RTN
-8A43	93 07               BCS-    BRANCH_83AE                 ; Branch back to finish the copying
+8A3E	47                  LDE	    X                           ; A = (X) then X = X - 1. A = (8A29)
+8A3F	2E                  STA	    (U)                         ; Copy 8A20->8A29 from ROM to 7A26 to 7A2F (AR-W) in RAM 
+8A40	62                  DEC	    UL                          ;  values: FD BE,  B8,   A5 A2 97,  A8, FD 81, 9A
+8A41	6E 26               CPI	    UL,26                       ;            REI, RPV, LDA (A297), SPV,   SEI, RTN
+8A43	93 07               BCS-    BRANCH_8A3E                 ; Branch back to finish the copying
 8A45	4A 56               LDI	    XL,56                       ; 
 8A47	48 78               LDI	    XH,78                       ; X = 7856 = ZONE_REG
-8A49	49 1F               ANI	    (X),1F                      ; X = (ZONE_REG) & 1F, zeros bits 7-5
-8A4B	BE 7A 26            SJP	    MATH_REG_Va_B7              ; Why mask (ZONE_REG) before reading (A297) in sub poked in?
-8A4E	89 02               BZR+    BRANCH_8A52                 ; Branch fwd if (A297) was not zero
+8A49	49 1F               ANI	    (X),1F                      ; X = (ZONE_REG) & 1F, zeros bits 7-5 of value in ZONE_REG
+8A4B	BE 7A 26            SJP	    ARV + 6                     ; Why mask (ZONE_REG) before reading (A297) in sub poked in?
+8A4E	89 02               BZR+    BRANCH_8A52                 ; Branch fwd if (A297) was not zero (looks for CE-150?)
 8A50	4B 20               ORI	    (X),20                      ; (ZONE_REG) = (ZONE_REG) | 20. Sets bit 5
 
 BRANCH_8A52: ; Branched to from 8A4E
-8A52	B7 6D               CPI	    A,6D                        ; FLAGS = A & 6D. A = (A297).
-8A54	89 02               BZR+    BRANCH_8A58                 ; If A != 6D, is 6D a command code?
+8A52	B7 6D               CPI	    A,6D                        ; FLAGS = A & 6D. A = (A297), some value if CE-150 present.
+8A54	89 02               BZR+    BRANCH_8A58                 ; If A != 6D.
 8A56	4B 40               ORI	    (X),40                      ; (ZONE_REG) = (ZONE_REG) | 40. Sets bit 6
 
 ; this section seems to set PORT_A and PORT_B directions
 BRANCH_8A58: ; Branched to from 8A54
-8A58	FD 2A               POP     U                           ; Pops original X into U. Is UL a command code?
-8A5A	68 D0               LDI	    UH,D0                       ; Changes High Byte to D0. D0 + ??
+8A58	FD 2A               POP     U                           ; Pops original X into U. Command code now in UL.
+8A5A	68 D0               LDI	    UH,D0                       ; Changes High Byte to D0. D0 + Command Code
 8A5C	ED 79 DE 10         BII	    (UNDEF_REG_79DE),10         ; Bit 4
 8A60	8B 19               BZS+    BRANCH_8A7B                 ; Brach fwd if Bit 4 was not set
 8A62	4D 20               BII	    (X),20                      ; FLAGS = (ZONE_REG) & 20.
@@ -1779,16 +1818,16 @@ BRANCH_8A58: ; Branched to from 8A54
 8A76	AE 78 8E            STA	    (TRACE_ON)                  ; (A still C3?)
 8A79	8E 25               BCH+    BRANCH_8AA0                 ; Unconditional fwd branch
 
-BRANCH_8A7B:  ; Branched to from 8A60                           ; Command code D0?
+BRANCH_8A7B:  ; Branched to from 8A60                           ; UH=D0, UH=Command code
 8A7B	EB 79 DE 10         ORI	    (UNDEF_REG_79DE),10         ; Set bit 4
 8A7F	B5 FE               LDI	    A,FE                        ; FE used by BZR+ branch
-8A81	6E D0               CPI	    UL,D0                       ; FLAGS = UL & D0. Here UL still original XL.
+8A81	6E D0               CPI	    UL,D0                       ; FLAGS = UL & D0. Command code D0=INIT command
 8A83	89 05               BZR+    BRANCH_8A8A                 ; If UL != D0 branch fwd
-8A85	A5 7A 20            LDA	    (VREG)                      ; A =  Math_REG_Va_B1
+8A85	A5 7A 20            LDA	    (ARV)                       ; A =  AR-V
 8A88	B9 01               ANI	    A,01                        ; A = A & 01, mask off all but bit 0
 
 BRANCH_8A8A: ; Branched to from 8A83
-8A8A	AE 78 8E            STA	    (TRACE_ON)                  ; (TRACE_ON) = A. A = FE or A = (VREG) & 01
+8A8A	AE 78 8E            STA	    (TRACE_ON)                  ; (TRACE_ON) = A. A = (ARV) & 01 (INT Cmd) or A = FE (rest)
 8A8D	4A B0               LDI	    XL,B0                       ; 
 8A8F	48 83               LDI	    XH,83                       ; X = 83B0 = CE-158_IOREG_INIT
 8A91	6A 0F               LDI	    UL,0F                       ; U = D00F = CE158_PRT_B
@@ -1801,35 +1840,37 @@ BRANCH_8A93:  ; Branched to from 8A99                           ; Sets default s
 8A99	93 08               BCS-    BRANCH_8A93                 ; If UL > 07 branch back, = 7 we are done
 8A9B	6A 56               LDI	    UL,56                       ; Bytes: FF FF 7F 03 00 00 00 A0
 8A9D	BE 9F 75            SJP	    SUB_9F75                    ; U = D056, X = 83B8 (83B8 value not used yet)
+                                                                ; Initializes some CE-158 registers
 
 BRANCH_8AA0: ; Branched to from 8A79
 8AA0	BE 9F D0            SJP	    SUB_9FD0                    ; Sets DTR/RTS based on OUTSTAT_REG
-8AA3	ED 78 8E 01         BII	    (TRACE_ON),01               ; FALGS = (TRACE_ON) & 01, mask all but bit 0 off
+8AA3	ED 78 8E 01         BII	    (TRACE_ON),01               ; FLAGS = (TRACE_ON) & 01, mask all but bit 0 off
 8AA7	89 94               BZR+    BRANCH_8B3D                 ; If bit 0 in (TRACE_ON) set branch fwd
+                                                                ; Branch fwd, set BAUD rate, then return
 
-MAIN_ENTRY_2_ALT_E1: ; Jumped to from to from 8910
+PORTS_UPDATE_ALT_E1: ; Jumped to from to from 8910
 8AA9	B5 99               LDI	    A,99                        ;
-8AAB	8E 8D               BCH+    BRANCH_8B3A                 ; Branch fwd unconditional
+8AAB	8E 8D               BCH+    BRANCH_8B3A                 ; Branch fwd, set BAUD rate, then return
 
 
 
 ;-----------------------------------------------------
-; MAIN_ENTRY_2_ALT_E2 - Called from SUB_8D04:8EDA
+; PORTS_UPDATE_ALT_E2 - Called from SUB_8D04:8EDA
 ; Not sure what this does. Searches through TBL_BAUD
 ; Arguments:
 ; Output:
 ; RegMod: A, X
-MAIN_ENTRY_2_ALT_E2:
+PORTS_UPDATE_ALT_E2:
 8AAD	A5 78 B6            LDA	    (ERROR_TOP_H)               ; Begining address of the program containing ERROR line
 8AB0	FB                  SEC                                 ; Set Carry Flag
 8AB1	B1 16               SBI	    A,16                        ; A = A - 16
-8AB3	81 0D               BCR+    BRANCH_8AC2                 ; If A < 16 Branch fwd
+8AB3	81 0D               BCR+    BRANCH_8AC2                 ; If A < 16 Branch fwd, Return
 8AB5	B7 0A               CPI	    A,0A                        ;
 8AB7	83 0D               BCS+    BRANCH_8AC6                 ; A >= 0A Branch, else A >= 16 A < 0A
 8AB9	BE 86 F6            SJP	    SUB_86F0_ALT_E1             ; Calculates a new address to set P to, uses U, X, A
 
 ; are these 5 lines not used
-8ABC	05                  LDA	    (X)                         ; A = (X)
+8ABC	05                  LDA	    (X)                         ; A = (X). What is X?
 8ABD	05                  LDA	    (X)                         ; why twice? 
 8ABE	10                  SBC	    YL                          ; A = A - YL
 8ABF	42                  DEC	    XL                          ; XL = XL - 1
@@ -1838,10 +1879,8 @@ MAIN_ENTRY_2_ALT_E2:
 BRANCH_8AC2: ; Branched to from 8AB3
 8AC2	9A                  RTN                                 ;
 
-
 ; How is this reached
-8AC3	BA 87 90            JMP	    JMP_8790                    ; 
-
+8AC3	BA 87 90            JMP	    JMP_8790                    ; ***
 
 BRANCH_8AC6:  ; Branched to from 8AB7
 8AC6	04                  LDA	    XL                          ; Not sure what X or Y is here
@@ -1851,7 +1890,9 @@ BRANCH_8AC6:  ; Branched to from 8AB7
 8ACC	BA CE D0            JMP	    TXFR_RSV_KEY                ; Transfers reserve key assignment to reserve storage area
 
 
-MAIN_ENTRY_2_ALT_E3: ; Branched to from 8921
+
+;--------------------------------------------------------------------------------------------------
+UNKNOWN_8ACF: ; Branched to from 8921
 8ACF	6A 50               LDI	    UL,50                       ;
 8AD1	BE D1 4F 56         SJP	    SUB39,BRANCH_8B2B           ; Pass decimal number which Y points to AR-X. Jump in case of error 
 8AD5	D0 06 53            VEJ     (D0),06,BRANCH_8B2B         ; Convert AR-X to INT & load to U-Reg. 06 is the range. If range exceeded: Branch fwd n
@@ -1890,12 +1931,12 @@ BRANCH_8AEA: ; Branched to from 8AE2
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8B02: ; Called from 8936
+; PARSE_SETCOM: ; Called from 8936
 ; Parse and set SETCOM settings
 ; Arguments: A, (SETCOM)
 ; Output:
 ; RegMod: A, X
-SUB_8B02:
+PARSE_SETCOM:
 8B02	CD 02 35 39 24      VMJ	    (02),35,39,BRANCH_8B2B      ; Load next token/character in U, check if (UL) in interval n1-n2. If not branch n3
 8B07	B1 34               SBI	    A,34                        ; A = A - 34. What is A?
 8B09	F1                  AEX                                 ; Swap hi and low nibbles of Accumulator.
@@ -1911,7 +1952,7 @@ SUB_8B11: ; Called from 89B7
                                                                 ; Bits 0,1 Parity, 5,6,7 Baud left
 8B1D	8E 18               BZS+    BRANCH_8B37                 ; Branch fwd if Zero set, if Parity and Baud both zero
 
-MAIN_ENTRY_2_ALT_E4: ; Called from 894C                         ; Parse parity settings
+PORTS_UPDATE_ALT_E4: ; Called from 894C                         ; Parse parity settings
 8B1F	C0                  VEJ     (C0)                        ; load next character/token to U-Reg
 8B20	83 09               BCS+    BRANCH_8B2B                 ; Branch fwd if Carry set, i.e. error from sub
 8B22	CD 34 02            VMJ	    (34),02,                    ; A 'Switch-Case' type of function 
@@ -1942,8 +1983,8 @@ BRANCH_8B3A: ; Branched to from 8AAB
 8B3A	AE 78 58            STA	    (SETCOM_REG)                ; (SETCOM_REG) = A
 
 BRANCH_8B3D: ; brancnched from 8AA7                             ; Sets Baud rate in CDP1854ACE UART chip
-8B3D	E9 78 82 00         ANI	    (STK_PTR_SBR-06/32),00      ; 
-8B41	BE 8B 72            SJP	    SUB_8B72                    ; Sets D201 which is a UART config register
+8B3D	E9 78 82 00         ANI	    (STK_PTR_GSB/FOR),00      ; 
+8B41	BE 8B 72            SJP	    CFG_UART_LPT                    ; Sets D201 which is a UART config register
 8B44	A5 78 58            LDA	    (SETCOM_REG)                ; A = (SETCOM_REG)
 8B47	F1                  AEX                                 ; Swap hi and low nibbles of Accumulator. 3 2 1 0 7 6 5 4
 8B48	B9 0E               ANI	    A,0E                        ; Keep x x x x 7 6 5 x of (SETCOM), i.e. BAUD
@@ -1971,27 +2012,27 @@ BRANCH_8B67: ; branched to from 8B60
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8B72 - Called from 8B41, 
+; CFG_UART_LPT - Called from 8B41, 
 ; Configures UART
 ; Arguments: 
 ; Output:
 ; RegMod: U, A, X
-SUB_8B72:
+CFG_UART_LPT:
 8B72	6A 01               LDI	    UL,01                       ;
 8B74	FD BE               RIE                                 ; Disable interrupts
 8B76	68 D2               LDI	    UH,D2                       ; U = D201 = UART_REG_W
-8B78	A5 78 57            LDA	    (SETDEV_VAL)                ; A = (SETDEV_VAL), which devices redirected to RS232
+8B78	A5 78 57            LDA	    (SETDEV_REG)                ; A = (SETDEV_REG), which devices redirected to RS232
 8B7B	D9                  SHL                                 ; A = A << 1. Shifted through Carry, 0 into MSB   C7  6 5 4 3 2 1 0 x
 8B7C	DB                  ROL                                 ; A = A << 1. Carry into Bit 0, Bit 7 into Carry  C6  5 4 3 2 1 0 x 7
-8B7D	83 3C               BCS+    BRANCH_8BBB                 ; If Bit 6 of (SETDEV_VAL) was set branch fwd
+8B7D	83 3C               BCS+    BRANCH_8BBB                 ; If Bit 6 of (SETDEV_REG) was set branch fwd
 8B7F	D1                  ROR                                 ; A = A >> 1. Carry into bit 7, bit 0 into Carry  C7  6 5 4 3 2 1 0 x
 8B80	A5 78 58            LDA	    (SETCOM_REG)                ; A = (SETCOM_REG)
 8B83	B9 1F               ANI	    A,1F                        ; Clear Bits 7-5, Baud 
 8B85	48 83               LDI	    XH,83                       ;
-8B87	81 23               BCR+    BRANCH_8BAC                 ; If Bit 7 of (SETDEV_VAL) was set branch fwd
-8B89	ED 78 82 0D         BII	    (STK_PTR_SBR-06/32),0D      ; 
+8B87	81 23               BCR+    BRANCH_8BAC                 ; If Bit 7 of (SETDEV_REG) was set branch fwd
+8B89	ED 78 82 0D         BII	    (STK_PTR_GSB/FOR),0D        ; 
 8B8D	8B 05               BZS+    BRANCH_8B94                 ; If all Bits 3,2,0 clear branch fwd
-8B8F	A5 78 82            LDA	    (STK_PTR_SBR-06/32)         ; A = (STK_PTR_SBR-06/32)
+8B8F	A5 78 82            LDA	    (STK_PTR_GSB/FOR)           ; A = (STK_PTR_GSB/FOR)
 8B92	8E 13               BCH+    BRANCH_8BA7                 ; Branch fwd unconditional
 
 BRANCH_8B94: ; branched to from 8B8D
@@ -2009,19 +2050,19 @@ BRANCH_8BA7: ; branched to from 8B92, 8BCC, 8BB5, 8BB9
 8BAB	9A                  RTN                                 ; Return
 
 
-BRANCH_8BAC: ; Branched to from 8B87                            ; This section seems wrong, 8307 is not a table.
+BRANCH_8BAC: ; Branched to from 8B87                            ; This section seems wrong, 8307 is not a table. 8407 is a table ***
 8BAC	4A 07               LDI	    XL,07                       ; XH = 83, X = 8307, A = (SETCOM_REG) & 1F
 8BAE	FD CA               ADR	    X                           ; X = X + A; 8307 inside MAIN_ENTRY?
 8BB0	05                  LDA	    (X)                         ; A = (X)
-8BB1	ED 78 82 08         BII	    (STK_PTR_SBR-06/32),08      ; FLAGS = (STK_PTR_SBR-06/32) & 08. Save bit 3
-8BB5	99 10               BZR-    BRANCH_8BA7                 ; If bit 3 in (STK_PTR_SBR-06/32) was set
+8BB1	ED 78 82 08         BII	    (STK_PTR_GSB/FOR),08        ; FLAGS = (STK_PTR_GSB/FOR) & 08. Save bit 3
+8BB5	99 10               BZR-    BRANCH_8BA7                 ; If bit 3 in (STK_PTR_GSB/FOR) was set
 8BB7	BB 60               ORI	    A,60                        ; A = A | 60
 8BB9	9E 14               BCH-    BRANCH_8BA7                 ; Unconditional back branch
 
 BRANCH_8BBB: ; Branched to from 8B7D
 8BBB	A5 78 58            LDA	    (SETCOM_REG)                ; A = (SETCOM_REG)
 8BBE	B9 1F               ANI	    A,1F                        ; A = A & 1F. Mask off bits 7-5, Baud
-8BC0	ED 78 82 0D         BII	    (STK_PTR_SBR-06/32),0D      ; FLAGS = (STK_PTR_SBR-06/32) & 0D
+8BC0	ED 78 82 0D         BII	    (STK_PTR_GSB/FOR),0D        ; FLAGS = (STK_PTR_GSB/FOR) & 0D
 8BC4	8B 02               BZS+    BRANCH_8BC8                 ; If all bits 0,2,3 are clear branch fwd
 8BC6	BB 40               ORI	    A,40                        ; A = A | 40. Set bit 3
 
@@ -2039,12 +2080,12 @@ BRANCH_8BC8:
 ; RegMod: 
 SUB_8BCE:
 8BCE	A5 78 B6            LDA	    (ERROR_TOP_H)               ; ERROR TOP (H)
-8BD1	BE 87 0B            SJP	    SUB_870B                    ; Copies text string from TEXT_84EF to Input Buffer (7BB0)
+8BD1	BE 87 0B            SJP	    TERMTXT_2INBUF              ; Copies text string from TEXT_84EF to Input Buffer (7BB0)
                                                                 ; A = String index. Terminal program menu text?
-8BD4	BE 86 F0            SJP	    SUB_86F0                    ; Calculates a new address to set P to (Program Counter),
+8BD4	BE 86 F0            SJP	    SUB_86F0                    ; Calculates a new address to set P to (Program Counter), and goes there.
 
 ;------
-; Seems like nonsense
+; Seems like nonsense ***
 8BD7	12                  ADC	    YL                          ; Was Y passed from a sub?
 8BD8	1C                  DCS	    (Y)                         ; A = A - (Y). BCD Subtraction 
 8BD9	1E                  STA	    (Y)                         ; (Y) = A
@@ -2062,6 +2103,8 @@ SUB_8BCE:
 8BE7	39                  AND	    (V)                         ; A = A & (V)
 8BE8	38                  NOP                                 ;
 8BE9	2D                  EOR	    (U)                         ;
+
+; this part looks reasonable but is not called 
 8BEA	48 85               LDI	    XH,85                       ;
 8BEC	4A 60               LDI	    XL,60                       ; X = 8560 in TBL_BAUD
 8BEE	6A 06               LDI	    UL,06                       ;
@@ -2076,7 +2119,7 @@ BRANCH_8BF0:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8BF4 - Called by?
+; SUB_8BF4 - Called by? ***
 ; no idea what it does
 ; Arguments: XL
 ; Output:
@@ -2133,6 +2176,7 @@ BRANCH_8C16: ; Branched to from 8C36
 8C1C	51                  SIN	    (Y)                         ; (Y) = A. Then Y = Y + 1
 8C1D	B5 07               LDI	    A,07                        ;
 8C1F	9E 0E               BCH-    BRANCH_8C13                 ; Unconditional branch back
+
 8C21	B5 46               LDI	    A,46                        ;
 8C23	51                  SIN	    (Y)                         ; (Y) = A. Then Y = Y + 1
 8C24	A5 78 B6            LDA	    (ERROR_TOP_H)               ;
@@ -2148,6 +2192,7 @@ BRANCH_8C16: ; Branched to from 8C36
                                                                 ; Sets C=0 if 2nd reserve memory area is occupied 
 8C36	BE CE C4            SJP	    SUB12                       ; Searches for reserve key code in reserve memory
 8C39	91 25               BCR-    BRANCH_8C16                 ; If carry not set branch back
+
 
 BRANCH_8C3B: ; Branched to from 8C43
 8C3B	45                  LIN	    (X)                         ; A = (X) then INC X
@@ -2171,12 +2216,12 @@ SUB_8C46:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8C4B - Called from UNKNOWN_CMD_8893:88AD 
+; SETCOM2ASCII - Called from DEV$
 ; Converts Baud Rate setting in SETCOM to ASCII?
 ; Arguments:
 ; Output:
 ; RegMod: A, X, U
-SUB_8C4B:
+SETCOM2ASCII:
 8C4B	A5 78 58            LDA	    (SETCOM_REG)                ;
 8C4E	B9 E0               ANI	    A,E0                        ; Keep Bits 7-5, baud rate
                                                                 ; 0 = 50, 4 = 110, 6 = 200, 8 = 300, A = 600, C = 1200, E = 2400
@@ -2196,12 +2241,12 @@ BRANCH_8C5B: ; Branched to from 8C49
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8C5F - Called from UNKNOWN_CMD_8899:88B5
+; PARITY2ASCII - Called from DEV$
 ; Updates (Y) with ASCII charecter for Parity
 ; Arguments: Y = 7A1B, MATH_REG_Ua_B4
 ; Output: (Y) = ASCII cahrecter for Parity
 ; RegMod: UL, A
-SUB_8C5F:
+PARITY2ASCII:
 8C5F	A5 78 58            LDA	    (SETCOM_REG)                ;
 8C62	6A 4E               LDI	    UL,4E                       ; UL = 4E if (SETCOM_REG) Bit 0 not set
 8C64	D5                  SHR                                 ; A = A >> 1. Shift out Bit 0
@@ -2219,12 +2264,12 @@ BRANCH_8C6E: ; Branched to from 8C65, 8C6A
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8C71 - Called from UNKNOWN_CMD_8893:88B1
+; WORDLEN2ASCII - Called from DEV$
 ; Updates (Y) with ASCII value for Word Length
 ; Arguments: Y = 7A19, MATH_REG_Ua_B2
 ; Output: (Y) = ASCII cahrecter for Word Length
 ; RegMod: A, Y, UL
-SUB_8C71:
+WORDLEN2ASCII:
 8C71	A5 78 58            LDA	    (SETCOM_REG)                ;
 8C74	B9 18               ANI	    A,18                        ; Keep bits 4-3. Swap high/low nibbles of A.
 8C76	F1                  AEX                                 ;  Bit 3 @ Bit 7, Bit 4 @ Bit 0
@@ -2237,12 +2282,12 @@ SUB_8C71:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8C7D - Called from UNKNOWN_CMD_8893:88B9
+; STOPBIT2ASCII - Called from DEV$
 ; Updates (Y) with ASCII charecter for #Stop Bits
 ; Arguments: Y = 7A1D, MATH_REG_Ua_B6
 ; Output: (Y) = ASCII cahrecter for #Stop Bits
 ; RegMod: A, Y
-SUB_8C7D:
+STOPBIT2ASCII:
 8C7D	B5 31               LDI	    A,31                        ; A = 31 = '1'
 8C7F	ED 78 58 04         BII	    (SETCOM_REG),04             ; Keep Bit 2, Stop Bits
 8C83	8B 01               BZS+    BRANCH_8C86                 ; If Bit 2 not set skip ahead, A = 21
@@ -2255,21 +2300,26 @@ BRANCH_8C86: ; Branched to from 8C83
 
 
 ;------------------------------------------------------------------------------------------------------------
-; UNKNOWN_CMD_8C88, UNKNOWN_CMD_8C8E - Called from Command Vector Table
-; Looks like it does some parsing, changes UART registers?
+; TERMINAL - Called by command vector table by 831C
 ; Arguments:
 ; Output: 
-; RegMod: A, X, U
-UNKNOWN_CMD_8C88:
+; RegMod:
+TERMINAL:
 8C88	E9 78 55 7F         ANI	    (CR/LF_REG),7F              ; Clear Bit 7. What is this register used for?
 8C8C	8E 09               BCH+    BRANCH_8C97                 ; Unconditional fwd branch
 
-UNKNOWN_CMD_8C8E:
+
+;------------------------------------------------------------------------------------------------------------
+; DTE - Called by command vector table by 831C
+; Arguments:
+; Output: 
+; RegMod:
+DTE:
 8C8E	EB 78 55 80         ORI	    (CR/LF_REG),80              ; Set Bit 7
 8C92	B5 92               LDI	    A,92                        ;
 8C94	BE 8B 3A            SJP     BRANCH_8B3A                 ; STA to (SETCOM) sets Buad rate in UART
 
-BRANCH_8C97: ; Branched to from 8C8C
+BRANCH_8C97: ; Branched to from TERMINAL
 8C97	C8 63               VEJ     (C8),BRANCH_8CFC            ; If following character not end to command sequence/line branch fwd BRANCH_8CFC 
 8C99	F4 78 99            VEJ     (F4),(VAR/ARR_PTR_H)        ; Loads U-Reg with 16-bit value from address of (VAR/ARR_PTR_H)
 8C9C	CC 67               VEJ     (CC),(67)                   ; Loads X-Reg with address at 78(67) 78(68) End of BASIC RAM (H)
@@ -2281,11 +2331,11 @@ BRANCH_8C97: ; Branched to from 8C8C
 8CAA	81 4D               BCR+    BRANCH_8CF9                 ; If error skip to end
 8CAC	6C 02               CPI	    UH,02                       ;
 8CAE	81 49               BCR+    BRANCH_8CF9                 ; If UH < 02 skip to end
-8CB0	F6 7A 05            VEJ     (F6),(MATH_REG_Xa_B6)       ; Transfers U to (MATH_REG_Xa_B6), (MATH_REG_Xa_B6)+1
+8CB0	F6 7A 05            VEJ     (F6),(ARX + 5)       ; Transfers U to (ARX + 5), (ARX + 5)+1
 8CB3	BE 87 A3            SJP     SUB_87A3                    ; shuffle around BASIC line numbers, maybe for editing?
 8CB6	C3 E0               VCS     (E0)                        ; If Carry Set Call VEJ(E0)->Indicates if UH is not "00" error message
 8CB8	FD E9 F0 0A 00      ANI	    #(PC1500_MSK_REG),00        ; Reset PC-1500 MSK Register
-8CBD	BE 81 E6            SJP     SUB_81E6                    ; Manipulates LPT/UART registers
+8CBD	BE 81 E6            SJP     IOCFG                    ; Manipulates LPT/UART registers
 8CC0	B5 04               LDI	    A,04                        ;
 8CC2	AE 78 95            STA	    (USING_F/F)                 ; Using format, presence of decimal point, comma,etc
 8CC5	CC 5D               VEJ     (CC),(5D)                   ; Loads X-Reg with address at 78(5D) 78(5E), KEYBOARD derivation flag
@@ -2325,7 +2375,7 @@ BRANCH_8CFC: ; Branched to from 8C97
 
 ;------------------------------------------------------------------------------------------------------------
 ; JMP_8D04 - Called from SUB_PRINT#:90F5
-; Alt entry at 8D08 Called from 8FC1:8EE1, Jumped to from TBL_915F
+; Alt entry at 8D08 Called from 8FC1:8EE1, Jumped to from JUMP_TBL_915F
 ; Resets CE-150, LCD annuncuiators, jumps to new code
 ; Arguments:
 ; Output: 
@@ -2349,7 +2399,7 @@ BRANCH_8D09: ; Branched to from 8CF7
 8D09	B5 00               LDI	    A,00                        ;
 
 SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
-8D0B	FD E9 F0 0A FC      ANI	    #(PC1500_MSK_REG),FC        ; Clear Bits B0 = Interrupt mask for IRQ, B1 = INterrupt mask for PB7
+8D0B	FD E9 F0 0A FC      ANI	    #(PC1500_MSK_REG),FC        ; Clear Bits B0 = Interrupt mask for IRQ, B1 = Interrupt mask for PB7
 8D10	BE 9F D0            SJP	    SUB_9FD0                    ; Sets DTR/RTS based on OUTSTAT_REG
 8D13	FD C8               PSH	    A                           ;
 8D15	B5 9A               LDI	    A,9A                        ;
@@ -2369,7 +2419,7 @@ SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
 8D3E	69 70               ANI	    (U),70                      ; Keep Bits 6 (RUN), 5 (PRO), 4 (RESERVE)
 8D40	BE D0 34            SJP	    SUB25                       ; Writes over input buffer with 0D
 8D43	FD 8A               POP	    A                           ;
-8D45	BE 87 36            SJP	    SUB_8736                    ; Copies text string from TEXT_84EF to Display
+8D45	BE 87 36            SJP	    TERMTXT_DISP                ; Copies text string from TEXT_84EF to Display
 8D48	6A 3F               LDI	    UL,3F                       ;
 8D4A	68 00               LDI	    UH,00                       ; U = 003F
 8D4C	BE E8 8C            SJP	    SBRAC                       ; Time delay 15,625 ms * Number from U-Reg.BREAK is possible
@@ -2395,7 +2445,7 @@ BRANCH_8D4F: ; Branched to from 8DC8, 8F86
 BRANCH_8D6B: ; Branched to from 8D5A, 8D5F, 8D64, 8D68
 8D6B	24                  LDA	    UL                          ; UL = 17, 01, 18, 19, 20 from above
 8D6C	D9                  SHL                                 ; A = A << 1. A = 2E, 02, 30, 32, 40
-8D6D	BE 87 36            SJP	    SUB_8736                    ; Displays text string from TEXT_84EF index by A
+8D6D	BE 87 36            SJP	    TERMTXT_DISP                ; Displays text string from TEXT_84EF index by A
 
 BRANCH_8D70: ; Branched to from 8DAD, BRANCH_TBL_8DD9
 8D70	BE 99 8D            SJP	    SUB_998D                    ; Something with LCD annunciators and last key pressed reg
@@ -2429,7 +2479,7 @@ BRANCH_8D8E: ; Branchded to from 8D8A
 8D97	08                  STA	    XH                          ; 
 8D98	25                  LDA	    (U)                         ; A = (U)
 8D99	0A                  STA	    XL                          ; X = 8E97, 8E9B, 8EA8
-8D9A	FD 5E               STX	    P                           ; P = X. Set Program Counter to X
+8D9A	FD 5E               STX	    P                           ; P = X. Set Program Counter to X ***JMP
 
 
 BRANCH_8D9C: ; Branced to from 8D78, 8D7C
@@ -2512,7 +2562,7 @@ BRANCH_8DF7:
 8DFB	F6 76 4E            VEJ	    (F6),(HIGHLCDFLAG)          ; Saves U-Reg to (HIGHLCDFLAG)
 8DFE	CC BE               VEJ	    (CC),BE                     ; Loads X-Reg with address at 78(pp) 78(pp+1). DATA POINTER
 8E00	CA 5D               VEJ	    (CA),(5D)                   ; Transfers X to 78(5D), 78(5E). KEYBOARD derivation
-8E02	BE 8A 2A            SJP	    MAIN_ENTRY_2                ; 785D = KEYBOARD derivation flag Bit7=1 SPV, Bit7=0 RPV
+8E02	BE 8A 2A            SJP	    PORTS_UPDATE                ; 785D = KEYBOARD derivation flag Bit7=1 SPV, Bit7=0 RPV
 8E05	FD E9 B0 0D BF      ANI	    #(CE150_PRT_B_DIR),BF       ; CE-150 - Bit 6 input, rest output
 8E0A	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set interrupt mask bit for IRQ
 8E0F	FD EB B0 0A 03      ORI	    #(CE150_MSK_REG),03         ; Set interrupt mask bit for IRQ, PB7 (Busy input)
@@ -2547,7 +2597,7 @@ BRANCH_8E1E: ; Branched to from BRANCH_TBL_8DD9
 
 BRANCH_8E23: ; Branched to from 8DB7
 8E23	AE 78 B6            STA	    (ERROR_TOP_H)               ;
-8E26	BA 8E EF            JMP	    JMP_8EEF                    ; MAy jump to new code or parse then jump to new code
+8E26	BA 8E EF            JMP	    JMP_8EEF                    ; May jump to new code or parse then jump to new code
 
 
 TBL_8E29: ; Used by code directly above
@@ -2560,7 +2610,7 @@ BRANCH_8E31: ; Branched to from BRANCH_TBL_8DD9
 
 BRANCH_8E32: ; Branched to from BRANCH_TBL_8DD9
 8E32	FD 88               PSH	    X                           ; X = Program Counter i.e. 8E31, 8E32
-8E34	BE 8A 2A            SJP	    MAIN_ENTRY_2                ;
+8E34	BE 8A 2A            SJP	    PORTS_UPDATE                ;
 8E37	BE 8F C1            SJP	    SUB_8FC1                    ; Copies 20 bytes to or from String Var P$
 8E3A	B5 02               LDI	    A,02                        ;
 8E3C	AE 79 F4            STA	    (79F4)                      ; CSIZE (Printing character size select)
@@ -2594,12 +2644,12 @@ JMP_8E55: ; Jumped to from 83A1, Jumped here from 8E52 through JMP_8380
 8E74	BE CE C4            SJP	    SUB12                       ; Searches for reserve key code in reserve memory
 8E77	81 4A               BCR+    BRANCH_8EC3                 ;  Sub returns carry set if success 
 8E79	FD 88               PSH	    X                           ; XL was altered by sub
-8E7B	BE 87 80            SJP	    SUB_876C_ALT_E1             ; #(CE158_PRT_A) Clear Bits 1-0 (ME1), Bit 0 = DTR, Bit 1 = RTS
+8E7B	BE 87 80            SJP	    IRQ_RESET_ALT_E1            ; #(CE158_PRT_A) Clear Bits 1-0 (ME1), Bit 0 = DTR, Bit 1 = RTS
 8E7E	6A 40               LDI	    UL,40                       ;
 8E80	68 00               LDI	    UH,00                       ; U = 0040
 8E82	BE E8 8C            SJP	    SBRAC                       ; Time delay 15,625 ms * Number from U-Reg.BREAK is possible
 8E85	FD 0A               POP	    X                           ; Maybe X was altered by SBRAC?
-8E87	BE 87 45            SJP	    SUB_8745                    ; Sends string to RS232. X is set with source table address?
+8E87	BE 87 45            SJP	    STRNG_2COM                  ; Sends string to RS232. X is set with source table address?
 8E8A	8E 37               BCH+    BRANCH_8EC3                 ;  
 
 BRANCH_8E8C: ; Branched to from 89DC
@@ -2651,7 +2701,7 @@ BRANCH_8EBD: ; Branched to from 8EB7
 
 
 BRANCH_8EC3: ; Branched to from 8E6B, 8E77, 8E8A
-8EC3	BE 87 6C            SJP	    SUB_876C                    ; Resets IRQ masks for CE-150, CE-158
+8EC3	BE 87 6C            SJP	    IRQ_RESET                    ; Resets IRQ masks for CE-150, CE-158
 8EC6	E9 78 B1 00         ANI	    (78B1),00                   ; Clear register. BREAK TOP (L)
 8ECA	BE 98 02            SJP	    SUB_9802                    ; Resets last pressed key register and repeat speed.
 8ECD	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set interrupt mask for IRQ
@@ -2668,7 +2718,7 @@ BRANCH_8EC3: ; Branched to from 8E6B, 8E77, 8E8A
 ; Output: 
 ; RegMod: A
 BRANCH_8EDA: ; Branched to from 8F6A
-8EDA	BE 8A AD            SJP	    MAIN_ENTRY_2_ALT_E2         ;
+8EDA	BE 8A AD            SJP	    PORTS_UPDATE_ALT_E2         ;
 8EDD	B5 06               LDI	    A,06                        ;
 8EDF	81 03               BCR+    BRANCH_8EE4                 ; Carry was set in sub
 
@@ -2973,7 +3023,7 @@ BRANCH_906F: ; Branched to from 9066
 
 
 ;------------------------------------------------------------------------------------------------------------
-; UNKNOWN_JMP_9072 - Branched to from 914B, 914F, Jumped to from 9F22, TBL_915F
+; UNKNOWN_JMP_9072 - Branched to from 914B, 914F, Jumped to from 9F22, JUMP_TBL_915F
 ; Changes LCD annunciators branches to SUB_PRINT#_ALT_X1
 UNKNOWN_JMP_9072:
 9072	2A                  STA	    UL                          ; Where does A come from, fall thru from above?
@@ -3028,7 +3078,7 @@ BRANCH_90AB: ; Branched to from 90A2
 ; Output: 
 ; RegMod: XL, Y, A
 JMP_90B1:
-90B1	BE 81 BC            SJP     SUB_81BC                    ; Sends charecter in A to RS232 Port
+90B1	BE 81 BC            SJP     CHAR2COM                    ; Sends charecter in A to RS232 Port
 90B4	83 36               BCS+    SUB_PRINT#_ALT_X1           ; Carry set = failure
 90B6	4A D8               LDI	    XL,D8                       ;
 90B8	BE 98 45            SJP     SUB_9845                    ; Shifts display left one charecter
@@ -3078,28 +3128,30 @@ BRANCH_910D: ; Branched to from 9102
 
 BRANCH_9111: ; Branched to from 9108
 9111	BE 99 AA            SJP	    SUB_99E6_ALT_E1             ; Not sure?
-9114	EF 7B 0E 10         ADI	    (7B0E),10                   ; Character to blink
+9114	EF 7B 0E 10         ADI	    (CURS_CTRL),10              ; Character to blink. ADI alters C
 9118	BE 91 1E            SJP	    SUB_911E                    ; looking for something at PC-1500 - IF Register?
 911B	BA 8F E0            JMP	    JMP_8FE0                    ; Seems like it resets some things
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_911E  Called from 911B, 9994
+; SUB_911E  Called from 9118, 9994
 ; Exit if Carry clear, else wait until PC-1500 IF_REG IRQ and PB7 (Power Button) are clear before exit
 ; Arguments: 
 ; Output: 
 ; RegMod: UL
 SUB_911E: 
-911E	81 19               BCR+    BRANCH_9139                 ; What set carry before getting here?
+911E	81 19               BCR+    BRANCH_9139                 ; If the ADI preceeding this call did not set carry
 9120	EF 78 97 01         ADI	    (7897),01                   ; USING & using of character string
-9124	81 0F               BCR+    BRANCH_9135                 ; If (7897) was < FF
+9124	81 0F               BCR+    BRANCH_9135                 ; If (7897) was < FF exit
 9126	6A 3C               LDI	    UL,3C                       ;
 9128	FD BE               RIE                                 ; Disable interrupts
 912A	FD C0               RDP                                 ; Sets LCD ON/OFF control flip-flop
+
+BRANCH_912C:
 912C	FD ED F0 0B 03      BIT	    #(PC1500_IF_REG),03         ; PC-1500 Bit 0 = IRQ, Bit 1 = PB7 = Power Button (ME1)
 9131	89 02               BZR+    BRANCH_9135                 ; If  Bits 0-1 were not both reset
-9133	88 09               LOP	    UL,912C                     ; UL = UL - 1, loop back 'e' if Borrow Flag not set
+9133	88 09               LOP	    UL,BRANCH_912C              ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 
 BRANCH_9135: ; Branched to from 9124, 9131 
 9135	FD 81               SIE                                 ; Enable interrupts
@@ -3115,16 +3167,14 @@ BRANCH_9139: ; Branched to from 911E
 ; Arguments A, U
 BRANCH_913A: ; Branched to from 905F
 913A	B1 EE               SBI	    A,EE                        ; A = A - EE
-913C	9B DC               BZS-    BRANCH_9062                 ; If A was = EE
+913C	9B DC               BZS-    BRANCH_9062                 ; If A was = EE branch back
 
 BRANCH_913E: ; Branched to from 9050, 9056, 905A
-913E	24                  LDA	    UL                          ;
-913F	BE E3 66            SJP	    E366                        ; Part of Auto Power Off routine
+913E	24                  LDA	    UL                          ; 
+913F	BE E3 66            SJP	    E366                        ; Auto Power Off routine, beginning of power back on
 
 
-;------
-; Not sure how this is reached
-BRANCH_9142: ; Branched to from 915A
+BRANCH_9142: ; Branched to from 915A                            ; Auto Power off jump above might return back here
 9142	AE 78 96            STA	    (7896)                      ; USING M integer part
 9145	B7 20               CPI	    A,20                        ; 20 = space
 9147	81 73               BCR+    JMP_91BC                    ; If A < 20 branch, else A >= 20
@@ -3143,14 +3193,13 @@ BRANCH_9158: ; Branched to from 9151
 
 BRANCH_915C: ; Branched to from 9155 
 915C	BA 90 3E            JMP	    JMP_903E                    ;
-;Not sure how this is reached
-;------
+
 
 
 ;------------------------------------------------------------------------------------------------------------
-; TBL_915F - Function address and value of A to pass to function
+; JUMP_TBL_915F - Function address and value of A to pass to function
 ; Used by 91DE
-TBL_915F:
+JUMP_TBL_915F:
 915F	92 3E 40            .BYTE   92 3E 40                    ; A1 - 923E     SUB_PRINT#_ALT_E1
 9162	92 3E 80            .BYTE   92 3E 80                    ;               SUB_PRINT#_ALT_E1
 9165	96 47 80            .BYTE   96 47 80                    ; A2 - 9647     SUB_INPUT#
@@ -3186,25 +3235,25 @@ TBL_915F:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_91BC: Branched to from 9147, A <= 19, Jumped to from 9F32 A <= 1F
+; JMP_91BC: Branched to from 9147, Jumped to from 9F32
 ; If A = 0 it points to a line of code. Guessing A must be > 0.
-; May use TBL_915F to jump to new code
-; Arguments: 
+; May use JUMP_TBL_915F to jump to new code
+; Arguments: A <= 19 from 9147, A <= 1F 9F32
 ; Output: 
 ; RegMod: U, A
 JMP_91BC: 
 91BC	6A 5C               LDI	    UL,5C                       ;
 91BE	EB 78 96 80         ORI	    (7896),80                   ; Set Bit 7. USING M integer part
 91C2	68 91               LDI	    UH,91                       ; U = 915C
-91C4	BF 08               BII	    A,08                        ; Where did A come from?
-91C6	89 0E               BZR+    BRANCH_91D6                 ; If Bit 3 set skip. 00~07 R, 08~0F S, 10~17 R, 18~1F S
+91C4	BF 08               BII	    A,08                        ; Check bit 3 of A that was passed in
+91C6	89 0E               BZR+    BRANCH_91D6                 ; If Bit 3 set skip. 00~07 or 10~17 Z=0, 08~0F or 18~1F Z=1
 91C8	ED 76 4E 10         BII	    (HIGHLCDFLAG),10            ; Bit 4, (DEFIII) annunciator on LCD
 91CC	89 02               BZR+    BRANCH_91D0                 ; If Bit 4 was set branch fwd
 91CE	B9 EF               ANI	    A,EF                        ; A = 00~07 Clear Bit 4
 
 BRANCH_91D0: ; Branched to from 91CC
 91D0	ED 76 4E 40         BII	    (HIGHLCDFLAG),40            ; (RUN) annunciator on LCD
-91D4	89 20               BZR+    BRANCH_91F6                 ; If Bit 6 was set skip the jump calcualtion below
+91D4	89 20               BZR+    BRANCH_91F6                 ; If Bit 6 set skip jump calculation and jump below
                    
                                                                 ; A = 08~0F, 18~1F from 91C6
                                                                 ; A = 00~07, 10~17 from 91CC
@@ -3216,8 +3265,8 @@ BRANCH_91D6: ; Branched to from 91C6                            ; A = 00-07     
 91DB	65                  LIN	    (U)                         ; A = (U) then INC U
 91DC	08                  STA	    XH                          ;
 91DD	65                  LIN	    (U)                         ; A = (U) then INC U, 
-91DE	0A                  STA	    XL                          ; X is address from TBL_915F
-91DF	A5 7B 0F            LDA	    (7B0F)                      ; Last pressed key code.
+91DE	0A                  STA	    XL                          ; X is now the address from JUMP_TBL_915F
+91DF	A5 7B 0F            LDA	    (KEY_LAST)                  ; Last pressed key code.
 91E2	B7 08               CPI	    A,08                        ; Left Cursor Key
 91E4	81 0A               BCR+    BRANCH_91F0                 ; If A < 08 branch fwd (< 08 is only SHFT and SML)
 91E6	B7 0D               CPI	    A,0D                        ; Enter Key
@@ -3230,11 +3279,11 @@ BRANCH_91F0: ; Branched to from 91E4, 91EA
 91F0	BE 98 02            SJP	    SUB_9802                    ; When A < 8 or A > 0D
 
 BRANCH_91F3: ; Branched to from 91E8, 91EE                      ; If A > 08 & A < 0D & A != 09
-91F3	25                  LDA	    (U)                         ; Argument from TBL_915F
-91F4	FD 5E               STX	    P                           ; P = X. Set Program Counter to X
+91F3	25                  LDA	    (U)                         ; Argument from JUMP_TBL_915F
+91F4	FD 5E               STX	    P                           ; P = X. Set Program Counter to X ***JMP
 
 
-BRANCH_91F6: ; Branched to from 91D4
+BRANCH_91F6: ; Branched to from 91D4                            ; If we did not jump away above, 
 91F6	B7 06               CPI	    A,06                        ; A = 00~07, 10~17 from 91CC, A = 00-07 from 91CE
 91F8	81 02               BCR+    BRANCH_91FC                 ; If A < 6 branch fwd
 91FA	B5 07               LDI	    A,07                        ; else set A = 07
@@ -3251,7 +3300,7 @@ BRANCH_91FC: ; Branched to from 91F8
 
 ;------------------------------------------------------------------------------------------------------------
 ; JMP_9209 - Jumped to from  JMP_9ED0:9F6B
-; Reads something from 7Baa and then jumps out. Purpose?
+; Reads something from 7BAA (in OUTPUT BUFFER) and then jumps out. Purpose?
 ; Arguments: A = ERROR ADDRESS (H), X = (CUR_VAR_ADD_L)
 ; Output: 
 ; RegMod: UL, X, A
@@ -3342,7 +3391,7 @@ BRANCH_925E: ; Branched to from 9253
 9278	89 50               BZR+    BRANCH_92CA                 ; If A != 49 branch fwd (A >=41 & A < 5B)
 927A	4A 58               LDI	    XL,58                       ; A = 49
 927C	48 92               LDI	    XH,92                       ; X = 9258 = TBL_9258
-927E	BE 87 45            SJP	    SUB_8745                    ; Sends string  from TBL_9258 to RS232. Alters A?
+927E	BE 87 45            SJP	    STRNG_2COM                    ; Sends string  from TBL_9258 to RS232. Alters A?
 9281	8E 47               BCH+    BRANCH_92CA                 ; Unconditional fwd branch
 
 BRANCH_9283: ; Branched to from 9266                            ; A = 20 
@@ -3423,7 +3472,7 @@ BRANCH_92E2: ; Branched to from 9287, 928B, 92C5,
 
 BRANCH_9306: ; Branched to from 92F4 (UL >= 20), 92FA (UL = 20), 9302 (UL = 0D), drop (UL = 0A)
 9306	24                  LDA	    UL                          ; 
-9307	BE 81 69            SJP	    SUB_8169                    ; Sends charecter in A to LPT
+9307	BE 81 69            SJP	    CHAR2LPT                    ; Sends charecter in A to LPT
 930A	93 2D               BCS-    BRANCH_92DF                 ;  If sub failure JMP SUB_PRINT#_ALT_X1
 930C	8E 23               BCH+    BRANCH_9331                 ; Unconditional fwd branch
 
@@ -3435,6 +3484,7 @@ BRANCH_9312: ; Branced to from 938E,
 9314	24                  LDA	    UL                          ; UL >=20 or UL = 20 or UL = 0D or UL = 0A
 9315	AE 7A 08            STA	    (ZREG)                      ; Math reg Z
 9318	BE 9A 9E            SJP	    SUB_9A9E                    ; jump code, A indexs into unknown table at X = 92B0?, sets PC
+                                                                ; probably does not return
 
 ;------
 ; Nonsense
@@ -3550,6 +3600,7 @@ BRANCH_93B8: ; Branched to from 939B, 93A0, 93A7, 93AE
 BRANCH_93CD: ; Branched to from 93E5
 93CD	45                  LIN	    (X)                         ; A = (X) then INC X
 93CE	FD C8               PSH	    A                           ;
+
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -3820,7 +3871,7 @@ BRANCH_9560: ; Branched to from 9542
 
 BRANCH_956C: ; Branched to from 9577, 957F
 956C	24                  LDA	    UL                          ;
-956D	BE 81 69            SJP	    SUB_8169                    ; Sends charecter in A to LPT
+956D	BE 81 69            SJP	    CHAR2LPT                    ; Sends charecter in A to LPT
 9570	81 4B               BCR+    BRANCH_95BD                 ; If sub success
 9572	89 07               BZR+    BRANCH_957B                 ; If sub fail with A != 0?
 9574	BE 9B 47            SJP	    SUB_9B47                    ; May return or poke new address into Stack Pointer
@@ -3949,11 +4000,11 @@ BRANCH_960F: ; Branched to from 95CA, 9607
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_INPUT# - Main entry at 9660 
 ; Alt entry at 9687 Called from SUB_8D04:8ED7, 9634
-; 9610, 9616, 961B, 9630, 9642, 9647, 967B, 96C8 jumped to from TBL_915F
+; 9610, 9616, 961B, 9630, 9642, 9647, 967B, 96C8 jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod: A, UL
-JMP_9610: ; Jumped to from TBL_915F
+JMP_9610: ; Jumped to from JUMP_TBL_915F
 9610	BE 95 C6            SJP	    SUB_95C6                    ; Might display text for terminal program?
 
 BRANCH_9613: ; Branched to from 9619, 9845, 964F, 9655, 9661, 965A, 9678
@@ -3962,7 +4013,7 @@ BRANCH_9613: ; Branched to from 9619, 9845, 964F, 9655, 9661, 965A, 9678
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9616 - Jumped to from TBL_915F
+; JMP_9616 - Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod:
@@ -3973,7 +4024,7 @@ JMP_9616:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_961B -  Jumped to from TBL_915F
+; JMP_961B -  Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod: UL, A
@@ -3990,7 +4041,7 @@ JMP_961B:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9630 - Jumped to from TBL_915F
+; JMP_9630 - Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod:
@@ -4001,14 +4052,14 @@ JMP_9630:
 963A	E9 78 AE 00         ANI	    (78AE),00                   ; Clear BREAK LINE (H)
 963E	EB 78 AE FE         ORI	    (78AE),FE                   ; Bit 0 clear BREAK LINE (H)
 
-BRANCH_9642: ; Branched to from 9634, Jumped to from TBL_915F
+BRANCH_9642: ; Branched to from 9634, Jumped to from JUMP_TBL_915F
 9642	AE 76 4F            STA	    (LOWLCDFLAG)                ; 0 (DE) 1 (G) 2 (RAD) 3 (vide) 4 (RESERVE) 5 (PRO) 6 (RUN) 7 (DEF)
 9645	9E 34               BCH-    BRANCH_9613                 ; Exit
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9647 - Jumped to from TBL_915F
+; JMP_9647 - Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod: A
@@ -4057,7 +4108,7 @@ BRANCH_9675: ; Branched to from 9671
 ; not reached ?
 967A	00                  SBC	    XL                          ; A = A = XL
 
-JMP_967B: ; Jumped to from SUB_PRINT#:94B1, TBL_915F
+JMP_967B: ; Jumped to from SUB_PRINT#:94B1, JUMP_TBL_915F
 967B	AD 76 4E            EOR	    (HIGHLCDFLAG)               ; A = A ^ (HIGHLCDFLAG). 0 (Busy), 1 (Shift), 2 (Katana), 3 (Small), 4 (DEFIII), 5 (DEFII), 6 (DEFI)
 967E	AE 76 4E            STA	    (HIGHLCDFLAG)               ; 0 (Busy), 1 (Shift), 2 (Katana), 3 (Small), 4 (DEFIII), 5 (DEFII), 6 (DEFI)
 9681	D5                  SHR                                 ; A = A >> 1
@@ -4095,7 +4146,7 @@ BRANCH_96C2: ; Branched to from 971B
 BRANCH_96C5: ; Brabched to from 96D6, 96DC, 96F3
 96C5	BA 90 83            JMP	    UNKNOWN_JMP_9083            ; Changes LCD annunciators branches to SUB_PRINT#_ALT_X1
 
-JMP_96C8: ; Jumped to from TBL_915F
+JMP_96C8: ; Jumped to from JUMP_TBL_915F
 96C8	A9 76 4E            AND	    (HIGHLCDFLAG)               ; 0 (Busy), 1 (Shift), 2 (Katana), 3 (Small), 4 (DEFIII), 5 (DEFII), 6 (DEFI)
 96CB	89 2F               BZR+    BRANCH_96FC                 ;
 96CD	E9 78 80 00         ANI	    (7880),00                   ; Clear Display parameter. Bit 7 = 1 is BREAK.
@@ -4486,7 +4537,7 @@ SEPARATOR_98D1:
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_98E8 - Called from 936B, 95C0
-; Pulls bit patterns for cahrecters out of matrix for LCD?
+; Pulls bit patterns for charecters out of matrix for LCD?
 ; Arguments: 
 ; Output: 
 ; RegMod: A, X, Y
@@ -4664,7 +4715,7 @@ SUB_998D:
 998D	BE 98 02            SJP	    SUB_9802                    ; Resets last pressed key register and repeat speed.
 
 BRANCH_9990: ; Branched to from 999F
-9990	EF 7B 0E 08         ADI	    (7B0E),08                   ; (7B0E) = (7B0E) + 08. Character to blink. Whay add 8?
+9990	EF 7B 0E 08         ADI	    (7B0E),08                   ; (7B0E) = (7B0E) + 08. Character to blink. Whay add 8? Alters C
 9994	BE 91 1E            SJP	    SUB_911E                    ; Exit if Carry clear, else wait until PC-1500 IF_REG IRQ and 
                                                                 ;  PB7 (Power Button) are clear before exit
 9997	BE 97 BA            SJP	    SUB_97BA                    ; Changes last pressed key code and repeat speed?
@@ -4691,9 +4742,9 @@ SUB_99E6_ALT_E1: ; Branched to from 9A46
 99B7	1A                  STA	    YL                          ;
 99B8	58 7B               LDI	    YH,7B                       ; Y = 7B##
 99BA	FD BE               RIE                                 ; Disable interrupts
-99BC	BE 81 E6            SJP	    SUB_81E6                    ; Manipulates LPT/UART registers
+99BC	BE 81 E6            SJP	    IOCFG                       ; Manipulates LPT/UART registers
 99BF	FD 81               SIE                                 ; Enable interrupts
-99C1	81 91               BCR+    BRANCH_9A54                 ; Carry set in SUB_81E6
+99C1	81 91               BCR+    BRANCH_9A54                 ; Carry set in IOCFG
 99C3	BF 40               BII	    A,40                        ; 
 99C5	8B B5               BZS+    BRANCH_9A7C                 ; If Bit 6 set branch to RTN
 99C7	B5 3F               LDI	    A,3F                        ; 
@@ -4745,7 +4796,7 @@ BRANCH_9A05: ; Branched to from 99FE
 
 BRANCH_9A12: ; Branched to from 9A0A, 9A2D
 9A12	24                  LDA	    UL                          ; 
-9A13	BE 81 BC            SJP	    SUB_81BC                    ; Sends charecter to RS232 Port
+9A13	BE 81 BC            SJP	    CHAR2COM                    ; Sends charecter to RS232 Port
 9A16	81 1A               BCR+    BRANCH_9A32                 ; Carry returned from sub
 9A18	BF 20               BII	    A,20                        ;
 9A1A	89 2F               BZR+    BRANCH_9A4B                 ; If Bit 5 was set
@@ -4867,7 +4918,7 @@ BRANCH_9ABC: ; Branched to from 9AB1, 9ACA, 9AF6, 9AFE, 9B02, 9B08
 9AC0	45                  LIN     X                           ; A = (X) then INC X
 9AC1	FD CA               ADR	    X                           ; X = X + A
 9AC3	24                  LDA	    UL                          ; What table is this using?
-9AC4	FD 5E               STX     P                           ; Save X to Program Counter
+9AC4	FD 5E               STX     P                           ; Save X to Program Counter ***JUMP
 
 
 BRANCH_9AC6: ; Branched to from 9AB5, 9AB9                      ; If A < A1 | A >= E0
@@ -5033,14 +5084,14 @@ BRANCH_9B7D: ; Branched to from 9B64
 9B8F	FD 0A               POP	    X                           ;
 9B91	44                  INC	    X                           ;
 9B92	44                  INC	    X                           ; INC X twice to walk to next vector?
-9B93	FD 5E               STX     P                           ; Save X to Program Counter
+9B93	FD 5E               STX     P                           ; Save X to Program Counter ***JMP
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; Called from 96B1, 96DE. 
 ; Alt entries at 9BD0
-; Looks at BUAD setting and lh5811 timer conttrol Bit 5. Why?
+; Looks at BUAD setting and lh5811 timer control Bit 5. Why?
 ; Arguments: 
 ; Output: 
 ; RegMod: A, A, U, Y
@@ -5143,7 +5194,7 @@ BRANCH_9C07: ; Branched to from 9BF7, 9BFF, 9C04
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_(C0A - Called from 9BE2
-; Reads something from TBL_8475 and may hcange program counter
+; Reads something from TBL_8475 and may change program counter
 ; Arguments: 
 ; Output: 
 ; RegMod: X, A
@@ -5177,7 +5228,8 @@ BRANCH_9C2E: ; Branched to from 9C22, 92CA
 9C30	45                  LIN	    (X)                 ; A = (X) then INC X
 9C31	FD CA               ADR	    X                   ; X = X + A.
 9C33	24                  LDA	    UL                  ; A = UL
-9C34	FD 5E               STX     P                   ; Save X to Program Counter, i.e. jump
+9C34	FD 5E               STX     P                   ; Save X to Program Counter, ***Jump
+
 
 ;--------------
 ; Nonsense here down
@@ -5201,6 +5253,7 @@ BRANCH_9C2E: ; Branched to from 9C22, 92CA
 9C4D	A4                  LDA	    UH                  ;
 ; Nonsense here up
 ;------------------
+
 
 9C4E	B5 7A               LDI	    A,7A                ;
 9C50	AE 78 5E            STA	    (785E)              ; Keyboard address or user chars address high byte (if 785D = 0)
@@ -5619,7 +5672,7 @@ BRANCH_9EE4: ; Branched to from 9ED8
 9EEE	B5 0F               LDI	    A,0F                        ; If A >= 20 & A < 80 then A = 0F? Shift In / X-Off
 
 BRANCH_9EF0: ; Branched to from 9EE2, A = 0E or A = 0F
-9EF0	BE 81 BC            SJP	    SUB_81BC                    ; Sends charecter in A to RS232 Port
+9EF0	BE 81 BC            SJP	    CHAR2COM                    ; Sends charecter in A to RS232 Port
 9EF3	83 0E               BCS+    BRANCH_9F03                 ; If error sending
 9EF5	A5 78 B0            LDA	    (78B0)                      ; BREAK TOP (H)
 9EF8	BD 20               EAI	    20                          ; A = A ^ 20. Toggle Bit 5
@@ -5636,7 +5689,7 @@ BRANCH_9F03: ; Branched to from 9EF3
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9F06 - Jumped to from TBL_915F
+; JMP_9F06 - Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod: X
@@ -5656,7 +5709,7 @@ BRANCH_9F18: ; Branched to from 9F09, 9F1E
 
 
 ;------------------------------------------------------------------------------------------------------------
-; JMP_9F1B - Jumped to from TBL_915F
+; JMP_9F1B - Jumped to from JUMP_TBL_915F
 ; Arguments: 
 ; Output: 
 ; RegMod: A
@@ -5690,7 +5743,7 @@ JMP_9F35: ; Jumped to from JMP_91BC:9206
 9F3A	89 2C               BZR+    BRANCH_9F68                 ; If A != 07
 9F3C	ED 78 B4 04         BII	    (ERRORLINE),04              ;
 9F40	8B 26               BZS+    BRANCH_9F68                 ; If Bit 2 not set
-9F42	BE 87 45            SJP	    SUB_8745                    ; Sends string to RS232. X is source table address?
+9F42	BE 87 45            SJP	    STRNG_2COM                    ; Sends string to RS232. X is source table address?
 9F45	6A 21               LDI	    UL,21                       ;
 9F47	A5 78 93            LDA	    (7893)                      ; Pointer operations
 9F4A	08                  STA     XH                          ;
@@ -5720,7 +5773,7 @@ BRANCH_9F68: ; Branched to from 9F3A, 9F40
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9F75 - Called from 8AD9
 ; Arguments: U = D056, X = 83B8 = CE-158_IO-REG_INIT2
-; Does some initialization of the CE-158
+; Does some initialization of the CE-158 registers
 ; Arguments: 
 ; Output: 
 ; RegMod: U, X, A
@@ -5756,11 +5809,11 @@ BRANCH_9F8E: ; X = 83B8 U = D056 on entering
 BRANCH_9F9A:
 9F9A	ED 78 8E 01         BII	    (TRACE_ON),01               ; 
 9F9E	8B 07               BZS+    BRANCH_9FA7                 ; If bit 0 not set branch fwd
-9FA0	E9 78 57 1F         ANI	    (SETDEV_VAL),1F             ; Clear bits 7-5
-9FA4	AB 78 57            ORA	    (SETDEV_VAL)                ; A = A | (SETDEV_VAL)
+9FA0	E9 78 57 1F         ANI	    (SETDEV_REG),1F             ; Clear bits 7-5
+9FA4	AB 78 57            ORA	    (SETDEV_REG)                ; A = A | (SETDEV_REG)
 
 BRANCH_9FA7:
-9FA7	AE 78 57            STA	    (SETDEV_VAL)                ; (SETDEV_VAL) = A
+9FA7	AE 78 57            STA	    (SETDEV_REG)                ; (SETDEV_REG) = A
 9FAA	FD EB D0 0C C0      ORI	    #(CE158_PRT_A_DIR),C0       ; CE-158 - Set bit 7-6 to write. (part of BAUD rate select) (ME1)
 9FAF	ED 78 8E 80         BII	    (TRACE_ON),80               ; 
 9FB3	89 1A               BZR+    BRANCH_9FCF                 ; If bit 7 was set branch fwd 

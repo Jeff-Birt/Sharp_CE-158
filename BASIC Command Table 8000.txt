@@ -1,0 +1,125 @@
+BASIC Command Table 8000
+
+            Y-REG   X-REG
+Command     Token   Address
+"BREAK"     F0B3    CD89             ; $CD89 - Basic command P___/STEP/OFF/OR/ERROR/AND/THEN/TO
+"CLOAD"     F089    82EC             ; $82EC - MAIN_ENTRY/CLOAD
+"CSAVE"     F095    82DD             ; $82DD - Drops through to MAIN_ENTRY/CLOAD
+"COM$"      E858    82D3             ; $82D3 - Drops through to MAIN_ENTRY/CLOAD
+"CONSOLE"   F0B1    82DE             ; $82DE - Drops through to MAIN_ENTRY/CLOAD      
+"DEV$"      E857    82D4             ; $82D4 - Drops through to MAIN_ENTRY/CLOAD 
+"DTE"       E884    82D1             ; $82D1 - Drops through to MAIN_ENTRY/CLOAD
+"ERN"       F052    82DF             ; $82DF - Drops through to MAIN_ENTRY/CLOAD 
+"ERL"       F053    82E0             ; $82E0 - Drops through to MAIN_ENTRY/CLOAD
+"FEED"      F0B0    82E1             ; $82E1 - Drops through to MAIN_ENTRY/CLOAD 
+"INPUT"     F091    82E2             ; $82E2 - Drops through to MAIN_ENTRY/CLOAD 
+"INSTAT"    E859    82E3             ; $82E3 - Drops through to MAIN_ENTRY/CLOAD
+"LPRINT"    F0B9    82E4             ; $82E4 - Drops through to MAIN_ENTRY/CLOAD
+"LLIST"     F0B8    82E5             ; $82E5 - Drops through to MAIN_ENTRY/CLOAD 
+"MERGE"     F08F    82C0             ; $82C0 - Sets XL=F0, branches to MAIN_ENTRY/CLOAD
+"OUTSTAT"   E880    82E6             ; $82E6 - Drops through to MAIN_ENTRY/CLOAD
+"PRINT"     F097    82E7             ; $82E7 - Drops through to MAIN_ENTRY/CLOAD
+"PROTOCOL"  E881    82E8             ; $82E8 - Drops through to MAIN_ENTRY/CLOAD
+"RINKEY$"   E85A    82E9             ; $82E9 - Drops through to MAIN_ENTRY/CLOAD 
+"SETCOM"    E882    82D6             ; $82D6 - Drops through to MAIN_ENTRY/CLOAD
+"SETDEV"    E886    82D5             ; $82D5 - Drops through to MAIN_ENTRY/CLOAD  
+"SPACE$"    F061    82EA             ; $82EA - Drops through to MAIN_ENTRY/CLOAD 
+"TERMINAL"  E883    82D2             ; $82D2 - Drops through to MAIN_ENTRY/CLOAD 
+"TRANSMIT"  E885    82D7             ; $82D7 - Drops through to MAIN_ENTRY/CLOAD
+"TAB"       F0BB    880D             ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
+"ZONE"      F0B4    82EB             ; $82EB - Drops through to MAIN_ENTRY/CLOAD 
+ 
+
+ XL set to Following values for specific functions. Otherwise XL comes from the address in table above.
+ INIT=D0, INPUT#=ED, PRINT#=EE, PRINT#2=EF, MERGE=F0
+
+ All commands drop through to 82EC and is manipulated as below: U now contians what was in X, i.e. address of cmd
+
+82FD	68 83               LDI	    UH,83                       ; Setting up pointer, UL is original XL as described above
+82FF	FB                  SEC                                 ; Set Carry flag, for SBC below
+8300	B5 D7               LDI	    A,D7                        ; Used to calculate offset into vector table
+8302	20                  SBC	    UL                          ; A = A - UL. D7-D0=07, D7-ED=EA, D7-EE=E9, D7-EF=E8,   D7-F0=E7
+                                                                ;             INIT,     INPUT#,   PRINT#,   LPT_PRINT#, MERGE
+
+We now have these values in A:
+            Y-REG   X-REG (UH = 83)
+Command     Token   Address            A = D7 - UL
+"BREAK"     F0B3    CD89             ; Ignore has a real address
+"CLOAD"     F089    82EC             ; A = D7 - EC = EC, C=1 eb
+"CSAVE"     F095    82DD             ; A = D7 - DD = FB, C=1 
+"COM$"      E858    82D3             ; A = D7 - D3 = 05, C=0
+"CONSOLE"   F0B1    82DE             ; A = D7 - DE = FA, C=1 
+"DEV$"      E857    82D4             ; A = D7 - D4 = 04, C=0
+"DTE"       E884    82D1             ; A = D7 - D1 = 07, C=0
+"ERN"       F052    82DF             ; A = D7 - DF = F9, C=1
+"ERL"       F053    82E0             ; A = D7 - E0 = F7, C=1 --
+"FEED"      F0B0    82E1             ; A = D7 - E1 = F6, C=1
+"INPUT"     F091    82E2             ; A = D7 - E2 = F5, C=1
+"INSTAT"    E859    82E3             ; A = D7 - E3 = F4, C=1
+"LPRINT"    F0B9    82E4             ; A = D7 - E4 = F3, C=1
+"LLIST"     F0B8    82E5             ; A = D7 - E5 = F2, C=1
+"MERGE"     F08F    82C0             ; A = D7 - C0 = 17, C=0
+"OUTSTAT"   E880    82E6             ; A = D7 - E6 = F1, C=1
+"PRINT"     F097    82E7             ; A = D7 - E7 = F0, C=1
+"PROTOCOL"  E881    82E8             ; A = D7 - E8 = EF, C=1
+"RINKEY$"   E85A    82E9             ; A = D7 - E9 = EE, C=1
+"SETCOM"    E882    82D6             ; A = D7 - D6 = 01, C=0
+"SETDEV"    E886    82D5             ; A = D7 - D5 = 02, C=0
+"SPACE$"    F061    82EA             ; A = D7 - EA = ED, C=1
+"TERMINAL"  E883    82D2             ; A = D7 - D2 = 05, C=0
+"TRANSMIT"  E885    82D7             ; A = D7 - D7 = 00, C=0
+"TAB"       F0BB    880D             ; Ignore has a real address
+"ZONE"      F0B4    82EB             ; A = D7 - EB = EC, C=1
+
+
+
+8303	6A 63               LDI	    UL,63                       ; UH set to 83 above so, U = 8363   
+8305	83 08               BCS+    BRANCH_830F:                ; if carry set from SBC above, jump ahead
+8307	FD 62               DEC	    UH                          ; DEC UH 83 -> 82, U = 8263
+8309	FD BE               RIE                                 ; Disable interrupts
+830B	E9 78 55 F7         ANI	    (CR/LF_REG),F7              ; (CR/LF_REG) = (CR/LF_REG) & F7. Clear Bit 3
+
+BRANCH_830F: ;Branched to by 8305.                              ; Calc index into Command Vector Table @ 8331
+830F	D9                  SHL                                 ; Before: A = INIT=07, INPUT#=EA, PRINT#=E9, PRINT#2=E8, MERGE=E7
+                                                                ; A << 1: A = INIT=A0, INPUT#=D4, PRINT#=D2, PRINT#2=D0, MERGE=CE
+8310	FD EA               ADR	    U                           ; U = U + A. If cmd is INIT U=8363, else U=8263
+                                                                ; U = INIT=8371, INPUT#=8337, PRINT#=8335, PRINT#2=8333, MERGE=8331
+8312	65                  LIN	    U                           ; A = (U) then INC U
+8313	08                  STA	    XH                          ; XH = A. i.e. INIT A=88
+8314	25                  LDA	    (U)                         ; A = (U). i.e. INIT A=0A
+8315	0A                  STA	    XL                          ; X = INIT=880A, INPUT#=9660, PRINT=#93D0, PRINT#2=93D4, MERGE=901C
+
+
+
+            Y-REG   BTBL  Changed              
+Command     Token   Addr  Addr       ; PTR   VECT   Bank        w/&AA fill C0 != AA is Low Bank 
+"BREAK"     F0B3    CD89             ; Ignore has a real address 
+"CLOAD"     F089    82EC             ; 8339 (901B)  Low Bank -- C0=EB, C1=AA
+"CSAVE"     F095    82DD             ; 8357 (9870)  Low Bank -- C0=FA, C1=AA
+"COM$"      E858    82D3             ; 836B (8893) High Bank -- C0=AA, C1=08
+"CONSOLE"   F0B1    82DE             ; 8355 (8365)  Low Bank -- C0=F9, C1=AA
+"DEV$"      E857    82D4             ; 8369 (8899) High Bank -- C0=AA, C1=06
+"DTE"       E884    82D1             ; 836F (8C8E) High Bank -- C0=AA, C1=0C
+"ERN"       F052    82DF             ; 8353 (8312)  Low Bank -- C0=F8, C1=AA
+"ERL"       F053    82E0             ; 8351 (8309)  Low Bank -- C0=F7, C1=AA
+"FEED"      F0B0    82E1             ; 834F (9820)  Low Bank -- C0=F6, C1=AA
+"INPUT"     F091    82E2             ; 834D (8FFF)  Low Bank -- C0=F5, C1=AA
+"INSTAT"    E859    82E3             ; 834B (832A)  Low Bank -- C0=F4, C1=AA
+"LPRINT"    F0B9    82E4             ; 8349 (9056)  Low Bank -- C0=F3, C1=AA
+"LLIST"     F0B8    82E5             ; 8347 (901D)  Low Bank -- C0=F2, C1=AA
+"MERGE"     F08F    82C0  (82F0)     ; 8331 (901C)  Low Bank -- C0=F1, C1=AA
+"OUTSTAT"   E880    82E6             ; 8345 (8334)  Low Bank -- C0=F1, C1=AA
+"PRINT"     F097    82E7             ; 8343 (900D)  Low Bank -- C0=F0, C1=AA
+"PROTOCOL"  E881    82E8             ; 8341 (8317)  Low Bank -- C0=EF, C1=AA
+"RINKEY$"   E85A    82E9             ; 833F (8357)  Low Bank -- C0=EE, C1=AA
+"SETCOM"    E882    82D6             ; 8365 (8907) High Bank -- C0=AA, C1=02
+"SETDEV"    E886    82D5             ; 8367 (8968) High Bank -- C0=AA, C1=04
+"SPACE$"    F061    82EA             ; 833D (83D8)  Low Bank -- C0=ED, C1=AA
+"TERMINAL"  E883    82D2             ; 836D (8C88) High Bank -- C0=AA, C1=0A
+"TRANSMIT"  E885    82D7             ; 8363 (89F5) High Bank -- C0=AA, C1=00
+"TAB"       F0BB    880D             ; Ignore has a real address
+"ZONE"      F0B4    82EB             ; 843D (83D8)  Low Bank -- C0=EC, C1=AA
+"INPUT#"    NNNN    82CE  (82ED)     ; 8337 (9660)  Low Bank -- C0=EA, C1=AA
+"PRINT#"    NNNN    82C9  (82EE)     ; 8335 (93D0)  Low Bank -- C0=E9, C1=AA
+"PRINT#2"   NNNN    82CD  (82EF)     ; 8333 (9394)  Low Bank -- C0=E8, C1=AA
+"INIT"      NNNN    82B8  (82D0)     ; 8371 (880A) High Bank -- C0=AA, C1=0E
