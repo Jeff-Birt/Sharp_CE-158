@@ -1151,10 +1151,10 @@ BRANCH_8768: ; Branched to from 874C, 8759, 8764
 ; Output:
 ; RegMod:
 IRQ_RESET:
-876C	FD EB D0 0A 01      ORI     #(CE158_MSK_REG),01         ; Set Bit 0, Interrupt mask for IRQ
-8771	FD E9 B0 0A FD      ANI	    #(CE150_MSK_REG),FD         ; Clear Bit 1, PB7 Interrupt mask. Paper Feed Button
-8776	FD EB B0 0A 01      ORI	    #(CE150_MSK_REG),01         ; Set Bit 0. Interrupt mask for IRQ
-877B	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set Bit 0. Interrupt mask for IRQ
+876C	FD EB D0 0A 01      ORI     #(CE158_MSK_REG),01         ; CE-158 - Set Bit 0, Interrupt mask for IRQ
+8771	FD E9 B0 0A FD      ANI	    #(CE150_MSK_REG),FD         ; CE-150 - Clear Bit 1, PB7 Interrupt mask. Paper Feed Button
+8776	FD EB B0 0A 01      ORI	    #(CE150_MSK_REG),01         ; CE-150 - Set Bit 0. Interrupt mask for IRQ
+877B	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; PC-1500 - Set Bit 0. Interrupt mask for IRQ
 
 IRQ_RESET_ALT_E1:
 8780	FD E9 D0 0E FC      ANI     #(CE158_PRT_A),FC           ; Clear Bits 1-0 (ME1) Bit 0 = DTR, Bit 1 = RTS
@@ -2331,11 +2331,11 @@ BRANCH_8C97: ; Branched to from TERMINAL
 8CAA	81 4D               BCR+    BRANCH_8CF9                 ; If error skip to end
 8CAC	6C 02               CPI	    UH,02                       ;
 8CAE	81 49               BCR+    BRANCH_8CF9                 ; If UH < 02 skip to end
-8CB0	F6 7A 05            VEJ     (F6),(ARX + 5)       ; Transfers U to (ARX + 5), (ARX + 5)+1
+8CB0	F6 7A 05            VEJ     (F6),(ARX + 5)              ; Transfers U to (ARX + 5), (ARX + 5)+1
 8CB3	BE 87 A3            SJP     SUB_87A3                    ; shuffle around BASIC line numbers, maybe for editing?
 8CB6	C3 E0               VCS     (E0)                        ; If Carry Set Call VEJ(E0)->Indicates if UH is not "00" error message
-8CB8	FD E9 F0 0A 00      ANI	    #(PC1500_MSK_REG),00        ; Reset PC-1500 MSK Register
-8CBD	BE 81 E6            SJP     IOCFG                    ; Manipulates LPT/UART registers
+8CB8	FD E9 F0 0A 00      ANI	    #(PC1500_MSK_REG),00        ; PC-1500 - Reset MSK Register
+8CBD	BE 81 E6            SJP     IOCFG                       ; Manipulates LPT/UART registers
 8CC0	B5 04               LDI	    A,04                        ;
 8CC2	AE 78 95            STA	    (USING_F/F)                 ; Using format, presence of decimal point, comma,etc
 8CC5	CC 5D               VEJ     (CC),(5D)                   ; Loads X-Reg with address at 78(5D) 78(5E), KEYBOARD derivation flag
@@ -2393,13 +2393,13 @@ JMP_8CFD: ;Branched to from 8D02
 
 
 SUB_8D04:
-8D04	FD E9 F0 0B FD      ANI	    #(PC1500_IF_REG),FD         ; Clear Bit 1, PB7 Interrupt (Power button)
+8D04	FD E9 F0 0B FD      ANI	    #(PC1500_IF_REG),FD         ; PC-1500 - Clear Bit1, PB7 Interrupt (Power button)
 
 BRANCH_8D09: ; Branched to from 8CF7
 8D09	B5 00               LDI	    A,00                        ;
 
 SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
-8D0B	FD E9 F0 0A FC      ANI	    #(PC1500_MSK_REG),FC        ; Clear Bits B0 = Interrupt mask for IRQ, B1 = Interrupt mask for PB7
+8D0B	FD E9 F0 0A FC      ANI	    #(PC1500_MSK_REG),FC        ; PC-1500 - Clear mask for IRQ and PB7 (ON button)
 8D10	BE 9F D0            SJP	    SUB_9FD0                    ; Sets DTR/RTS based on OUTSTAT_REG
 8D13	FD C8               PSH	    A                           ;
 8D15	B5 9A               LDI	    A,9A                        ;
@@ -2410,7 +2410,7 @@ SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
 8D23	FD EB B0 0D 40      ORI	    #(CE150_PRT_B_DIR),40       ; Set Bit 6 to Write
 8D28	BE 9F EF            SJP	    SUB_9FEF                    ; CE-150 - Clears Pen Descending signal, and applies it again if safe.
 8D2B	FD E9 D0 0A FD      ANI	    #(CE158_MSK_REG),FD         ; Clear Bit 1, interrupt mask for PB7, Paper feed button
-8D30	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set Bit 0,  IRQ interrupt mask
+8D30	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; PC-1500 Set Bit0 IRQ mask
 8D35	6A 4E               LDI	    UL,4E                       ;
 8D37	68 76               LDI	    UH,76                       ; U = 764E, LCD annunciators
 8D39	6B 01               ORI	    (U),01                      ; Set Bit 0, (BUSY)
@@ -2564,8 +2564,8 @@ BRANCH_8DF7:
 8E00	CA 5D               VEJ	    (CA),(5D)                   ; Transfers X to 78(5D), 78(5E). KEYBOARD derivation
 8E02	BE 8A 2A            SJP	    PORTS_UPDATE                ; 785D = KEYBOARD derivation flag Bit7=1 SPV, Bit7=0 RPV
 8E05	FD E9 B0 0D BF      ANI	    #(CE150_PRT_B_DIR),BF       ; CE-150 - Bit 6 input, rest output
-8E0A	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set interrupt mask bit for IRQ
-8E0F	FD EB B0 0A 03      ORI	    #(CE150_MSK_REG),03         ; Set interrupt mask bit for IRQ, PB7 (Busy input)
+8E0A	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; PC-1500 - Set interrupt mask bit for IRQ
+8E0F	FD EB B0 0A 03      ORI	    #(CE150_MSK_REG),03         ; CE-150 - Set interrupt mask bit for IRQ, PB7 (Busy input)
 8E14	BA CA 55            JMP	    CA55                        ; Clear All then Warm boot
 
 
@@ -2704,7 +2704,7 @@ BRANCH_8EC3: ; Branched to from 8E6B, 8E77, 8E8A
 8EC3	BE 87 6C            SJP	    IRQ_RESET                    ; Resets IRQ masks for CE-150, CE-158
 8EC6	E9 78 B1 00         ANI	    (78B1),00                   ; Clear register. BREAK TOP (L)
 8ECA	BE 98 02            SJP	    SUB_9802                    ; Resets last pressed key register and repeat speed.
-8ECD	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; Set interrupt mask for IRQ
+8ECD	FD EB F0 0A 01      ORI	    #(PC1500_MSK_REG),01        ; PC-1500 - Set interrupt mask for IRQ
 8ED2	B5 BA               LDI	    A,BA                        ;
 8ED4	AE 79 FA            STA	    (UNDEF_REG_79FA)            ; Well, it is undefined
 8ED7	BA 96 87            JMP	    SUB_INPUT#_ALT_E1           ;

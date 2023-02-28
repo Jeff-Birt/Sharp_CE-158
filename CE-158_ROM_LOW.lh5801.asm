@@ -527,14 +527,14 @@ ZONE:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; MAIN_ENTRY/CLOAD - Called from 82BE, 82C3, 82C7, 82CB, 82CF
+; MAIN_ENTRY/CLOAD - Called from 82BE, 82C3, 82C7, 82CB, 82CF ***JMP : Uses a calculated jump
 ; Arguments: XL = INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF, MERGE=F0
 ; Outputs:
 ; RegMod: U, A, X
 MAIN_ENTRY/CLOAD:
 82EC	FD BE           RIE                         ; Disable interrupts
 82EE	E9 78 50 F7     ANI     (OUTSTAT_REG),F7    ; Clear Bit 3 = DCD
-82F2	68 7A           LDI	    UH,7A               ; Point U to AR-W (MATH_REG_Wa_B1)
+82F2	68 7A           LDI	    UH,7A               ; Point U to AR-W
 82F4	6A 28           LDI	    UL,28               ; U = 7A28
 82F6	B5 E1           LDI	    A,E1                ; Intialize $7A28-$7A31 to: 
 82F8	61              SIN     U                   ; $E1 $BA $82 $F0 ->
@@ -546,38 +546,55 @@ MAIN_ENTRY/CLOAD:
 8301	2E              STA     (U)                 ; Jumps to $7A28, runs code segment
 8302	BA 7A 28        JMP	    MATH_REG_Wa_B1      ; poked in above, swtiches to HI bank.
 
-
-BACK_FROM_HI_BANK:                                  ; X = INIT=880A, INPUT#=9660, PRINT=#93D0, PRINT#2=93D4, MERGE=901C
-8305	FD 81           SIE                         ; Enable interrupts, X = new address passed from high bank
-8307	FD 5E           STX     P                   ; *** where will this take us? ***JMP
+;------------------------------------------------------------------------------------------------------------
+; Return from High Bank
+; 
+; Command     Token    VECT   Bank  Command     Token    VECT   Bank
+; "CLOAD"     F089    (901B)  Low   "MERGE"     F08F    (901C)  Low
+; "CSAVE"     F095    (901A)  Low   "OUTSTAT"   E880    (8334)  Low
+; "CONSOLE"   F0B1    (8365)  Low   "PRINT"     F097    (900D)  Low
+; "ERN"       F052    (8312)  Low   "PROTOCOL"  E881    (8317)  Low
+; "ERL"       F053    (8309)  Low   "RINKEY$"   E85A    (8357)  Low
+; "FEED"      F0B0    (9820)  Low   "SPACE$"    F061    (83D8)  Low
+; "INPUT"     F091    (8FFF)  Low   "ZONE"      F0B4    (83D8)  Low
+; "INSTAT"    E859    (832A)  Low   "INPUT#"    NNNN    (9660)  Low
+; "LPRINT"    F0B9    (9056)  Low   "PRINT#"    NNNN    (93D0)  Low
+; "LLIST"     F0B8    (901D)  Low   "PRINT#2"   NNNN    (93D4)  Low
+ 
+BACK_FROM_HI_BANK:                                  ; High bank jumps back here for the above commands
+8305	FD 81           SIE                         ; X = new address passed from high bank
+8307	FD 5E           STX     P                   ; Jump to address by poking program counter ***JMP
 
 
 ;------------------------------------------------------------------------------------------------------------
-; ERL - Branched to via High Bank
+; ERL - Jumped to from 8307 via High Bank
+; 0=No error, >0=Line at which error occured
 ; Arguments:
 ; Outputs:
 ; RegMod:
 ERL:
 8309	F4 78 B4        VEJ     (F4),ERR_LINE_H     ; Loads U-Reg with 16-bit value from address of ($78B4) 
-830C	4A 6C           LDI     XL,6C               ; X = DA6C?
+830C	4A 6C           LDI     XL,6C               ; X = DA6C? Inside BASIC command MEM
 830E	48 DA           LDI     XH,DA               ; 
-8310	8E 51           BCH+	BRANCH_8363         ; Branch unconditional, hit anohter branch to a SJP
+8310	8E 51           BCH+	BRANCH_8363         ; Borrows exit of SPACE$_ZONE
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; ERN - Branched to via High Bank
+; ERN - Jumped to from 8307 via High Bank
+; Error code 0-255
 ; Arguments:
 ; Outputs:
 ; RegMod:
 ; Branched to via High Bank
 ERN:
-8312	A5 78 9B        LDA     (ERRORNUM)          ; *** How reached? Load error #, if any, into Accumulator
-8315	8E 19           BCH+	BRANCH_8330         ; Branch unconditional
+8312	A5 78 9B        LDA     (ERRORNUM)          ; Load error #, if any, into Accumulator
+8315	8E 19           BCH+	BRANCH_8330         ; Borrows exit of SPACE$_ZONE (eventually)
 
 
 ;------------------------------------------------------------------------------------------------------------
-; PROTOCOL - Branched to via High Bank
+; PROTOCOL - Jumped to from 8307 via High Bank
+; Protocol used in Terminal, XON/XOFF, ECHO
 ; Arguments:
 ; Outputs:
 ; RegMod:
@@ -587,7 +604,7 @@ PROTOCOL:
 831F	E2              VEJ     (E2)                ; Start of Basic Interpreter
 
 BRANCH_8320: ;branched to from 8317
-8320	C4 F1 9E 05     VEJ     (C4) ,FF,BRANCH_8329 ; If next char not token 'OFF' (F1 9E) branch fwd 5, $8329
+8320	C4 F1 9E 05     VEJ     (C4),FF,BRANCH_8329 ; If next char not token 'OFF' (F1 9E) branch fwd 5, $8329
 8324	E9 78 56 7F     ANI	    (ZONE_REG),7F       ; AND ZONE_REG (&7856) with $7F
 8328	E2              VEJ     (E2)                ; Start of Basic Interpreter
 
@@ -597,7 +614,9 @@ BRANCH_8329: ;branched to from 8320
 
 
 ;------------------------------------------------------------------------------------------------------------
-; INSTAT - Branched to via High Bank
+; INSTAT - Jumped to from 8307 to via High Bank
+; Returns state of RS232 hansshaking signals (0-31)
+; Bit4 = DSR, Bit3 = CD, Bit2 = CTS. Bit1 = RTS, Bit0 = DTR
 ; Arguments:
 ; Outputs:
 ; RegMod:
@@ -611,21 +630,23 @@ BRANCH_8330: ;branched to from 8315
 
 
 ;------------------------------------------------------------------------------------------------------------
-; OUTSTAT - Branched to via High Bank
+; OUTSTAT - Jumped to from 8307 via High Bank
+; Sets state of RS232 hansshaking signals (0-31)
+; Bit4 = DSR, Bit3 = CD, Bit2 = CTS. Bit1 = RTS, Bit0 = DTR 
 ; Arguments:
 ; Outputs:
 ; RegMod:
 OUTSTAT:
-8334	DE 20	        VEJ     (DE),BRANCH_8356    ; Calc formula Y-reg points to, res to AR-X, Branch fwd 20 to 8356 on error
-8336	D0 04 1D	    VEJ     (D0),04,BRANCH_8356 ; Convert AR-X to INT send to U, range of 4, branch fwd 1D to 8356 on error
-8339	E9 7A 06 03	    ANI	    (MATH_REG_Xa_B7),03 ; keep bits 0-1
+8334	DE 20	        VEJ     (DE),BRANCH_8356    ; Calc formula Y-reg points to, res to AR-X, Branch fwd to 8356 on error
+8336	D0 04 1D	    VEJ     (D0),04,BRANCH_8356 ; Convert AR-X to INT send to U, range of 4, branch fwd to 8356 on error
+8339	E9 7A 06 03	    ANI	    (ARX + 6),03        ; keep bits 0-1
 833D	A5 78 50	    LDA	    (OUTSTAT_REG)       ;
 8340	B9 FC	        ANI     A,FC                ; clear bits 0-1, DTR, RTS
-8342	AB 7A 06	    ORA     (MATH_REG_Xa_B7)    ; 
+8342	AB 7A 06	    ORA     (ARX +  6)          ; 
 8345	AE 78 50	    STA 	(OUTSTAT_REG)       ; Sets DTR and RTS from calc in 8334?
 8348	FD A5 D0 0E	    LDA     #(CE158_PRT_A)      ; 
 834C	B9 FC	        ANI     A,FC                ; clear bits 0-1, DTR, RTS
-834E	AB 7A 06	    ORA 	(MATH_REG_Xa_B7)    ; 
+834E	AB 7A 06	    ORA 	(ARX +  6)          ; 
 8351	FD AE D0 0E	    STA     #(CE158_PRT_A)      ; Also set DTR/RTS bits on CE-158
 8355	E2              VEJ     (E2)                ; Start of Basic Interpreter
 
@@ -634,9 +655,10 @@ BRANCH_8356: ; branched to from 8334, 8336
 
 
 ;------------------------------------------------------------------------------------------------------------
-; RINKY$ - Branched to via High Bank
-; Arguments:
-; Outputs:
+; RINKEY$ - Branched to from 8307 via High Bank
+; Returns last byte RXd on COM, UART version of INKEY$
+; Arguments: 
+; Outputs: ASCII code from UART, $00 = no input
 ; RegMod:
 RINKY$:
 8357	BE 81 E6	    SJP 	SUB_81E6            ; Manipulates LPT/UART registers
@@ -656,6 +678,7 @@ BRANCH_8363: ;branched to from 8310
 
 ;------------------------------------------------------------------------------------------------------------
 ; CONSOLE - Branched to via High Bank
+; Specifies #digits per line. Specifies EOL char TXd (default is CR)
 ; Arguments:
 ; Outputs:
 ; RegMod:
@@ -670,7 +693,7 @@ BRANCH_836A: ;branched to from 83CD, 83DF, 83D4
 836D	B7 C4	        CPI     A,C4
 836F	8B 06	        BZS+    BRANCH_8377         ; Branch fwd if A = C4
 8371	24	            LDA     UL
-8372	AE 78 51	    STA	    (CONS_1_RS232C)     ; Console 1 RS232C
+8372	AE 78 51	    STA	    (RS232C)     ; Console 1 RS232C
 8375	8E 04	        BCH+	BRANCH_837B         ; Branch unconditional to 837B
 
 BRANCH_8377:  ;branched to from 836F
@@ -749,39 +772,41 @@ BRANCH_83D7: ;branched to from 837F, 8397
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SPACE$_ZONE - Branched to via High Bank
-; Arguments:
+; SPACE$_ZONE - Branched to from 8307 via High Bank, ***JMP : Uses a calculated jump
+; SPACE$ arg : (0-32d) Number of spaces
+; ZONE arg   : (1-31d) Determine the block length of comma seperate data sent over COM with LPRINT
+; Arguments  : XREG = Address, YREG = Token, AR-X is argument after command
 ; Outputs:
 ; RegMod:
 SPACE$_ZONE:
-83D8	D0 08 1D	    VEJ     (D0),08,BRANCH_83F8 ; Convert AR-X to INT send to U, range of 8, branch fwd 1D to 83F8 on error
+83D8	D0 08 1D	    VEJ     (D0),08,BRANCH_83F8 ; Convert AR-X to INT send to U, range of 8, branch fwd 83F8 on error
 83DB	6E 21	        CPI	    UL,21               ;
 83DD	68 19	        LDI	    UH,19               ; 
-83DF	83 17 	        BCS+    BRANCH_83F8         ; If UL >= 21 branch fwd
+83DF	83 17 	        BCS+    BRANCH_83F8         ; If UL >= 33d branch fwd, out of range
 83E1	4A 08	        LDI	    XL,08               ;
-83E3	48 7A	        LDI	    XH,7A               ; X=7A08, Math Register Za, B1
-83E5	24	            LDA     UL                  ;
-83E6	8B 0A 	        BZS+    BRANCH_83F2         ; If UL=0 branch fwd
-83E8	28	            STA	    UH                  ;
-83E9	62	            DEC	    UL                  ;
-83EA	B5 20	        LDI	    A,20                ;
+83E3	48 7A	        LDI	    XH,7A               ; X=7A08, AR-Z
+83E5	24	            LDA     UL                  ; UL is command's argument
+83E6	8B 0A 	        BZS+    BRANCH_83F2         ; If argument=0 branch fwd
+83E8	28	            STA	    UH                  ; UH = argument (1-31d)
+83E9	62	            DEC	    UL                  ; UL = argument - 1 (0-30d)
+83EA	B5 20	        LDI	    A,20                ; ASCII for space
 
-BRANCH_83EC: ;branched to from 83ED
-83EC	41	            SIN     X                   ; (X) = A. Then X = X + 1. Copies A to (X) to (X+UL)
+BRANCH_83EC: ;branched to from 83ED                 ; Fills AR-Z with arg# of spaces
+83EC	41	            SIN     X                   ; (X) = A. Then X = X + 1. Copies A to (X) to (X + UL)
 83ED	88 03	        LOP 	UL,BRANCH_83EC      ; UL = UL - 1, loop back 'e' if Borrow Flag not set
-83EF	4A 08	        LDI	    XL,08               ;
-83F1	A4	            LDA 	UH                  ;
+83EF	4A 08	        LDI	    XL,08               ; X = 7A08
+83F1	A4	            LDA 	UH                  ; A = UH = argument
 
-BRANCH_83F2: ;branched to from 83E6
-83F2	BE DF A1	    SJP	    SUB82               ; X points to string to insert into String buffer. Branch if overflow 
-83F5	02	            ADC	    XL                  ;
+BRANCH_83F2: ;branched to from 83E6                 ; Branch here if is argument = 0
+83F2	BE DF A1 02	    SJP	    XREG2STRBUF,83F8    ; X points to string to insert into String buffer. UL = #of chars
+                                                    ; Jump if overflow
 83F6	68 00	        LDI	    UH,00               ;
 
-BRANCH_83F8: ;branched to from 83D8, 83DF
+BRANCH_83F8: ;branched to from 83D8, 83DF, 83F2     ; Branched to if argument out of range
 83F8	48 80 83F8	    LDI	    XH,80               ; Setting the destination address for 840A
 83FA	4A 13	        LDI	    XL,13               ; X=8013
 
-BRANCH_83FC:
+BRANCH_83FC: ;branched to from 8363 RINKY$
 83FC	B5 38	        LDI 	A,38                ; Is this finding if this is OUTSTAT or CR/LF command?
 83FE	ED 78 50 08	    BII	    (OUTSTAT_REG),08    ; Keep Bit3, DCD
 8402	8B 06           BZS+    BRANCH_840A         ; If Bit3 was not set
@@ -789,14 +814,14 @@ BRANCH_83FC:
 8406	EB 78 55 08     ORI	    (CR/LF_REG),08      ; Set Bit3 in (CR/LF)
 
 BRANCH_840A:
-840A	AE 7A 30        STA	    (SREG)              ; Store A, (38) NOP or (E1) SPU to Math Reg Sa B1
+840A	AE 7A 30        STA	    (ARS)               ; Store A, (38) NOP or (E1) SPU to AR-S
 840D	B5 24           LDI	    A,24                ; SPU swtiches to High Bank of ROM
-840F	AE 7A 31        STA	    (7A31)              ; next opcode
+840F	AE 7A 31        STA	    (ARS+1)             ; next opcode, UL is argument of command
 8412	B5 FD           LDI     A,FD                ; then: (24)      LDA UL
-8414	AE 7A 32        STA	    (7A32)              ;       (FD 5E)   STX P ***JMP
+8414	AE 7A 32        STA	    (ARS+2)             ;       (FD 5E)   STX P ***JMP
 8417	B5 5E           LDI	    A,5E                ; Which saves X-Reg (8013) to PC (X set in 83F8)
-8419	AE 7A 33        STA	    (7A33)              ; i.e. this is destination address
-841C	BA 7A 30        JMP	    SREG                ; 8013 == B_TBL_8000_JMPS, low ROM is just (9A) RET
+8419	AE 7A 33        STA	    (ARS+3)             ; i.e. this is destination address
+841C	BA 7A 30        JMP	    ARS                 ; X = 8013 == B_TBL_8000_JMPS, low ROM is just (9A) RET
 841F	F8              VEJ     (F8)                ; High ROM has: (BA 79 FA 9A) JMP 79FA, RET
 
 
@@ -1104,7 +1129,11 @@ TABLE_8887:
 8F37	00 31 00 00 BB 00 DF 82   00 A8 00 00 FF 00 FF 01 
 8F47	00 10 00 00 BF 00 FF 40   00 24 10 00 FF 00 6F 84 
 8F57	00 80 00 00 7F 00 EF C4   00 18 00 00 FF 00 FB 28 
-8F67	00 40 00 00 FF 00 B7 24   00 10 00 00 D7 00 FF B0 
+8F67	00 40 00 
+
+8F6A    00 FF 00 B7 24 00 10 00   00                            ; Used by $902F
+
+8F73    D7 00 FF B0 
 8F77	00 26 00 00 EF 00 3F 00   00 10 00 00 FF 00 FF 10 
 8F87	00 18 00 00 FF 00 A3 04   00 06 08 00 FF 00 FF 80 
 8F97	00 80 00 00 E5 00 7B 20   00 82 00 00 7F 00 7F 00 
@@ -1113,188 +1142,175 @@ TABLE_8887:
 8FC7	04 26 00 00 F7 00 FF 24   00 28 04 00 7F 00 FF 10 
 8FD7	00 03 00 00 FF 00 FD 00   00 18 00 00 FE 00 9B 03 
 8FE7	00 00 00 00 67 00 EF 44   00 0B 00 00 FF 00 DF C0 
-8FF7	00 00 00 00 3F 00 
-
+8FF7	00 00 00 00 3F 00 FD
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_8FFD - Called from ??
-; 
-; Arguments:
+; INPUT - Jumped to from 8307 via High Bank ***DIS need to disasemble starting at 8FFF
+; Arguments: X-REG address of function, Y-REG Token
 ; Output:
 ; RegMod:
-8FFD	F9                REC                                   ; Reset Carry
-8FFE	C5 C2 23 23       VHR       (C2),23,BRANCH_9025         ; If Half-Carry Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
-
 INPUT:
-8FFF
-
-9002	B5 84             LDI	    A,84                        ;
-9004	AE 78 79          STA	    (7879)                      ;
-9007	C2 2D 1A          VEJ       (C2),2D,BRANCH_9024         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
-
-BRANCH_900A: ; branched to from 9018
-900A	BA E4 F6          JMP	    E4F6                        ;
+8FFF    C2 23 23          VEJ       (C2),'#',BRANCH_9025        ; If not an INPUT# skip ahead
+9002    B5 84             LDI       A,$84                       ;
+9004    AE 78 79          STA       (CASS_FLAG)                 ;
+9007    C2                VEJ       (C2),'-',BRANCH_9024        ; If not '-' skip ahead
+900A    BA E4 F6          JMP       $E4F6                       ; Inside BASIC PRINT command
 
 
+;------------------------------------------------------------------------------------------------------------
+; PRINT - Jumped to from 8307 via High Bank
+; Arguments: X-REG address of function, Y-REG Token
+; Outputs:
+; RegMod:
 PRINT:
-900D	C2 23 12          VEJ       (C2),23,BRANCH_9022         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
+900D	C2 23 12          VEJ       (C2),'#',BRANCH_9022        ; If not a PRINT# skip ahead
 9010	B5 04             LDI	    A,04                        ;
-9012	AE 78 79          STA	    (7879)                      ;
-9015	C2 2D 0B          VEJ       (C2),2D,BRANCH_9023         ; If next char not token 'ON' (F1 9C) branch fwd 5, $8320
+9012	AE 78 79          STA	    (CASS_FLAG)                 ;
+9015	C2 2D 0B          VEJ       (C2),'-',BRANCH_9023        ; If not '-' skip ahead
 9018	9E 10             BCH-	    BRANCH_900A                 ;
 
+
+;------------------------------------------------------------------------------------------------------------
+; CSAVE - Branched to from 8307 via High Bank
+; Arguments: X-REG address of function, Y-REG Token
+; Outputs:
+; RegMod:
 CSAVE:
 901A	F9                REC                                   ; Reset Carry
 
+
+;------------------------------------------------------------------------------------------------------------
+; CLOAD - Jumpedto from 8307 via High Bank
+; Arguments: X-REG address of function, Y-REG Token
+; Outputs:
+; RegMod:
 CLOAD:
 901B	F9                REC                                   ; Reset Carry
 
+
+;------------------------------------------------------------------------------------------------------------
+; MERGE - Jumped to from 8307 via High Bank
+; Arguments: X-REG address of function, Y-REG Token
+; Outputs:
+; RegMod:
 MERGE:
 901C	F9                REC                                   ; Reset Carry
 
 
-LLIST: ; branched to from 905C, 905F
+;------------------------------------------------------------------------------------------------------------
+; LLIST - Jumped to from 8307 via High Bank ***JMP - Does a calcualted jump
+; Arguments: X-REG address of function, Y-REG Token
+; Outputs:
+; RegMod:
+LLIST: ; branched to from 905C, 905F (LPRINT X=9056, LLIST X=901D)
 901D	C0                VEJ       (C0)                        ; Load next character/token to U-Reg
-901E	B5 04             LDI	    A,04                        ;
-9020	FD CA             ADR	    X                           ; X = X + A + Carry
+901E	B5 04             LDI	    A,04                        ; X = X + A + Carry
+9020	FD CA             ADR	    X                           ; LLIST=901D+04=9021, LPRINT=9018+04=901C, LPRINT=9019+04=901D
+                                                                ; CSAVE=901A+04=901E,  CLOAD=901B+04=901F,  MERGE=901C+04=9020
 
-BRANCH_9022: ; branched to from 900D
+BRANCH_9022: ; branched to from 900D (PRINT X=9010)
 9022	F9                REC                                   ; Reset Carry
 
-BRANCH_9023: ; branched to from 9015
+BRANCH_9023: ; branched to from 9015 (PRINT X=9018)
 9023	F9                REC                                   ; Reset Carry
 
-BRANCH_9024: ; branched to from 9007
+BRANCH_9024: ; branched to from 9007 (INPUT X=900A)
 9024	F9                REC                                   ; Reset Carry
 
-BRANCH_9025: ; branched to from 8FFE
-9025	C6                VEJ       (C6)                        ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-9026	04                LDA	    XL                          ;
-9027	FD C8             PSH	    A                           ;
-9029	6A 09             LDI	    UL,09                       ;
-902B	68 7A             LDI	    UH,7A                       ; U = 7A09
-902D	4A 6A             LDI	    XL,6A                       ;
-
-BRANCH_902F: ; branched to from 9031
+BRANCH_9025: ; branched to from 8FFF (INPUT X=9002)
+9025	C6                VEJ       (C6)                        ; DEC Y-Reg by 2 for tokens or 1 for chars in U-Reg
+9026	04                LDA	    XL                          ; XL is low byte of Command address
+9027	FD C8             PSH	    A                           ; Original LB of X-REG
+9029	6A 09             LDI	    UL,09                       ; Loop counter
+902B	68 7A             LDI	    UH,7A                       ; U = 7A09 
+902D	4A 6A             LDI	    XL,6A                       ; XH = HB of command, XL=6A 
+                                                                
+BRANCH_902F: ; branched to from 9031                            ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
+                                                                ; copied backwards 7A00-7A08, LPRINT 906A, PRINT 906A, INPUT 8F6A
 902F	47                LDE	    (X)                         ; A = (X) then X = X - 1
 9030	2E                STA	    (U)                         ;
 9031	88 04             LOP	    UL,BRANCH_902F              ; UL = UL - 1, loop back 'e' if Borrow Flag not set
-9033	FD 8A             POP	    A                           ;
-9035	FB                SEC                                   ;
-9036	B1 1C             SBI	    A,1C                        ;
-9038	D9                SHL                                   ;
-9039	D9                SHL                                   ;
-903A	D9                SHL                                   ;
-903B	4A 6B             LDI	    XL,6B                       ;
-903D	FD CA             ADR	    X                           ; X = X + A + Carry
-903F	45                LIN	    (X)                         ; A = (X) then INC X
-9040	A9 78 57          AND	    (SETDEV_VAL)                ;
-9043	8B 09             BZS+      BRANCH_904E                 ;
-9045	BE 93 CB          SJP	    BRANCH_93CB                 ;
-9048	AE 7B 9E          STA	    (7B9E)                      ;
-904B	44                INC	    X                           ;
-904C	44                INC	    X                           ;INC	BC
-904D	44                INC	    X                           ;
+9033	FD 8A             POP	    A                           ; A = original low byte of command before $902F
+9035	FB                SEC                                   ; Set carry flag
+9036	B1 1C             SBI	    A,1C                        ; LLIST  21-1C=05 C=1 -> LLIST  05<<3=28 C=0, MERGE  20-1C=## C=# -> MERGE  ##<<3=## C=#
+9038	D9                SHL                                   ; LPRINT 1C-1C=00 C=1 -> LPRINT 00<<3=00 C=0, LPRINT 1D-1C=01 C=1 -> LPRINT 01<<3=08 C=0
+9039	D9                SHL                                   ; CSAVE  1E-1C=## C=# -> CSAVE  ##<<3=#  C=#, CLOAD  1F-1C=## C=# -> CLOAD  ##<<3=# C=#
+903A	D9                SHL                                   ; PRINT  10-1C=## C=# -> PRINT  ##<<3=#  C=#, PRINT  18-1C=## C=# -> PRINT  ##<<3=# C=#
+903B	4A 6B             LDI	    XL,6B                       ; INPUT  0A-1C=## C=# -> INPUT  ##<<3=#  C=#, INPUT  02-1C=## C=# -> INPUT  ##<<3=# C=#
+903D	FD CA             ADR	    X                           ; LLIST 9093 C=0, LPRINT(1C) 906B C=0, LPRINT(1D) 9073 C=0
+903F	45                LIN	    (X)                         ; LLIST A=4 -> X=9094, A = (X) then INC X
+9040	A9 78 57          AND	    (SETDEV_VAL)                ; Clear bits based on A. A = A & X
+                                                                ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
+
+9043	8B 09             BZS+      BRANCH_904E                 ; 1st byte in table does not match SETDEV mode
+9045	BE 93 CB          SJP	    BRANCH_93CB                 ; Compares C0 to (BASIC_EXT_TBL)
+9048	AE 7B 9E          STA	    (OUT_BUF + 3E)                      ; A=C0, set in BRANCH_93CB, (79BE) in OUTPUT_BUFFER
+904B	44                INC	    X                           ; skip three bytes in table if in SETDEV mode
+904C	44                INC	    X                           ; use 1st three bytes if mode does not match
+904D	44                INC	    X                           ; yse 2nd three bytes if mode does match
 
 BRANCH_904E: ; branched to from 9043
 904E	45                LIN	    (X)                         ; A = (X) then INC X
 904F	28                STA	    UH                          ;
 9050	45                LIN	    (X)                         ; A = (X) then INC X
-9051	2A                STA	    UL                          ;
-9052	05                LDA	    (X)                         ;
-9053	BA 7A 00          JMP	    XREG                        ;
+9051	2A                STA	    UL                          ; LLIST U=B754, CE-150 LLIST function
+9052	05                LDA	    (X)                         ; A = 58
+9053	BA 7A 00          JMP	    ARX                         ; ***JMP to what was poked in to ARX by $902F
 
 
+
+;------------------------------------------------------------------------------------------------------------
+; LPRINT - Jumped to from 8307 via High Bank
+; Arguments: XREG = Address, YREG = Token,
+; Outputs:
+; RegMod:
 LPRINT:
 9056	4A 18             LDI	    XL,18                       ;
-9058	ED 78 56 40       BII	    (ZONE_REG),40               ;
-905C	9B 41             BZS-      BRANCH_901D                 ;
-905E	40                INC	    XL                          ;
-905F	9E 44             BCH-      BRANCH_901D                 ;
-9061	CD 3C             VMJ	    (3C)                        ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
-9063	FD 28             LDX       U                           ; X = U
-9065	68 1B             LDI	    UH,1B                       ;
-9067	C9 E0             VZR       (E0)                        ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
-9069	FD 5E             STX       P                           ; P = X.  Program_Counter = X ***JMP
-
-906B	04                LDA	    XL                          ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg  
-906C	B2                ADC	    VH                          ; bogus
-906D	F4 58 93          VEJ	    (F4),(5893)                 ; Loads U-Reg with 16-bit value from address of (pp)
+9058	ED 78 56 40       BII	    (ZONE_REG),40               ; Test for bit 6 set
+905C	9B 41             BZS-      LLIST                       ; If Bit 6 not set branch to LLIST, bit indicates?
+905E	40                INC	    XL                          ; XL = 19
+905F	9E 44             BCH-      LLIST                       ; Unconditional Branch to LLIST
 
 
+;-----------------------------------------------------------------------------------------------------------
+; TABLE_9061 - Used by $902F
+; Code copied reverse order to 7A09->00 
+TABLE_9061:
+9061	CD 3C FD 28 68 1B C9 E0  FD 5E                          ; 
+;7A00   5E FD           CPI         YL,FD                       ; Maybe looking for token in Y? Why would FD be low byte?
+;7A02   E0              VEJ         (E0)                        ; Display error message from UH?
+;7A03   C9 1B           VZR         (1B)                        ; If Z=0, CALL (FF1B)
+;7A05   68 28           LDI         UH,28                       ; UH=28
+;7A07   FD 3C CD        VCS#        (CD)                        ; If C=1 CALL (FFCD)
 
-;--------- ---------------------------------------------------------------------------------------------------
-; TBL_9070 - Disassembled below, part my be bogus part my be legit
-TBL_9070:
-9070	DE C0 00 04 B2 EC 58 93   DE C0 00 10 B8 A6 5C 90 
-9080	BB C0 00 08 B8 F9 5C 90   C3 C0 00 08 B9 95 5C 90 
-9090	BF C0 00 04 B7 54 58 93   56 C0 00 02 E6 B6 60 93 
-90A0	6A C0 00 10 E4 F3 5C 94   E0 C0 00 08 E4 F3 5C 94 
-90B0	E0 C0 00 01 C8 FA 60 96   60 C0 00 B5 20 8E 06 B5 
-90C0	10 8E 02 B5 00 AE 7B A1   55 B7 E0 83 23 2A B5 01 
+
+
+;-----------------------------------------------------------------------------------------------------------
+; TABLE_906B - Used by 903F
+TABLE_906B:
+906B    04 B2 F4 58 93 DE C0 00                                 ; Byte 0 is SETDEV mode mask
+9073	04 B2 EC 58 93 DE C0 00                                 ; Byte 1 -> UH
+907B    10 B8 A6 5C 90 BB C0 00                                 ; Byte 2 -> UL
+9083    08 B8 F9 5C 90 C3 C0 00                                 ; Byte 3 -> A   if SETDEV mode does not match mask
+908B    08 B9 95 5C 90 BF C0 00                                 ; Byte 4 -> UH
+9093    04 B7 54 58 93 56 C0 00                                 ; Byte 5 -> UL
+909B    02 E6 B6 60 93 6A C0 00                                 ; Byte 6 -> A   if SETDEV mode does match mask
+90A3	10 E4 F3 5C 94 E0 C0 00                                 ; Byte 7 -> 00 delimiter
+90AB    08 E4 F3 5C 94 E0 C0 00                                 ;
+90B3	01 C8 FA 60 96 60 C0 00                                 ;
+
+
+
+
+90BB    B5 20 8E 06 B5 10 8E 02
+90C0	B5 00 AE 7B A1   55 B7 E0 83 23 2A B5 01 
 90D0	6E 72 8B 14 D9 6E 4D 8B   0F D9 6E 61 89 12 68 1A 
 90E0	ED 76 4F 10 C9 E0 8E 12   ED 7B A1 10 68 01 9E 0C 
 90F0	56 B5 00 ED 76 4F 10 8B   01 DD AB 7B A1 AE 7B A1 
 9100	BF 30 89 09 BF 02 89 05   68 1A D8 C9 E0 BE 9D F1 
 9110	C1 E4 A5 7B A1 D5 81 11   CD 38 83 08 68 18 E9 7B 
 9120	A1 20 C9 E0 
-
-
-; 9074 ~90A4 may be bogus
-9070	DE C0             VEJ	    (DE),9132               ; bogus line? Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
-9072	00                SBC	    XL                      ;
-9073	04                LDA	    XL                      ;
-9074	B2                ADC	    VH                      ;
-9075	EC                VEJ       (EC)                    ; Clears arithmetic register X
-9076	58 93             LDI       YH,93                   ;
-9078	DE C0             VEJ	    (DE),913A               ; bogus line? Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
-907A	00                SBC	    XL                      ;
-907B	10                SBC	    YL                      ;
-907C	B8                RPV                               ;
-907D	A6                CPA	    UH                      ;
-907E	5C 90             CPI       YH,90                   ;
-9080	BB C0             ORI	    A,C0                    ;
-9082	00                SBC	    XL                      ;
-9083	08                STA	    XH                      ;
-9084	B8                RPV                               ;
-9085	F9                REC                               ;
-9086	5C 90             CPI       YH,90                   ;
-9088	C3 C0             VCS       (C0)                    ; If Carry Set do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
-908A	00                SBC	    XL                      ;
-908B	08                STA	    XH                      ;
-908C	B9 95             ANI	    A,95                    ;
-908E	5C 90             CPI       YH,90                   ;
-9090	BF C0             BII	    A,C0                    ;
-9092	00                SBC	    XL                      ;
-9093	04                LDA	    XL                      ;
-9094	B7 54             CPI	    A,54                    ;
-9096	58 93             LDI       YH,93                   ;
-9098	56                DEC	    Y                       ;
-9099	C0                VEJ       (C0)                    ; Load next character/token to U-Reg
-909A	00                SBC	    XL                      ;
-909B	02                ADC	    XL                      ;
-909C	E6                VEJ       (E6)                    ; Transfer AR-X to AR-Y
-909D	B6                CPA	    VH                      ;
-909E	60                INC	    UL                      ;
-909F	93 6A             BCS-      9037                    ; bogus line? 
-90A1	C0                VEJ       (C0)                    ; Load next character/token to U-Reg
-90A2	00                SBC	    XL                      ;
-90A3	10                SBC	    YL                      ;
-90A4	E4                VEJ       (E4)                    ; Output error 1 and return to the editor
-
-
-90A5	F3                .BYTE     F3                      ;
-
-; this may be bogus or legit
-90A6	5C 94             CPI	    YH,94                   ;
-90A8	E0                VEJ       (E0)                    ; Indicates if UH is not "00" error message
-90A9	C0                VEJ       (C0)                    ; Load next character/token to U-Reg
-90AA	00                SBC	    XL                      ;
-90AB	08                STA	    XH                      ;
-90AC	E4                VEJ       (E4)                    ; Output error 1 and return to the editor
-
-90AD	F3                .BYTE     F3                      ;
 
 
 
@@ -1325,7 +1341,7 @@ SUB_90AE:; called from ?
 90C3	B5 00             LDI	    A,00                    ;
 
 BRANCH_90C5: ; branched to from 90BD, 90C1
-90C5	AE 7B A1          STA	    (7BA1)                  ;
+90C5	AE 7B A1          STA	    (OUT_BUF  + 41)                  ;
 90C8	55                LIN       Y                       ; A = (Y) then INC Y
 90C9	B7 E0             CPI	    A,E0                    ;
 90CB	83 23             BCS+      BRANCH_90F0             ;
@@ -1348,7 +1364,7 @@ BRANCH_90E4: ; branched to from 90EE
 90E6	8E 12             BCH+	    BRANCH_90FA             ;
 
 BRANCH_90E8: ; branched to from 90D2 90D7
-90E8	ED 7B A1 10       BII	    (7BA1),10               ;
+90E8	ED 7B A1 10       BII	    (OUT_BUF  + 41),10               ;
 90EC	68 01             LDI	    UH,01                   ;
 90EE	9E 0C             BCH-      BRANCH_90E4             ;
 
@@ -1361,8 +1377,8 @@ BRANCH_90F0: ; branched to from 90CB, 90DC
 90F9	DD                INC	    A                       ;
 
 BRANCH_90FA: ; branched to from 90F7, 90E6
-90FA	AB 7B A1          ORA	    (7BA1)                  ;
-90FD	AE 7B A1          STA	    (7BA1)                  ;
+90FA	AB 7B A1          ORA	    (OUT_BUF  + 41)                  ;
+90FD	AE 7B A1          STA	    (OUT_BUF  + 41)                  ;
 9100	BF 30             BII	    A,30                    ;
 9102	89 09             BZR+      BRANCH_910D             ;
 9104	BF 02             BII	    A,02                    ;
@@ -1374,13 +1390,13 @@ BRANCH_90FA: ; branched to from 90F7, 90E6
 BRANCH_910D: ; branched to from 9102, 9106
 910D	BE 9D F1          SJP	    SUB_9DF1                ;
 9110	C1 E4             VCR	    (E4)                    ;
-9112	A5 7B A1          LDA	    (7BA1)                  ;
+9112	A5 7B A1          LDA	    (OUT_BUF  + 41)                  ;
 9115	D5                SHR                               ;
 9116	81 11             BCR+      BRANCH_9129             ;
 9118	CD 38             VMJ	    (38)                    ;
 911A	83 08             BCS+      BRANCH_9124             ;
 911C	68 18             LDI	    UH,18                   ;
-911E	E9 7B A1 20       ANI	    (7BA1),20               ;
+911E	E9 7B A1 20       ANI	    (OUT_BUF  + 41),20               ;
 9122	C9 E0             VZR       (E0)                    ;
 
 BRANCH_9124: ; branched to from 911A
@@ -1395,7 +1411,7 @@ BRANCH_9129: ; branched to from 9116
 9133	8E 1B             BCH+	    BRANCH_9150             ;
 
 BRANCH_9135: ; branched to from 912E
-9135	E9 7B A1 EF       ANI	    (7BA1),EF               ;
+9135	E9 7B A1 EF       ANI	    (OUT_BUF  + 41),EF               ;
 
 BRANCH_9139: ; branched to from 9141
 9139	BE 9A 38          SJP	    SUB_9A38                ;
@@ -1422,9 +1438,9 @@ BRANCH_9157: ; branched to from 9169
 9157	BA 96 2B          JMP	    BRANCH_962B             ;
 
 BRANCH_915A: ; branched to from 9155
-915A	ED 7B A1 20       BII	    (7BA1),20               ;
+915A	ED 7B A1 20       BII	    (OUT_BUF  + 41),20               ;
 915E	8B 0D             BZS+      BRANCH_916D             ;
-9160	ED 7B A1 04       BII	    (7BA1),04               ;
+9160	ED 7B A1 04       BII	    (OUT_BUF  + 41),04               ;
 9164	89 17             BZR+      BRANCH_917D             ;
 9166	BE 9C EC          SJP	    SUB_9CEC                ;
 9169	93 14             BCS-      BRANCH_9157             ;
@@ -1434,19 +1450,19 @@ BRANCH_916D: ; branched to from 915E
 916D	8E E1             BCH+	    SUB_9250                ;
 
 BRANCH_916F: ; branched to from 916B
-916F	F4 7B 75          VEJ       (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+916F	F4 7B 75          VEJ       (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 9172	FD 28             LDX       U                       ; X = U
-9174	F4 7B 77          VEJ       (F4),(7B77)             ; Loads U-Reg with 16-bit value from address of (pp)
+9174	F4 7B 77          VEJ       (F4),(OUT_BUF + 17)             ; Loads U-Reg with 16-bit value from address of (pp)
 9177	BE 9A A7          SJP	    BRANCH_9AA7             ;
 917A	BA 96 07          JMP	    JMP_9607                ;
 
 BRANCH_917D: ; branched to from 9164
 917D	FD 98             PSH       Y                       ;
-917F	F4 7B 75          VEJ       (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+917F	F4 7B 75          VEJ       (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 9182	FD 28             LDX       U                       ; X = U
 
 BRANCH_9184: ; branched to from 9224
-9184	BE 9B E1          SJP	    SUB_9BE1                ;
+9184	BE 9B E1          SJP	    SUB_9BE1                ; Manipulates OUT_BUF
 
 BRANCH_9187: ; branched to from 9249
 9187	83 B8             BCS+      BRANCH_9241             ;
@@ -1464,7 +1480,7 @@ BRANCH_9187: ; branched to from 9249
 919B	14                LDA	    YL                      ;
 919C	FB                SEC                               ; Set Carry Flag
 919D	B1 21             SBI	    A,21                    ;
-919F	ED 7B A1 80       BII	    (7BA1),80               ;
+919F	ED 7B A1 80       BII	    (OUT_BUF  + 41),80               ;
 91A3	89 10             BZR+      BRANCH_91B5             ;
 91A5	B5 25             LDI	    A,25                    ;
 91A7	10                SBC	    YL                      ;
@@ -1488,7 +1504,7 @@ BRANCH_91B2: ; branched to from 91AD
 BRANCH_91B5: ; branched to from 91B5, 9207
 91B5	2A                STA	    UL                      ;
 91B6	FD 1A             POP	    Y                       ;
-91B8	BE 9A CF          SJP	    SUB_9ACF                ;
+91B8	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 91BB	83 84             BCS+      BRANCH_9241             ;
 91BD	C2 0D 02          VEJ	    (C2),BRANCH_91C2        ;
 91C0	8E 47             BCH+	    BRANCH_9209             ;
@@ -1522,7 +1538,7 @@ BRANCH_91DB: ; branched to from 91D3
 91E4	89 10             BZR+      SUB_91F6                ;
 91E6	5A 0A             LDI	    YL,0A                   ;
 91E8	B5 64             LDI	    A,64                    ;
-91EA	A7 7B A1          CPA	    (7BA1)                  ;
+91EA	A7 7B A1          CPA	    (OUT_BUF  + 41)                  ;
 91ED	89 10             BZR+      BRANCH_91FF             ;
 91EF	5A 08             LDI	    YL,08                   ;
 91F1	B5 7E             LDI	    A,7E                    ;
@@ -1538,7 +1554,7 @@ BRANCH_91DB: ; branched to from 91D3
 ; Output:
 ; RegMod:
 SUB_91F6: ; branched to from 91E4
-91F6	ED 7B A1 80       BII	    (7BA1),80               ;
+91F6	ED 7B A1 80       BII	    (OUT_BUF  + 41),80               ;
 91FA	89 03             BZR+      BRANCH_91FF             ;
 91FC	B5 20             LDI	    A,20                    ;
 91FE	51                SIN       Y                       ; (Y) = A. Then Y = Y + 1
@@ -1556,20 +1572,20 @@ BRANCH_9201: ; branched to from 91DF
 BRANCH_9209: ; branched to from 91C0
 9209	BE 9B 41          SJP	    SUB_9B41                ;
 920C	83 33             BCS+      BRANCH_9241             ;
-920E	BE 9B C1          SJP	    SUB_9BC1                ;
+920E	BE 9B C1          SJP	    SUB_9BC1                ; Manipulates OUT_BUF
 9211	83 2E             BCS+      BRANCH_9241             ;
 9213	BE 9B 76          SJP	    SUB_9B76                ;
 9216	83 29             BCS+      BRANCH_9241             ;
-9218	F4 7B 79          VEJ	    (F4),(7B79)             ; Loads U-Reg with 16-bit value from address of (pp)
+9218	F4 7B 79          VEJ	    (F4),(OUT_BUF + 19)     ; Loads U-Reg with 16-bit value from address of (pp)
 921B	FD 18             LDX	    Y                       ; X = Y
-921D	BE DF E1          SJP	    DFE1                    ;
+921D	BE DF E1          SJP	    DFE1                    ; DEC U then U-Reg = U-Reg - X-Reg (with overflow C=1)
 9220	81 11             BCR+      BRANCH_9233             ;
 
 BRANCH_9222: ; branched to from 922D, 9231
 9222	05                LDA	    (X)                     ;
 9223	DD                INC	    A                       ;
 9224	99 A2             BZR-      BRANCH_9184             ;
-9226	ED 7B A1 40       BII	    (7BA1),40               ;
+9226	ED 7B A1 40       BII	    (OUT_BUF  + 41),40               ;
 922A	8B 07             BZS+      BRANCH_9233             ;
 922C	44                INC	    X                       ;
 922D	88 0D             LOP	    UL,BRANCH_9222          ; UL = UL - 1, loop back 'e' if Borrow Flag not set
@@ -1577,7 +1593,7 @@ BRANCH_9222: ; branched to from 922D, 9231
 9231	93 11             BCS-      BRANCH_9222             ;
 
 BRANCH_9233: ; branched to from 9220, 922A
-9233	ED 7B A1 40       BII	    (7BA1),40               ;
+9233	ED 7B A1 40       BII	    (OUT_BUF  + 41),40               ;
 9237	89 03             BZR+      BRANCH_923C             ;
 9239	BE 9B 41          SJP	    SUB_9B41                ;
 
@@ -1586,9 +1602,9 @@ BRANCH_923C: ; branched to from 9237
 923E	BA 96 07          JMP	    JMP_9607                ;
 
 BRANCH_9241: ; branched to from 9187, 91BB, 920C, 9211, 9216
-9241	BE 9B 5E          SJP	    SUB_9B5E                ;
+9241	BE 9B 5E          SJP	    SUB_9B5E                ; REC if UH == 3C, 34, 40, 3A
 9244	83 05             BCS+      BRANCH_924B             ;
-9246	BE 9C 32          SJP	    SUB_9C32                ;
+9246	BE 9C 32          SJP	    SUB_9C32                ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
 9249	9E C4             BCH- 	    BRANCH_9187             ;
 
 BRANCH_924B: ; branched to from 9244
@@ -1606,41 +1622,42 @@ BRANCH_924D: ; branched to from 9259
 ; Output:
 ; RegMod:
 SUB_9250:
-9250	ED 7B A1 04       BII       (7BA1),04               ;
-9254	89 62             BZR+      BRANCH_92BB             ;
-9256	BE 9D 65          SJP       SUB_9D65                ;
+9250	ED 7B A1 04       BII       (OUT_BUF  + 41),04               ; Is Bit3 set? In Output Buffer
+9254	89 62             BZR+      BRANCH_92BB             ; If bit set branch
+9256	BE 9D 65          SJP       SUB_9D65                ; Seems like it might have to do with MERGE
 9259	93 0E             BCS-      BRANCH_924D             ;
-925B	BE 9A A7          SJP       BRANCH_9AA7             ;
+925B	BE 9A A7          SJP       BRANCH_9AA7             ; No idea
 925E	83 03             BCS+      BRANCH_9263             ;
-9260	BE 9E 3E          SJP       SUB_9E3E                ;
+9260	BE 9E 3E          SJP       SUB_9E3E                ; No idea
 
 BRANCH_9263: ; branched to from 925E
-9263	A5 7B A1          LDA	    (7BA1)                  ;
+9263	A5 7B A1          LDA	    (OUT_BUF  + 41)                  ; In Output Buffer
 9266	83 27             BCS+      BRANCH_928F             ;
-9268	D5                SHR                               ;
+9268	D5                SHR                               ; Right shift
 9269	81 04             BCR+      BRANCH_926F             ;
-926B	49 00             ANI	    (X),00                  ;
+926B	49 00             ANI	    (X),00                  ; Clear what XREG points to
 926D	8E 1D             BCH+      BRANCH_928C             ;
 
 BRANCH_926F: ; branched to from 9269
-926F	D5                SHR                               ;
+926F	D5                SHR                               ; Right shift
 9270	81 0D             BCR+      BRANCH_927F             ;
-9272	F4 7B 94          VEJ	    (F4),(7B94)             ; Loads U-Reg with 16-bit value from address of (pp)
+9272	F4 7B 94          VEJ	    (F4),(7B94)             ; Loads U-Reg with 16-bit value from address of (pp) (Output Buffer)
 9275	26                CPA	    UL                      ;
 9276	89 03             BZR+      BRANCH_927B             ;
 9278	DD                INC	    A                       ;
 9279	8B 11             BZS+      BRANCH_928C             ;
 
 BRANCH_927B: ; branched to from 9276
-927B	FD 28             LDX       U                       ; X=U
+927B	FD 28             LDX       U                       ; X=U, U was from output buffer?
 927D	FD 5E             STX       P                       ; X to Program Counter ***JMP
+
 
 BRANCH_927F: ; branched to from 9270
 927F	4B FF             ORI	    (X),FF                  ;
 9281	CA 67             VEJ	    (CA),(67)               ; Transfers X to 78(pp), 78(pp+1)
 9283	BE D0 9E          SJP       D09E                    ;
-9286	F4 7B 75          VEJ	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
-9289	F6 78 69          VEJ	    (F6),(MERGEBASIC)       ; Transfers U to pp, pp+1
+9286	F4 7B 75          VEJ	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
+9289	F6 78 69          VEJ	    (F6),(BASPRG_EDT_H)       ; Transfers U to pp, pp+1
 
 BRANCH_928C: ; branched to from 926D, 9279
 928C	BA 96 0C          JMP	    JMP_960C                ;
@@ -1662,7 +1679,7 @@ BRANCH_929F: ; branched to from 9292
 929F	D5                SHR                               ;
 92A0	83 11             BCS+      BRANCH_92B3             ;
 92A2	BE D0 9E          SJP       D09E                    ;
-92A5	E9 7B A1 10       ANI	    (7BA1),10               ;
+92A5	E9 7B A1 10       ANI	    (OUT_BUF  + 41),10               ;
 92A9	89 08             BZR+      BRANCH_92B3             ;
 92AB	CC 65             VEJ	    (CC),(65)               ; Loads X-Reg with address at 78(pp) 78(pp+1)
 92AD	4B FF             ORI	    (X),FF                  ;
@@ -1677,7 +1694,7 @@ BRANCH_92BB: ; branched to from 9254
 92B8	BE D0 0D          SJP       CE158_PRT_B_DIR         ;
 92BB	CC 67             VEJ	    (CC),(67)               ; Loads X-Reg with address at 78(pp) 78(pp+1)
 92BD	44                INC	    X                       ;
-92BE	ED 7B A1 10       BII	    (7BA1),10               ;
+92BE	ED 7B A1 10       BII	    (OUT_BUF  + 41),10               ;
 92C2	89 02             BZR+      BRANCH_92C6             ;
 92C4	CC 65             VEJ	    (CC),(65)               ; Loads X-Reg with address at 78(pp) 78(pp+1)
 
@@ -1691,14 +1708,14 @@ BRANCH_92CE: ; branched to from 9317
 92CE	4A 10             LDI	    XL,10                   ;
 92D0	48 7B             LDI	    XH,7B                   ;
 92D2	6A 4F             LDI	    UL,4F                   ;
-92D4	BE 9A A5          SJP       SUB_9AA5                ;
+92D4	BE 9A A5          SJP       SUB_9AA5                ; No idea
 92D7	83 71             BCS+      SUB_934A                ;
 92D9	46                DEC	    X                       ;
 92DA	05                LDA	    (X)                     ;
 92DB	B7 0D             CPI	    A,0D                    ;
 92DD	89 3A             BZR+      BRANCH_9319             ;
 92DF	B5 60             LDI	    A,60                    ;
-92E1	AE 78 8B          STA	    (788B)                  ;
+92E1	AE 78 8B          STA	    (INBUFPTR_L)            ;
 92E4	BE 93 37          SJP       SUB_9337                ;
 92E7	BE F9 57          SJP       F957                    ;
 92EA	8B 2F             BZS+      BRANCH_931B             ;
@@ -1709,7 +1726,7 @@ BRANCH_92CE: ; branched to from 9317
 92F2	BE 93 37          SJP       SUB_9337                ;
 
 BRANCH_92F5: ; branched to from 934E
-92F5	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+92F5	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 92FA	CD 42             VMJ	    (42)                    ;
 
 BRANCH_92FC: ; branched to from 92F0
@@ -1742,7 +1759,7 @@ BRANCH_9322: ; branched to from 934C
 9324	58 00             LDI	    YH,00                   ;
 
 JMP_9326: ; jumped to from 969D, 976E
-9326	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+9326	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 932B	A4                LDA	    UH                      ;
 932C	C9 E0             VZR       (E0)                    ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
 932E	D8                VEJ       (D8)                    ;
@@ -1800,7 +1817,7 @@ SUB_934A:
 ; RegMod:
 SUB_9350:
 9350	BE 93 C1          SJP	    BRANCH_93C1             ;
-9353	AE 7B 9E          STA	    (7B9E)                  ;
+9353	AE 7B 9E          STA	    (OUT_BUF + 3E)                  ;
 9356	BE DF F3          SJP	    DFF3                    ;
 9359	C1 42             VCR	    (42)                    ; If Carry Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
 935B	BE 99 49          SJP	    SUB_9949                ;
@@ -1813,7 +1830,7 @@ SUB_9350:
 936A	B5 6C             LDI	    A,6C                    ;
 936C	BE 98 C0          SJP	    SUB_98C0                ;
 936F	83 09             BCS+      BRANCH_937A             ;  
-9371	BE 9B DF          SJP	    9BDF                    ;
+9371	BE 9B DF          SJP	    SUB_98DF                    ;
 
 BRANCH_9374: ; branched to from 9384
 9374	83 04             BCS+      BRANCH_937A             ;  
@@ -1821,9 +1838,9 @@ BRANCH_9374: ; branched to from 9384
 9378	8E 32             BCH+	    BRANCH_93AC             ;
 
 BRANCH_937A: ; branched to from 936F, 93A8
-937A	BE 9B 5E          SJP	    SUB_9B5E                ;
+937A	BE 9B 5E          SJP	    SUB_9B5E                ; REC if UH == 3C, 34, 40, 3A
 937D	83 3F             BCS+      BRANCH_93BE             ;              
-937F	BE 9C 32          SJP	    SUB_9C32                ;
+937F	BE 9C 32          SJP	    SUB_9C32                ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
 9382	FD 5A             STX       Y                       ; Y = X
 9384	9E 12             BCH-	    BRANCH_9374             ;
 
@@ -1851,7 +1868,7 @@ BRANCH_9393: ; branched to from 9389
 BRANCH_93A2: ; branched to from 9395
 93A2	2A                STA	    UL                      ;
 93A3	68 00             LDI	    UH,00                   ;
-93A5	BE 9A CF          SJP	    SUB_9ACF                ;
+93A5	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 93A8	93 30             BCS-      BRANCH_937A             ;
 
 BRANCH_93AA: ; branched to from 939C
@@ -1883,10 +1900,11 @@ BRANCH_93C1: ; branched to from 9350
 
 BRANCH_93C3: ; branched to from 93CD
 93C3	68 1B             LDI	    UH,1B                   ;
-93C5	A7 79 D1          CPA	    (BASIC_EXT_TBL)         ;
-93C8	C9 E0             VZR	    (E0)                    ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+93C5	A7 79 D1          CPA	    (BASIC_EXT_TBL)         ; This table might be some sort of mode mask
+93C8	C9 E0             VZR	    (E0)                    ; If Z=0 output error code in UH
 93CA	9A                RTN                               ;
 
+BRANCH_93CB: ; branched to from 9045
 93CB	B5 C0             LDI	    A,C0                    ;
 93CD	9E 0C             BCH-	    BRANCH_93C3             ;
 
@@ -1894,7 +1912,7 @@ BRANCH_93C3: ; branched to from 93CD
 
 
 ;------------------------------------------------------------------------------------------------------------
-; PRINT#, PRINT#2 Jumped to from 8307 
+; PRINT# Jumped to from 8307 via High Bank
 ; 
 ; Arguments:
 ; Output:
@@ -1903,6 +1921,13 @@ PRINT#
 93D0	B5 C0             LDI	    A,C0                    ; Not reached?
 93D2	8E 07             BCH+	    BRANCH_93DB             ;
 
+
+;------------------------------------------------------------------------------------------------------------
+; PRINT#2 Jumped to from 8307 via High Bank
+; 
+; Arguments:
+; Output:
+; RegMod:
 PRINT#2: Jumped to from 8307 
 93D4	B5 C4             LDI	    A,C4                    ; Not reached?
 93D6	8E 03             BCH+	    BRANCH_93DB             ;
@@ -1910,11 +1935,11 @@ PRINT#2: Jumped to from 8307
 93D8	BE 93 C1          SJP       BRANCH_93C1             ; Not reached?
 
 BRANCH_93DB: ; branched to from 93D2, 93D6
-93DB	AE 7B 9E          STA	    (7B9E)                  ;
+93DB	AE 7B 9E          STA	    (OUT_BUF + 3E)                  ;
 93DE	B5 6C             LDI	    A,6C                    ;
 93E0	BE 98 B7          SJP       SUB_98B7                ;
 93E3	83 7F             BCS+      BRANCH_9464             ;
-93E5	BE 9B DF          SJP       9BDF                    ;
+93E5	BE 9B DF          SJP       SUB_98DF                    ;
 
 BRANCH_93E8: ; branched to from 949D
 93E8	83 7A             BCS+      BRANCH_9464             ;
@@ -2006,7 +2031,7 @@ BRANCH_9466: ; branched to 9443, 9462
 BRANCH_9468: ; branched to from 93AC
 9468	BE 9B 41          SJP	    SUB_9B41                ;
 946B	83 26             BCS+      BRANCH_9493             ;
-946D	BE 9B C1          SJP	    SUB_9BC1                ;
+946D	BE 9B C1          SJP	    SUB_9BC1                ; Manipulates OUT_BUF
 9470	83 21             BCS+      BRANCH_9493             ;
 9472	BA 96 07          JMP	    JMP_9607                ;
 
@@ -2014,7 +2039,7 @@ BRANCH_9468: ; branched to from 93AC
 9478	C8 14             VEJ	    (C8),BRANCH_948E        ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
 
 BRANCH_947A: ; branched to from 93B3, 9420, 948C
-947A	BE 9B C1          SJP	    SUB_9BC1                ;
+947A	BE 9B C1          SJP	    SUB_9BC1                ; Manipulates OUT_BUF
 947D	83 14             BCS+      BRANCH_9493             ;
 947F	BA 96 0C          JMP	    JMP_960C                ;
 
@@ -2032,9 +2057,9 @@ BRANCH_9491: ; branched to from 9422, 9482
 9491	68 01             LDI	    UH,01                   ;
 
 BRANCH_9493: ; branched to from 9464, 946B, 9470, 947D, 9488
-9493	BE 9B 5E          SJP	    SUB_9B5E                ;
+9493	BE 9B 5E          SJP	    SUB_9B5E                ; REC if UH == 3C, 34, 40, 3A
 9496	83 08             BCS+      BRANCH_94A0             ;
-9498	BE 9C 32          SJP	    SUB_9C32                ;
+9498	BE 9C 32          SJP	    SUB_9C32                ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
 949B	FD 5A             STX       Y                       ; Y = X
 949D	BA 93 E8          JMP	    BRANCH_93E8             ;
 
@@ -2049,7 +2074,7 @@ BRANCH_94A0: ; branched to from 9518, 9544
 
 SUB_94E0:
 94E0	B5 C0             LDI	    A,C0                    ;
-94E2	AE 7B 9E          STA	    (7B9E)                  ;
+94E2	AE 7B 9E          STA	    (OUT_BUF + 3E)                  ;
 94E5	B5 28             LDI	    A,28                    ;
 94E7	ED 78 79 80       BII	    (7879),80               ;
 94EB	8B 02             BZS+      BRANCH_94EF             ;
@@ -2059,7 +2084,7 @@ BRANCH_94EF: ; jumped to from 94EB
 94EF	BE 98 C0          SJP	    SUB_98C0                ;
 94F2	BE 9D F1          SJP	    SUB_9DF1                ;
 94F5	91 57             BCR-      BRANCH_94A0             ;
-94F7	ED 7B A1 20       BII	    (7BA1),20               ;
+94F7	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 94FB	89 05             BZR+      BRANCH_9502             ;
 94FD	BE 9D 65          SJP	    SUB_9D65                ;
 9500	8E 16             BCH+	    BRANCH_9518             ;
@@ -2069,19 +2094,19 @@ BRANCH_9502: ; jumped to from
 9505	93 67             BCS-      BRANCH_94A0             ;
 
 JMP_9507: ; jumped to from 9626
-9507	ED 7B A1 20       BII	    (7BA1),20               ;
+9507	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 950B	8B 0D             BZS+      BRANCH_951A             ;
-950D	ED 7B A1 80       BII	    (7BA1),80               ;
+950D	ED 7B A1 80       BII	    (OUT_BUF  + 41),80      ;
 9511	89 05             BZR+      BRANCH_9518             ;
 9513	B5 FF             LDI	    A,FF                    ;
-9515	BE 9B 8C          SJP	    SUB_9B8C                ;
+9515	BE 9B 8C          SJP	    DELAY_A_MS              ; Time delay of A * 15.625ms
 
 BRANCH_9518: ; branched to from 9511
 9518	93 7A             BCS-      BRANCH_94A0             ;
 
 BRANCH_951A: ; branched to from 950B
 951A	CE F1 25          VEJ 	    (CE),F1,BRANCH_9542     ; Determines variable 'F1' address all variable types allowed, if errors continue at P+n2
-951D	ED 7B A1 20       BII	    (7BA1),20               ;
+951D	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 9521	89 39             BZR+      BRANCH_955C             ;
 9523	BF 01             BII	    A,01                    ;
 9525	8B 35             BZS+      BRANCH_955C             ;
@@ -2153,7 +2178,7 @@ BRANCH_9574: ; branched to from 9576
 9575	2E                STA	    (U)                     ;
 9576	88 04             LOP 	    UL,BRANCH_9574          ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 9578	FD 28             LDX	    U                       ; X = U
-957A	ED 7B A1 20       BII	    (7BA1),20               ;
+957A	ED 7B A1 20       BII	    (OUT_BUF  + 41),20               ;
 957E	89 02             BZR+      BRANCH_9582             ;
 9580	4A 07             LDI	    XL,07                   ;
 
@@ -2161,13 +2186,13 @@ BRANCH_9582: ; branched to from 957E
 9582	40                INC	    XL                      ;
 9583	6A 04             LDI	    UL,04                   ;
 9585	68 00             LDI	    UH,00                   ;
-9587	BE 9B E1          SJP	    SUB_9BE1                ;
+9587	BE 9B E1          SJP	    SUB_9BE1                ; Manipulates OUT_BUF
 
 BRANCH_958A: ; branched to from 9603
 958A	83 6F             BCS+      BRANCH_95FB             ;
-958C	BE 9A CF          SJP	    SUB_9ACF                ;
+958C	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 958F	83 6A             BCS+      BRANCH_95FB             ;
-9591	ED 7B A1 20       BII	    (7BA1),20               ;
+9591	ED 7B A1 20       BII	    (OUT_BUF  + 41),20               ;
 9595	89 0B             BZR+      BRANCH_95A2             ;
 9597	68 7A             LDI	    UH,7A                   ;
 9599	6A 04             LDI	    UL,04                   ;
@@ -2192,7 +2217,7 @@ BRANCH_95A2: ; branched to from 9595
 
 BRANCH_95B4: ; branched to from 95BE, 95F9
 95B4	FD C8             PSH	    A                       ;
-95B6	BE 9A CF          SJP	    SUB_9ACF                ;
+95B6	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 95B9	FD 8A             POP	    A                       ;
 95BB	83 3E             BCS+      BRANCH_95FB             ;
 95BD	DF                DEC	    A                       ;
@@ -2207,24 +2232,24 @@ BRANCH_95C4: ; branched to from 95FE
 
 BRANCH_95C7: ; branched to from 95A9
 95C7	6A 3F             LDI	    UL,3F                   ;
-95C9	BE 9A CF          SJP	    SUB_9ACF                ;
+95C9	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 95CC	83 2D             BCS+      BRANCH_95FB             ;
-95CE	ED 7B A1 20       BII	    (7BA1),20               ;
+95CE	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 95D2	8B 07             BZS+      BRANCH_95DB             ;
 95D4	B5 FF             LDI	    A,FF                    ;
-95D6	BE 9B 8C          SJP	    SUB_9B8C                ;
+95D6	BE 9B 8C          SJP	    DELAY_A_MS              ; Time delay of A * 15.625ms
 95D9	83 20             BCS+      BRANCH_95FB             ;
 
 BRANCH_95DB: ; branched to from 95D2
 95DB	4A 50             LDI	    XL,50                   ;
 95DD	48 76             LDI	    XH,76                   ;
 95DF	6A AF             LDI	    UL,AF                   ;
-95E1	BE 9A CF          SJP	    SUB_9ACF                ;
+95E1	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 95E4	83 15             BCS+      BRANCH_95FB             ;
-95E6	ED 7B A1 20       BII	    (7BA1),20               ;
+95E6	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 95EA	8B 07             BZS+      BRANCH_95F3             ;
 95EC	B5 FF             LDI	    A,FF                    ;
-95EE	BE 9B 8C          SJP	    SUB_9B8C                ;
+95EE	BE 9B 8C          SJP	    DELAY_A_MS              ; Time delay of A * 15.625ms
 95F1	83 08             BCS+      BRANCH_95FB             ;
 
 BRANCH_95F3: ; branched to from 95EA
@@ -2234,9 +2259,9 @@ BRANCH_95F3: ; branched to from 95EA
 95F9	9E 47             BCH-	    BRANCH_95B4             ;
 
 BRANCH_95FB: ; branched to from 958A, 958F, 95BB, 95CC, 95D6, 95D6, 95E4, 95F1
-95FB	BE 9B 5E          SJP	    SUB_9B5E                ;
+95FB	BE 9B 5E          SJP	    SUB_9B5E                ; REC if UH == 3C, 34, 40, 3A
 95FE	93 3C             BCS-      BRANCH_95C4             ;
-9600	BE 9C 32          SJP	    SUB_9C32                ;
+9600	BE 9C 32          SJP	    SUB_9C32                ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
 9603	9E 7B             BCH-	    BRANCH_958A             ;
 
 BRANCH_9605: ; branched to from 95C0
@@ -2246,50 +2271,45 @@ JMP_9607: ; jumped from from 923E
 9607	BE 9E 3E          SJP	    SUB_9E3E                ;
 960A	83 1F             BCS+      BRANCH_962B             ;
 
-JMP_960C: ; jumped to from 928C
-960C	BE 9B AA          SJP	    SUB_9BAA                ;
-960F	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+JMP_960C: ; jumped to from 928C, 9859
+960C	BE 9B AA          SJP	    SUB_9BAA                ; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
+960F	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; PC-1500 - Set interrupt mask for ON Key
 9614	56                DEC	    Y                       ;
 9615	E2                VEJ       (E2)                    ; Start of Basic Interpreter
+
+
 9616	C4 2C 10          VEJ       (C4),2C,BRANCH_9629     ; Check tokens/char in U-Reg if not p branch fwd n
 9619	B5 84             LDI	    A,84                    ;
-961B	ED 7B A1 20       BII	    (7BA1),20               ;
+961B	ED 7B A1 20       BII	    (OUT_BUF  + 41),20               ; In OUT_BUF
 961F	8B 02             BZS+      BRANCH_9623             ;
 9621	B5 04             LDI	    A,04                    ;
 
 BRANCH_9623: ; branched to from 961F
-9623	AE 78 79          STA	    (7879)                  ;
-9626	BA 95 07          JMP	    JMP_9507                ;
+9623	AE 78 79          STA	    (CASS_FLAG)             ;
+9626	BA 95 07          JMP	    JMP_9507                ; Unknown
 
 BRANCH_9629: ; branched to from 9616
 9629	68 01             LDI	    UH,01                   ;
 
-BRANCH_962B: ; branched to from 9157
-962B	A5 7B A1          LDA	    (7BA1)                  ;
+BRANCH_962B: ; branched to from 9157, jumped to from 985E
+962B	A5 7B A1          LDA	    (OUT_BUF  + 41)                  ; In OUT_BUF
 962E	B7 A0             CPI	    A,A0                    ;
 9630	81 0C             BCR+      BRANCH_963E             ;
 9632	FD 28             LDX	    U                       ; X = U
-9634	FD E9 F0 0A FC    ANI       #(PC1500_MSK_REG),FC    ;
-9639	BE 9E 47          SJP	    SUB_9E47                ;
+9634	FD E9 F0 0A FC    ANI       #(PC1500_MSK_REG),FC    ; Clear IRQ and ON Key interrupt mask for PC-1500
+9639	BE 9E 47          SJP	    SUB_9E47                ; Unknown
 963C	FD 6A             STX       U                       ; U = X
 
 BRANCH_963E: ; branched to from 9630
-963E	BE 9B AA          SJP       SUB_9BAA                ;
+963E	BE 9B AA          SJP       SUB_9BAA                ; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
 
 
-
-;--------- ---------------------------------------------------------------------------------------------------
-; JMP_9641 - Called from 92B5
-; 
-; Arguments:
-; Output:
-; RegMod:
-JMP_9641:
-9641	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+JMP_9641: ; Jumped to from 92B5
+9641	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 9646	A4                LDA	    UH                      ;
-9647	C9 E0             VZR       E0                      ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+9647	C9 E0             VZR       (E0)                    ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
 9649	FD EB F0 0B 02    ORI       #(PC1500_IF_REG),02     ;
-964E	BA C6 84          JMP	    C684                    ;
+964E	BA C6 84          JMP	    BCMD_DATA               ; Basic Command DATA / ARUN / AREAD
 
 
 
@@ -2299,28 +2319,27 @@ SEPARATOR_9651:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; INPUT# - Called from 8307
-; 
-; Arguments:
+; INPUT# - Jumped to from 8307 via High Bank
+; Arguments: XREG = Address, YREG = Token,
 ; Output:
 ; RegMod:
 INPUT#:
 9660	B5 C0             LDI	    A,C0                    ;
-9662	AE 7B 9E          STA	    (7B9E)                  ;
-9665	C2 25 46          VEJ	    (C2),25,BRANCH_96AE     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
-9668	CE F1 78          VEJ	    (CE),F1,BRANCH_96E3     ; Determines variable 'n1' address all variable types allowed, if errors continue at P+n2
-966B	FD 28             LDX       U                       ; X = U
-966D	68 44             LDI	    UH,44                   ;
-966F	B7 29             CPI	    A,29                    ;
-9671	C9 E0             VZR       (E0)                    ; If Z Reset do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+9662	AE 7B 9E          STA	    (OUT_BUF + 3E)                  ; In OUTPUT_BUFFER
+9665	C2 25 46          VEJ	    (C2),25,BRANCH_96AE     ; If next character is not '%', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+9668	CE F1 78          VEJ	    (CE),F1,BRANCH_96E3     ; Determines variable pointed to by y-REG all variable types allowed, if errors continue at P+n2
+966B	FD 28             LDX       U                       ; X = U. U returned from (CE) as start address of variable
+966D	68 44             LDI	    UH,44                   ; 
+966F	B7 29             CPI	    A,29                    ; A must have been changed in (CE) call
+9671	C9 E0             VZR       (E0)                    ; If Z Reset Set Output ERROR 1 if UH != 00
 9673	46                DEC	    X                       ;
-9674	4D 20             BII	    (X),20                  ;
-9676	CB E0             VZS       (E0)                    ; If Z Set do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
-9678	44                INC	    X                       ;
+9674	4D 20             BII	    (X),20                  ; Look for a space before variable?
+9676	CB E0             VZS       (E0)                    ; If Z Set Output ERROR 1 if UH != 00
+9678	44                INC	    X                       ; X is back to address of variable
 9679	45                LIN	    X                       ; A = (X) then INC X
 967A	28                STA	    UH                      ;
 967B	45                LIN	    X                       ; A = (X) then INC X
-967C	2A                STA       UL                      ;
+967C	2A                STA       UL                      ; What is U-REG pointing to?
 967D	44                INC	    X                       ;
 967E	44                INC	    X                       ;
 967F	44                INC	    X                       ;
@@ -2330,132 +2349,137 @@ INPUT#:
 9683	66                DEC	    U                       ;
 9684	FD 88             PUSH	    X                       ;
 9686	FD A8             PUSH	    U                       ;
-9688	BE D3 C5          SJP	    D3C5                    ;
+9688	BE D3 C5          SJP	    D3C5                    ; Deletes U+2 bytes? from X-REG
 968B	B5 0C             LDI	    A,0C                    ;
-968D	BE 98 C0          SJP	    SUB_98C0                ;
+968D	BE 98 C0          SJP	    SUB_98C0                ; No idea
 9690	FD 2A             POP	    U                       ;
 9692	FD 0A             POP	    X                       ;
-9694	BE 9A A7          SJP	    BRANCH_9AA7             ;
+9694	BE 9A A7          SJP	    BRANCH_9AA7             ; No idea
 9697	81 07             BCR+      BRANCH_96A0             ;
 9699	6C 42             CPI	    UH,42                   ;
-969B	8B 0B             BZS+      BRANCH_96A8             ;
-969D	BA 93 26          JMP	    JMP_9326                ;
+969B	8B 0B             BZS+      BRANCH_96A8             ; No idea
+969D	BA 93 26          JMP	    JMP_9326                ; No idea
+
 
 BRANCH_96A0: ; branched to from 9697
-96A0	46                DEC	    X                       ;
+96A0	46                DEC	    X                       ; X is still in variable?
 96A1	05                LDA	    (X)                     ;
-96A2	B7 0D             CPI	    A,0D                    ;
+96A2	B7 0D             CPI	    A,0D                    ; Looking for CR?
 96A4	89 02             BZR+      BRANCH_96A8             ;
-96A6	49 00             ANI	    (X),00                  ;
+96A6	49 00             ANI	    (X),00                  ; Clear address (X)
 
 BRANCH_96A8: ; branched to from 969B, 96A4
-96A8	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+96A8	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 96AD	E2                VEJ       (E2)                    ; Start of Basic Interpreter
+
 
 BRANCH_96AE: ; branched to from 9665
 96AE	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
 96AF	68 1A             LDI	    UH,1A                   ;
 96B1	D8                VEJ       (D8)                    ; Checks if program expires. If so:Z=0
-96B2	CB E0             VZS       (E0)                    ; If Z Set do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+96B2	CB E0             VZS       (E0)                    ; If Z=1 CALL (E0). If Z Set Output ERROR 1 if UH != 00
 96B4	E9 7B 9F 00       ANI	    (7B9F),00               ;
-96B8	C2 24 05          VEJ	    (C2),24,96C0            ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+96B8	C2 24 05          VEJ	    (C2),24,96C0            ; If next character is not '$', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
 96BB	C0                VEJ       (C0)                    ; Load next character/token to U-Reg
-96BC	EB 7B 9F 01       ORI	    (7B9F),01               ;
+96BC	EB 7B 9F 01       ORI	    (7B9F),01               ; In output buffer
 
 BRANCH_96C0: ; branched to from 96B8
 96C0	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-96C1	BE D0 34          SJP	    SUB25                   ;
-96C4	C2 22 1D          VEJ	    (C2),22,BRANCH_96E4     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
-96C7	CD 0C             VMJ	    (0C)                    ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
-96C9	FD 98             PSH	    Y                       ;
+96C1	BE D0 34          SJP	    $D034                   ; Inside delete Input_Buffer w/0D
+96C4	C2 22 1D          VEJ	    (C2),22,BRANCH_96E4     ; If next character is not ' " ', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+96C7	CD 0C             VMJ	    (0C)                    ; Determine string length, create CSI in AR-X
+96C9	FD 98             PSH	    Y                       ; Y-REG contains end address marker
 96CB	5A B0             LDI	    YL,B0                   ;
-96CD	58 7B             LDI	    YH,7B                   ; Y = 7BB0
-96CF	A5 7A 07          LDA	    (7A07)                  ;
+96CD	58 7B             LDI	    YH,7B                   ; Y = 7BB0, INPUT_BUFFER
+96CF	A5 7A 07          LDA	    (ARX + 7)               ; last byte of AR-X
 96D2	2A                STA	    UL                      ;
-96D3	BE D0 49          SJP	    D049                    ;
+96D3	BE D0 49          SJP	    D049                    ; Transfers UL bytes from X-Reg to Y-Reg
 96D6	14                LDA	    YL                      ;
-96D7	AE 78 8B          STA	    (788B)                  ;
+96D7	AE 78 8B          STA	    (INBUFPTR_L)            ;
 96DA	FD 1A             POP	    Y                       ;
-96DC	C2 3B 0D          VEJ	    (C2),3B,BRANCH_96EC     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+96DC	C2 3B 0D          VEJ	    (C2),3B,BRANCH_96EC     ; If next character is not ';', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
 96DF	B5 40             LDI	    A,40                    ;
-96E1	8E 13             BCH+	    BRANCH_96F6             ;
+96E1	8E 13             BCH+	    BRANCH_96F6             ; Must have been ';' so keep parsing?
+
 
 BRANCH_96E3: ; branched to from 9668
 96E3	E0                VEJ       (E0)                    ; Indicates if UH is not "00" error message
 
 BRANCH_96E4: ; branched to from 96C4
 96E4	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-96E5	B5 3F             LDI	    A,3F                    ;
+96E5	B5 3F             LDI	    A,3F                    ; '?'
 96E7	AE 7B B0          STA	    (INPUTBUF)              ;
-96EA	8E 03             BCH+	    96EF                    ;
+96EA	8E 03             BCH+	    BRANCH_96EF             ;
 
 BRANCH_96EC: ; branched to from 96DC
-96EC	C4 2C 78          VEJ       (C4),2C,BRANCH_9767     ; Check tokens/char in U-Reg if not p branch fwd n
+96EC	C4 2C 78          VEJ       (C4),2C,BRANCH_9767     ; Check tokens/char in U-Reg if not ',' branch fwd n
 
 BRANCH_96EF: ; branched to from 96EA
 96EF	B5 B0             LDI	    A,B0                    ;
-96F1	AE 78 8B          STA	    (788B)                  ;
+96F1	AE 78 8B          STA	    (INBUFPTR_L)             ;
 96F4	B5 00             LDI	    A,00                    ;
 
 BRANCH_96F6: ; branched to from 96E1
-96F6	AE 78 80          STA	    (7880)                  ;
-96F9	EB 78 8A 10       ORI	    (788A),10               ;
-96FD	BE EF 67          SJP	    EF67                    ;
+96F6	AE 78 80          STA	    (DISPARAM)              ;
+96F9	EB 78 8A 10       ORI	    (BREAKPARAM),10         ;
+96FD	BE EF 67          SJP	    EF67                    ; Prepare the LCD output if C=1
 9700	68 20             LDI	    UH,20                   ;
-9702	E9 78 8A 00       ANI	    (788A),00               ;
-9706	C3 E0             VCS       (E0)                    ; If Carry Set do Indexed Vectored Call. HB = $FF, LB = n ($00-$F6)
+9702	E9 78 8A 00       ANI	    (BREAKPARAM),00         ;
+9706	C3 E0             VCS       (E0)                    ; If Carry Set Indicates if UH is not "00" error message
 9708	B5 0C             LDI	    A,0C                    ;
-970A	BE 98 C0          SJP	    SUB_98C0                ;
+970A	BE 98 C0          SJP	    SUB_98C0                ; No idea
 970D	83 5F             BCS+      BRANCH_976E             ;
 970F	FD 98             PSH	    Y                       ;      
 9711	58 7B             LDI	    YH,7B                   ;
-9713	A5 78 8B          LDA	    (788B)                  ;
-9716	1A                STA	    YL                      ;
-9717	BE E8 CA          SJP	    PRGMDISP                ;
+9713	A5 78 8B          LDA	    (INBUFPTR_L)            ;
+9716	1A                STA	    YL                      ; Y now points to current position in input buffer?
+9717	BE E8 CA          SJP	    PRGMDISP                ; Displays input buffer on LCD
 
 BRANCH_971A: ; branched to from 97FA
 971A	FD 1A             POP	    Y                       ;
 971C	CE 58 4F          VEJ	    (CE),58,BRANCH_976E     ; Determines variable 'n1' address all variable types allowed, if errors continue at P+n2
-971F	F6 78 86          VEJ       (F6),(7886)             ;
+971F	F6 78 86          VEJ       (F6),(LASTVARADD_H)     ; Copy U-REG to 7886-87
 9722	44                INC	    X                       ;
-9723	A5 7A 07          LDA	    (7A07)                  ;
+9723	A5 7A 07          LDA	    (ARX + 7)               ;
 9726	0E                STA	    (X)                     ;
 9727	FD 98             PSH	    Y                       ; 
 9729	58 7B             LDI	    YH,7B                   ;
 972B	BE D0 21          SJP	    D021                    ;
-972E	A5 78 8B          LDA	    (788B)                  ;
+972E	A5 78 8B          LDA	    (INBUFPTR_L)            ;
 9731	0A                STA	    XL                      ;
 9732	48 7B             LDI	    XH,7B                   ;
 9734	B5 FF             LDI	    A,FF                    ;
 9736	FB                SEC                               ; Set Carry
 9737	00                SBC	    XL                      ;
 9738	2A                STA	    UL                      ;
-9739	BE 9A A5          SJP	    SUB_9AA5                ;
+9739	BE 9A A5          SJP	    SUB_9AA5                ; No idea
 973C	83 2A             BCS+      BRANCH_9768             ;
 973E	46                DEC	    X                       ;
 973F	68 43             LDI	    UH,43                   ;
 9741	05                LDA	    (X)                     ;
-9742	B7 0D             CPI	    A,0D                    ;
+9742	B7 0D             CPI	    A,0D                    ; Look for CR?
 9744	89 26             BZR+      BRANCH_976C             ;
-9746	ED 7B 9F 01       BII	    (7B9F),01               ;
+9746	ED 7B 9F 01       BII	    (7B9F),01               ; In IN_BUF
 974A	89 0B             BZR+      BRANCH_9757             ;
-974C	ED 78 88 80       BII	    (7888),                 ;
+974C	ED 78 88 80       BII	    (LASTVARTYPE),80        ;
 9750	8B 05             BZS+      BRANCH_9757             ;
 9752	BE F9 57          SJP	    F957                    ;
 9755	8B 15             BZS+      BRANCH_976C             ;
 
 BRANCH_9757: ; branched to from 974A, 9750
-9757	A5 78 8B          LDA	    (788B)                  ;
+9757	A5 78 8B          LDA	    (INBUFPTR_L)            ;
 975A	06                CPA	    XL                      ;
 975B	81 14             BCR+      BRANCH_9771             ;
 
 BRANCH_975D: ; branched to from 976A
-975D	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+975D	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 9762	FD 1A             POP	    Y                       ;
-9764	BA C6 76          JMP	    C676                    ;
+9764	BA C6 76          JMP	    BCMD_REM                ; Basic command REM
+
 
 BRANCH_9767: ; branched to from 96EC
 9767	E4                VEJ       (E4)                    ; Output error 1 and return to the editor
+
 
 BRANCH_9768: ; branched to from 973C
 9768	6C 42             CPI	    UH,42                   ;
@@ -2465,19 +2489,20 @@ BRANCH_976C: ; branched to from 9744, 9755, 97AA, 9819
 976C	FD 1A             POP	    Y                       ;
 
 BRANCH_976E: ; branched to from 970D, 971C, 97D0, 9817
-976E	BA 93 26          JMP	    JMP_9326                ;
+976E	BA 93 26          JMP	    JMP_9326                ; No idea
+
 
 BRANCH_9771: ; branched to from 975B
 9771	1A                STA	    YL                      ;
 9772	58 7B             LDI	    YH,7B                   ;
 
 BRANCH_9774: ; branched to from 9811
-9774	C2 2C 0F          VEJ	    (C2),2C,BRANCH_9786     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+9774	C2 2C 0F          VEJ	    (C2),2C,BRANCH_9786     ; If next character is not ',', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
 9777	EC                VEJ       (EC)                    ; Clears arithmetic register X
 9778	B5 D0             LDI	    A,D0                    ;
-977A	ED 78 88 80       BII	    (7888),80               ;
+977A	ED 78 88 80       BII	    (LASTVARTYPE),80        ;
 977E	89 03             BZR+      BRANCH_9783             ;
-9780	AE 7A 04          STA	    (7A04)                  ;
+9780	AE 7A 04          STA	    (ARX + 4)               ;
 
 BRANCH_9783: ; branched to from 977E
 9783	56                DEC	    Y                       ;
@@ -2485,10 +2510,10 @@ BRANCH_9783: ; branched to from 977E
 
 BRANCH_9786: ; branched to from 9774
 9786	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-9787	ED 78 88 80       BII	    (7888),80               ;
+9787	ED 78 88 80       BII	    (LASTVARTYPE),80        ;
 978B	89 27             BZR+      BRANCH_97B4             ;
-978D	C2 22 04          VEJ	    (C2),22,BRANCH_9794     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
-9790	CD 0C             VMJ	    (0C)                    ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
+978D	C2 22 04          VEJ	    (C2),22,BRANCH_9794     ; If next character is not ' " ', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+9790	CD 0C             VMJ	    (0C)                    ; Determine string length, create CSI in AR-X
 9792	8E 22             BCH+	    BRANCH_97B6             ;
 
 BRANCH_9794: ; branched to from 978D
@@ -2500,9 +2525,9 @@ BRANCH_9799: ; branched to from 97A6
 9799	55                LIN	    X                       ; A = (Y) then INC Y
 979A	B7 E0             CPI	    A,E0                    ;
 979C	83 0A             BCS+      BRANCH_97A8             ;
-979E	B7 2C             CPI	    A,2C                    ;
+979E	B7 2C             CPI	    A,2C                    ;","
 97A0	8B 0A             BZS+      BRANCH_97AC             ;
-97A2	B7 0D             CPI	    A,0D                    ;
+97A2	B7 0D             CPI	    A,0D                    ; CR
 97A4	8B 06             BZS+      BRANCH_97AC             ;
 97A6	88 0F             LOP	    UL,BRANCH_9799          ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 
@@ -2515,45 +2540,46 @@ BRANCH_97AC: ; branched to from 97A0, 97A4
 97AD	14                LDA	    YL                      ;
 97AE	FB                SEC                               ;
 97AF	00                SBC	    XL                      ;
-97B0	CD 24             VMJ	    (24)                    ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
+97B0	CD 24             VMJ	    (24)                    ; Creates CSI in AR-X. X-Reg start address, A length
 97B2	8E 02             BCH+	    BRANCH_97B6             ;
 
 BRANCH_97B4: ; branched to from 978B
 97B4	DE 63             VEJ       (DE),BRANCH_9919        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 
 BRANCH_97B6: ; branched to from 9784, 9792, 97B2
-97B6	F4 78 86          VEJ       (F4),(7886)             ; Loads U-Reg with 16-bit value from address of (pp)
-97B9	CC 88             VEJ	    (CC),(88)               ; Loads X-Reg with address at 78(pp) 78(pp+1)
-97BB	BE C0 11          SJP	    C011                    ;
-97BE	CD 08 58          VMJ	    (08),BRANCH_9919        ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
+97B6	F4 78 86          VEJ       (F4),(LASTVARADD_H)     ; Loads U-Reg with last variable address
+97B9	CC 88             VEJ	    (CC),(88)               ; Loads X-Reg with address at 78(pp) 78(pp+1), LASTVARTYPE
+97BB	BE C0 11          SJP	    C011                    ; Store address from U-Reg and Accumulator.
+97BE	CD 08 58          VMJ	    (08),BRANCH_9919        ; Transfers the result from AR-X to a fixed variable or clock module
 97C1	FD 18             LDX	    Y                       ; X = Y
 97C3	FD 1A             POP	    Y                       ;
 97C5	FD 88             PSH	    X                       ;
 97C7	C8 21             VEJ	    (C8),BRANCH_97EA        ; Syntax check: Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
 97C9	FD 0A             POP	    X                       ;
 97CB	05                LDA	    (X)                     ;
-97CC	B7 0D             CPI	    A,0D                    ;
+97CC	B7 0D             CPI	    A,0D                    ; CR?
 97CE	68 41             LDI	    UH,41                   ;
 97D0	99 64             BZR-      BRANCH_976E             ;
-97D2	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ;
+97D2	FD EB F0 0A 01    ORI       #(PC1500_MSK_REG),01    ; Set interrupt mask for PC-1500 ON Key
 97D7	56                DEC	    Y                       ;
 97D8	FD 98             PSH	    Y                       ; 
 97DA	58 7B             LDI	    YH,7B                   ;
-97DC	A5 78 8B          LDA	    (788B)                  ;
+97DC	A5 78 8B          LDA	    (INBUFPTR_L)            ;
 97DF	1A                STA	    YL                      ;
-97E0	E9 78 80 00       ANI	    (7880),00               ;
-97E4	BE E8 CA          SJP	    PRGMDISP                ;
+97E0	E9 78 80 00       ANI	    (DISPARAM),00           ; Clear Display Parameter flags
+97E4	BE E8 CA          SJP	    PRGMDISP                ; Displays input buffer on LCD
 97E7	FD 1A             POP	    Y                       ;
 97E9	E2                VEJ       (E2)                    ; Start of Basic Interpreter
 
+
 BRANCH_97EA: ; branched to from 97C7
-97EA	C4 2C 26          VEJ       (C4),2C,9813            ; Check tokens/char in U-Reg if not p branch fwd n
+97EA	C4 2C 26          VEJ       (C4),2C,9813            ; Check tokens/char in U-Reg if not ',' branch fwd n
 97ED	FD 0A             POP	    X                       ;
 97EF	FD 98             PSH	    Y                       ; 
 97F1	45                LIN	    X                       ; A = (X) then INC X
 97F2	B7 2C             CPI	    A,2C                    ;
 97F4	8B 06             BZS+      BRANCH_97FC             ;
-97F6	B7 0D             CPI	    A,0D                    ;
+97F6	B7 0D             CPI	    A,0D                    ; CR?
 97F8	99 52             BZR-      BRANCH_97A8             ;
 97FA	9E E2             BCH-      BRANCH_971A             ;
 
@@ -2561,9 +2587,9 @@ BRANCH_97FC: ; branched to from 97F4
 97FC	FD 1A             POP	    Y                       ;
 97FE	FD 88             PUSH	    X                       ;
 9800	CE 58 12          VEJ	    (CE),58,BRANCH_9815     ; Determines variable 'n1' address all variable types allowed, if errors continue at P+n2
-9803	F6 78 86          VEJ       (F6),(7886)             ;
+9803	F6 78 86          VEJ       (F6),(LASTVARADD_H)     ; Copy U-REG to 7886-87
 9806	44                INC	    X                       ;
-9807	A5 7A 07          LDA	    (7A07)                  ;
+9807	A5 7A 07          LDA	    (ARX + 7)               ;
 980A	0E                STA	    (X)                     ;
 980B	FD 0A             POP	    X                       ;
 980D	FD 98             PSH	    Y                       ; 
@@ -2578,71 +2604,69 @@ BRANCH_9815: ; branched to from 9800
 BRANCH_9819: ; branched to from 97B4, 97BE
 9819	9E AF             BCH-      BRANCH_976C             ;
 
+
 ; 981B ~ 981E seperator bytes
 SEPARATOR_981B:
-981B	FF 00 FF 01
+981B	FF 00 FF 01 BF
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
-; FEED - Called from 
-; 
+;------------------------------------------------------------------------------------------------------------
+; FEED - Jumped to from 8307 via High Bank
 ; Arguments:
-; Output:
+; Outputs:
 ; RegMod:
-SUB_981F:
-981F	BF A5             BII	    A,A5                    ;
-
 FEED:
-9020
+9820   A5 79 D1         LDA         (BASIC_EXT_TBL)         ; This table might be some sort of mode mask
+9823   AE 7B 9E         STA         ($OUT_BUF + 3E)                 ; In OUTPUT_BUFFER
+9826   B5 6C            LDI         A,$6C                   ;
+9828   BE 98 B7         SJP         SUB_98B7                ;
+982B   C8               VEJ         (C8),BRANCH_9831        ; Syntax check: Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
+982D   6A 00            LDI         UL,$00                  ;
+982F   8E 0C            BCH+        BRANCH_983D             ;
 
-9821	79 D1             ANI	    (V),D1                  ; bugus?
-9823	AE 7B 9E          STA	    (7B9E)                  ;
-9826	B5 6C             LDI	    A,6C                    ;
-9828	BE 98 B7          SJP	    SUB_98B7                ;
-982B	C8 04             VEJ	    (C8),BRANCH_9831        ; Syntax check: Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
-982D	6A 00             LDI	    UL,00                   ;
-982F	8E 0C             BCH+ 	    BRANCH_983D             ;
+BRANCH_9831:
+9831   C6               VEJ         (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
+9832   DE               VEJ         (DE),BRANCH_985E        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
+9834   D0               VEJ         (D0),$01,BRANCH_985E    ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
+9837   C8               VEJ         (C8),BRANCH_985C        ; Syntax check: Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
+9839   F4               VEJ         (F4),(ARX + 5)          ; Loads U-Reg with $7A05
+983C   66               DEC         U
 
-BRANCH_9831: ; branched to from 982B
-9831	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-9832	DE 2A             VEJ       (DE),BRANCH_98FE        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
-9834	D0 01 27          VEJ	    (D0),01,BRANCH_98FE     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
-9837	C8 23             VEJ	    (C8),BRANCH_985C        ; Syntax check: Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
-9839	F4 7A 05          VEJ	    (F4),(7A05)             ; Loads U-Reg with 16-bit value from address of (pp)
-983C	66                DEC	    U                       ;
+BRANCH_983D:
+983D   A5 7B A6         LDA         ($OUT_BUF  + 46)                 ; In OUT_BUF
+9840   8B 05            BZS+        BRANCH_9847             ;
+9842   DD               INC         A                       ;
+9843   B7 A7            CPI         A,$A7                   ;
+9845   8B 07            BZS+        BRANCH_984E             ;
 
-BRANCH_983D: ; branched to from 982F
-983D	A5 7B A6          LDA	    (7BA6)                  ;
-9840	8B 05             BZS+      BRANCH_9847             ;
-9842	DD                INC	    A                       ;
-9843	B7 A7             CPI	    A,A7                    ;
-9845	8B 07             BZS+      BRANCH_984E             ;
+BRANCH_9847:
+9847   B5 20            LDI         A,$20                   ;
+9849   BE 7B AA         SJP         $OUT_BUF + 4A                   ; In OUT_BUF what code has been poked in here?
+984C   83 10            BCS+        BRANCH_985E             ;
 
-BRANCH_9847: ; branched to from 9840, 9853, 9857
-9847	B5 20             LDI	    A,20                    ;
-9849	BE 7B AA          SJP	    7BAA                    ;
-984C	83 10             BCS+      BRANCH_98FE             ;
+BRANCH_984E:
+984E   BE 9B 41         SJP         SUB_9B41                ; No idea  
+9851   83 0B            BCS+        BRANCH_985E             ;
+9853   88 0E            LOP         UL,BRANCH_9847          ;
+9855   FD 62            DEC         UH                      ;
+9857   93 12            BCS-        BRANCH_9847             ;
+9859   BA 96 0C         JMP         JMP_960C                ;
 
-BRANCH_984E: ; branched to from 9845
-984E	BE 9B 41          SJP	    SUB_9B41                ;
-9851	83 0B             BCS+      BRANCH_98FE             ;
-9853	88 0E             LOP	    UL,BRANCH_9847          ; UL = UL - 1, loop back 'e' if Borrow Flag no
-9855	FD 62             DEC	    UH                      ;
-9857	93 12             BCS-      BRANCH_9847             ;
-9859	BA 96 0C          JMP	    JMP_960C                ;
+BRANCH_985C:
+985C   68 01            LDI         UH,$01
 
-BRANCH_985C: ; branched to from 9837
-985C	68 01             LDI	    UH,01                   ;
+BRANCH_985E:
+985E   BA 96 2B         JMP         BRANCH_962B             ;
 
-BRANCH_985E: ; branched to from 9832, 9834, 984C, 9851
-985E	BA 96 2B          JMP	    BRANCH_962B             ;
-9861	FA                VEJ       (FA)                    ; Timer Interrupt
 
+;------------------------------------------------------------------------------
 SEPARATOR_9862:
-9862	00 FF 00 FF 45 F7 00 FF   00 FF 00 FF 02 FF
+9861	FA 00 FF 00 FF 45 F7 00 FF   00 FF 00 FF 02 FF
 
 
+;-------------------------------------------------------------------------------
+; *** What calls this
 9870	DE 14             VEJ	    (DE),BRANCH_9886        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 9872	D0 09 11          VEJ       (D0),09,BRANCH_9886     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
 9875	68 35             LDI	    UH,35                   ;
@@ -2658,10 +2682,12 @@ BRANCH_9886: ; branched to from 9870, 9872
 
 
 
+;-------------------------------------------------------------------------------------
+; Used by BRANCH_9924
 TBL_9887:
 9887	BA 82 8E          JMP	    BRANCH_828E             ;
 988A	BA 9B 1C          JMP	    SUB_9B1C                ;
-988D	BA 82 3A          JMP	    SUB_823A                ;
+988D	BA 82 3A          JMP	    SUB_823A                ; Sends charecter in A to RS232 Port.
 9890	BA 9B 31          JMP	    SUB_9B31                ;
 9893	BA 82 5B          JMP	    SUB_825B                ;
 9896	BA 9B 31          JMP	    SUB_9B31                ;
@@ -2679,7 +2705,7 @@ TBL_9887:
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_98B7 - Called from 93E0
+; SUB_98B7 - Called from 9828 Feed, 93E0 PRINT#2, 9362 SUB_9350
 ; 
 ; Arguments:
 ; Output:
@@ -2698,46 +2724,46 @@ SUB_98B7:
 ; Output:
 ; RegMod:
 SUB_99BD: 
-98BD	A5 7B A1          LDA	    (7BA1)                  ;
+98BD	A5 7B A1          LDA	    (OUT_BUF  + 41)                  ; In OUT_BUF
 
 SUB_98C0: ; called from 936C
 98C0	38                NOP                               ;
 
 BRANCH_98C1: ; branched to from 98BB 
 98C1	B9 7F             ANI       A,7F                    ;
-98C3	AE 7B A1          STA	    (7BA1)                  ;
-98C6	FD E9 F0 0A FC    ANI       #(PC1500_MSK_REG),FC    ;
+98C3	AE 7B A1          STA	    (OUT_BUF  + 41)                  ; In OUT_BUF
+98C6	FD E9 F0 0A FC    ANI       #(PC1500_MSK_REG),FC    ; Clear IRQ and ON Key interrupt mask for PC-1500
 98CB	4A 87             LDI	    XL,87                   ;
-98CD	48 98             LDI	    XH,98                   ; X = 9887, TBL_9887
+98CD	48 98             LDI	    XH,98                   ; X = 9887, TBL_9887 X used in 9924
 98CF	FD 98             PSH	    Y                       ;
 98D1	5A A6             LDI	    YL,A6                   ;
-98D3	58 7B             LDI	    YH,7B                   ; Y = 7BA6
+98D3	58 7B             LDI	    YH,7B                   ; Y = OUT_BUF  + 46, in OUT_BUF
 98D5	B9 40             ANI       A,40                    ;
 98D7	8B 1F             BZS+      BRANCH_98F8             ;
-98D9	A5 7B 9E          LDA	    (7B9E)                  ;
+98D9	A5 7B 9E          LDA	    (OUT_BUF + 3E)                  ; in OUT_BUF
 98DC	B7 C4             CPI	    A,C4                    ;
 98DE	8B 01             BZS+      BRANCH_98E1             ;
 98E0	F9                REC                               ; Reset Carry
 
 BRANCH_98E1: ; branched to from 98DE
-98E1	A5 78 51          LDA	    (CONS_1_RS232C)         ;
+98E1	A5 78 51          LDA	    (RS232C)                ; *** need to figure out what this is
 98E4	81 03             BCR+      BRANCH_98E9             ;
-98E6	A5 78 52          LDA	    (CONS_1_(//))           ;
+98E6	A5 78 52          LDA	    (CONS_1_(//))           ; *** need to figure out what this is
 
 BRANCH_98E9: ; branched to from 98E4
-98E9	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
-98EA	A5 78 53          LDA	    (7853)                  ;
+98E9	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1. OUT_BUF  + 46+1=7AB7
+98EA	A5 78 53          LDA	    (7853)                  ; *** need to figure out what this is
 98ED	81 03             BCR+      BRANCH_98F2             ;
-98EF	A5 78 54          LDA	    (7854)                  ;
+98EF	A5 78 54          LDA	    (7854)                  ; *** need to figure out what this is
 
 BRANCH_98F2: ; branched to from 98ED
-98F2	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
-98F3	A5 78 55          LDA	    (CR/LF_REG)             ;
+98F2	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1. OUT_BUF  + 47+1=7AB8
+98F3	A5 78 55          LDA	    (CR/LF_REG)             ; *** need to figure out what this is
 98F6	8E 02             BCH+	    BRANCH_98FA             ;
 
 BRANCH_98F8: ; branched to from 98D7
-98F8	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
-98F9	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
+98F8	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1. 7BA8+1=7AB9
+98F9	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1. OUT_BUF + 49+1=7ABA
 
 BRANCH_98FA: ; branched to from 98F6
 98FA	81 01             BCR+      BRANCH_98FD             ;
@@ -2761,28 +2787,28 @@ BRANCH_990F: ; branched to from 9906, 990B
 990F	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
 9910	24                LDA	    UL                      ;
 9911	51                SIN	    (Y)                     ; (Y) = A. Then Y = Y + 1
-9912	A5 7B 9E          LDA	    (7B9E)                  ;
+9912	A5 7B 9E          LDA	    (OUT_BUF + 3E)                  ;
 9915	B7 C4             CPI	    A,C4                    ;
 9917	8B 01             BZS+      BRANCH_991A             ;
 9919	F9                REC                               ; Reset Carry
 
 BRANCH_991A: ; branched to from 9917
-991A	A5 7B A1          LDA	    (7BA1)                  ;
+991A	A5 7B A1          LDA	    (OUT_BUF  + 41)                  ; In OUT_BUF
 991D	F1                AEX                               ;
 991E	B9 0A             ANI       A,0A                    ;
 9920	81 02             BCR+      BRANCH_9924             ;
 9922	B5 06             LDI	    A,06                    ;
 
-BRANCH_9924: ; branched to from 9920
-9924	FD CA             ADR	    X                       ; X = X + A + Carry
+BRANCH_9924: ; branched to from 9920                        ; X = X = 9887. uses TBL_9887
+9924	FD CA             ADR	    X                       ; X = X + A + Carry. A = ?? or 06.  X=9887+1=9888
 9926	D9                SHL                               ;
 9927	FD CA             ADR	    X                       ; X = X + A + Carry
-9929	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
-992A	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
-992B	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
-992C	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
-992D	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
-992E	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
+9929	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=9888+1=9889
+992A	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=9889+1=988A
+992B	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=988A+1=988B
+992C	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=988B+1=988C
+992D	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=988C+1=988D
+992E	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1. X=988D+1=988E
 992F	FD 1A             POP	    Y                       ;
 9931	BF 04             BII	    A,04                    ;
 9933	8B 0F             BZS+      BRANCH_9944             ;
@@ -2800,77 +2826,76 @@ BRANCH_9943: ; branched to from 9937, 993C
 9943	9A                RTN                               ;
 
 BRANCH_9944: ; branched to from 9933
-9944	BE 81 E6          SJP	    SUB_81E6                ;
+9944	BE 81 E6          SJP	    SUB_81E6                ; Manipulates LPT/UART registers
 9947	F9                REC                               ; Reset Carry
 9948	9A                RTN                               ;
 
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_9949 - Called from 9148
+; SUB_9949 - Called from 935B SUB_9350, 9148 SUB_90AE
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_9949: 
 9949	FD 6A             STX       U                       ; U = X
-994B	F6 7B 75          VEJ       (F6),(7B75)             ; Transfers U to pp, pp+1
-994E	C8 02             VEJ       (C8),9952               ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
-9950	8E 2E             BCH+	    9980                    ;
+994B	F6 7B 75          VEJ       (F6),(OUT_BUF + 15)     ; Transfers U to pp, pp+1 in OUT_BUF 
+994E	C8 02             VEJ       (C8),BRANCH_9952        ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
+9950	8E 2E             BCH+	    BRANCH_9980             ;
 
 BRANCH_9952: ; branched to from 994E
-9952	C4 2C 02          VEJ       (C4),9957               ; Check tokens/char in U-Reg if not p branch fwd n
-9955	8E 27             BCH+	    997E                    ;
+9952	C4 2C 02          VEJ       (C4),2C,BRANCH_9957     ; Check tokens/char in U-Reg if not ',' branch fwd n
+9955	8E 27             BCH+	    BRANCH_997E             ;
 
 BRANCH_9957: ; branched to from 9952
 9957	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-9958	DE 1F             VEJ       (DE),9979               ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
-995A	D0 83 1C          VEJ       (D0),83,9979            ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
-995D	BE D2 EA          SJP	    LINESEARCH              ;
-9960	12                ADC	    YL                      ;
+9958	DE 1F             VEJ       (DE),BRANCH_9979        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
+995A	D0 83 1C          VEJ       (D0),83,BRANCH_9979     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
+995D	BE D2 EA          SJP	    LINESEARCH,BRANCH_9973  ; Search for line # from adddress in U-Reg; update program pointer. If not found, jump to Distance Address.
 
 BRANCH_9961: ; branched to from 9977
-9961	F4 78 A6          VEJ 	    (F4),(78A6)             ; Loads U-Reg with 16-bit value from address of (pp)
+9961	F4 78 A6          VEJ 	    (F4),(SRCH_ADD_H)       ; Loads U-Reg with Address of linefound during search (H)
 9964	66                DEC	    U                       ;
 9965	66                DEC	    U                       ;
-9966	66                DEC	    U                       ;
-9967	F6 7B 75          VEJ       (F6),(7B75)             ; Transfers U to pp, pp+1
-996A	C8 0F             VEJ       (C8),997B               ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
-996C	F4 7B 75          VEJ 	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+9966	66                DEC	    U                       ; The backs up three spots?
+9967	F6 7B 75          VEJ       (F6),(OUT_BUF + 15)     ; Transfers U to pp, pp+1
+996A	C8 0F             VEJ       (C8),BRANCH_997B        ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
+996C	F4 7B 75          VEJ 	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 996F	64                INC	    U                       ;
 9970	64                INC	    U                       ;
-9971	8E 2B             BCH+	    999E                    ;
+9971	8E 2B             BCH+	    BRANCH_999E             ;
 
-9973	81 04             BCR+      9979                    ;
+BRANCH_9973:
+9973	81 04             BCR+      BRANCH_9979             ;
 9975	6C 0B             CPI	    UH,0B                   ;
-9977	9B 18             BZS-      9961                    ;
+9977	9B 18             BZS-      BRANCH_9961             ;
 
 BRANCH_9979: ; branched to from 9958, 995A, 9973
 9979	F9                REC                               ; Reset Carry
 997A	9A                RTN                               ;
 
 BRANCH_997B: ; branched to from 9958, 996A
-997B	C4 2C CE          VEJ       (C4),BRANCH_9A4C        ; Check tokens/char in U-Reg if not p branch fwd n (branch borrows exit)
+997B	C4 2C CE          VEJ       (C4),2C,BRANCH_9A4C     ; Check tokens/char in U-Reg if not ',' branch fwd n (branch borrows exit)
 
 BRANCH_997E: ; branched to from 9955
-997E	C8 05             VEJ       (C8),9985               ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
+997E	C8 05             VEJ       (C8),BRANCH_9985        ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
 
 BRANCH_9980: ; branched to from 9950
-9980	F4 78 67          VEJ 	    (F4),(ENDBASIC)         ; Loads U-Reg with 16-bit value from address of (pp)
-9983	8E 1C             BCH+	    99A1                    ;
+9980	F4 78 67          VEJ 	    (F4),(BASPRG_END_H)         ; Loads U-Reg with End of Basic program in RAM (H)
+9983	8E 1C             BCH+	    BRANCH_99A1                    ;
 
 BRANCH_9985: ; branched to from 997E
 9985	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
 9986	DE 63             VEJ       (DE),BRANCH_99EB        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 9988	D0 83 60          VEJ       (D0),83,BRANCH_99EB     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
 998B	FD A8             PSH	    U                       ;
-998D	F4 7B 75          VEJ 	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+998D	F4 7B 75          VEJ 	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 9990	FD 28             LDX	    U                       ; X = U
 9992	FD 2A             POP	    U                       ;
-9994	BE D2 EC          SJP	    D2EC                    ;
-9997	4D C8             BII	    (X),C8                  ;
-9999	53                SDE	    (Y)                     ; (Y) = A. Y = Y - 1
-999A	F4 78 A6          VEJ 	    (F4),(78A6)             ; Loads U-Reg with 16-bit value from address of (pp)
+9994	BE D2 EC 4D       SJP	    D2EC,4D                 ; Search for program line, jump if not found
+9998	C8 53             VEJ       (C8),53                 ; Syntax check: Jump fwd (n1) if following character doesn’t represent end to command sequence or line. C=1 if ":"
+999A	F4 78 A6          VEJ 	    (F4),(SRCH_ADD_H)       ; Address of linefound during search (H)
 999D	66                DEC	    U                       ;
 
 BRANCH_999E: ; branched to from 9971
@@ -2878,35 +2903,35 @@ BRANCH_999E: ; branched to from 9971
 999F	FD EA             ADR	    U                       ; U = U + A + Carry
 
 BRANCH_99A1: ; branched to from 9983
-99A1	F6 7B 79          VEJ       (F6),(7B79)             ; Transfers U to pp, pp+1
-99A4	F4 7B 75          VEJ 	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+99A1	F6 7B 79          VEJ       (F6),(OUT_BUF + 19)     ; Transfers U to pp, pp+1
+99A4	F4 7B 75          VEJ 	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 99A7	FD 28             LDX	    U                       ; X = U
-99A9	F4 7B 79          VEJ 	    (F4),(7B79)             ; Loads U-Reg with 16-bit value from address of (pp)
+99A9	F4 7B 79          VEJ 	    (F4),(OUT_BUF + 19)     ; Loads U-Reg with 16-bit value from address of (pp)
 99AC	FB                SEC                               ; Set Carry
-99AD	A5 78 68          LDA	    (7868)                  ;
+99AD	A5 78 68          LDA	    (BASPRG_END_L)          ; End of Basic program in RAM (L)
 99B0	20                SBC	    UL                      ; A = A - UL. Subtract with Carry
-99B1	A5 78 67          LDA	    (ENDBASIC)              ;
+99B1	A5 78 67          LDA	    (BASPRG_END_H)          ; End of Basic program in RAM (H)
 99B4	A0                SBC	    UH                      ; A = A - UH. Subtract with Carry
-99B5	81 2A             BCR+      99E1                    ;
+99B5	81 2A             BCR+      BRANCH_99E1             ;
 99B7	A4                LDA	    UH                      ;
-99B8	A7 78 64          CPA	    (ENDRAM)                ;
-99BB	83 24             BCS+      99E1                    ;
-99BD	BE DF E1          SJP	    DFE1                    ;
-99C0	F6 7B 77          VEJ       (F6),(7B77)             ; Transfers U to pp, pp+1
-99C3	F4 7B 75          VEJ 	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
-99C6	A7 78 65          CPA	    (STARTBASIC)            ;
-99C9	81 05             BCR+      99D0                    ;
-99CB	A7 78 63          CPA	    (STARTRAM)              ;
-99CE	83 10             BCS+      99E0                    ;
+99B8	A7 78 64          CPA	    (RAM_END_H)             ; End of RAM pointer (H)
+99BB	83 24             BCS+      BRANCH_99E1             ;
+99BD	BE DF E1          SJP	    $DFE1                   ; DEC U then U-Reg = U-Reg - X-Reg (with overflow C=1)
+99C0	F6 7B 77          VEJ       (F6),(OUT_BUF + 17)     ; Transfers U to pp, pp+1
+99C3	F4 7B 75          VEJ 	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
+99C6	A7 78 65          CPA	    (BASPRG_ST_H)           ; Compare A and Start of Basic program in RAM (H)
+99C9	81 05             BCR+      BRANCH_99D0             ;
+99CB	A7 78 63          CPA	    (RAM_ST_H)              ; Compare A and Start of RAM pointer
+99CE	83 10             BCS+      BRANCH_99E0             ;
 
 BRANCH_99D0: ; branched to from 99C9
-99D0	CC 60             VEJ       (CC),(60)               ; Loads X-Reg with address at 78(pp) 78(pp+1)
+99D0	CC 60             VEJ       (CC),(60)               ; Loads X-Reg with address at 78(pp) 78(pp+1) 7860 - Start of ROM in module
 99D2	68 1F             LDI	    UH,1F                   ;
 99D4	4A 00             LDI	    XL,00                   ;
 99D6	05                LDA	    (X)                     ;
 99D7	B7 55             CPI	    A,55                    ;
 99D9	F9                REC                               ; Reset Carry
-99DA	89 04             BZR+      99E0                    ;
+99DA	89 04             BZR+      BRANCH_99E0             ;
 99DC	4A 07             LDI	    XL,07                   ;
 99DE	05                LDA	    (X)                     ;
 99DF	D9                SHL                               ;
@@ -2919,7 +2944,7 @@ BRANCH_99E1: ; branched to from 99B5, 99BB
 99E3	F9                REC                               ; Reset Carry
 99E4	9A                RTN                               ;
 
-99E5	81 04             BCR+      99EB                    ; These three line bogus?
+99E5	81 04             BCR+      BRANCH_99EB             ; These three line bogus?
 99E7	6C 0B             CPI	    UH,0B                   ; These three line bogus?
 99E9	9B 53             BZS-      9998                    ; These three line bogus?
 
@@ -2937,21 +2962,21 @@ BRANCH_99EB: ; branched to from 9986, 9988, 99E5
 ; RegMod:
 99ED	8E 5D             BCH+	    BRANCH_9A4C             ; is this reached
 
-SUB_99EF: ; called from 914D
+SUB_99EF: ; called from 914D SUB_90AE
 99EF	85 29             BHR+      BRANCH_9A1A             ;
 99F1	DE 5B             VEJ       (DE),BRANCH_9A4E        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 99F3	D0 00 58          VEJ       (D0),00,BRANCH_9A4E     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
-99F6	F6 7B 75          VEJ       (F6),(7B75)             ; Transfers U to pp, pp+1
-99F9	C2 2C 50          VEJ   	(C2),2C,BRANCH_9A4C     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
+99F6	F6 7B 75          VEJ       (F6),(OUT_BUF + 15)     ; Transfers U to pp, pp+1
+99F9	C2 2C 50          VEJ   	(C2),2C,BRANCH_9A4C     ; If next character is not ''', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
 99FC	DE 50             VEJ       (DE),BRANCH_9A4E        ; Calculates formula to which Y-Reg points and passes result to AR-X. Jump FWD (n) if error
 99FE	D0 01 4D          VEJ       (D0),01,BRANCH_9A4E     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
-9A01	A5 7B 75          LDA	    (7B75)                  ;
+9A01	A5 7B 75          LDA	    (OUT_BUF + 15)          ;
 9A04	08                STA	    XH                      ;
-9A05	A5 7B 76          LDA	    (7B76)                  ;
+9A05	A5 7B 76          LDA	    (OUT_BUF + 16)          ;
 9A08	0A                STA	    XL                      ;
-9A09	BE DF E2          SJP	    SUB85                   ;
+9A09	BE DF E2          SJP	    U_MINUS_X               ; U-Reg= U-Reg - X-Reg (with overflow C=1)
 9A0C	81 41             BCR+      BRANCH_9A4F             ;
-9A0E	F6 7B 77          VEJ       (F6),(7B77)             ; Transfers U to pp, pp+1
+9A0E	F6 7B 77          VEJ       (F6),(OUT_BUF + 17)     ; Transfers U to pp, pp+1
 9A11	C8 0B             VEJ       (C8),BRANCH_9A1E        ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
 
 BRANCH_9A13: ; branched to from 9A1C
@@ -2965,7 +2990,7 @@ BRANCH_9A1A: ; branched to from 99EF
 9A1C	9E 0B             BCH-	    BRANCH_9A13             ;
 
 BRANCH_9A1E: ; branched to from 9A11
-9A1E	C4 2C 2B          VEJ       (C4),2C,BRANCH_9A4C     ; Check tokens/char in U-Reg if not p branch fwd n
+9A1E	C4 2C 2B          VEJ       (C4),2C,BRANCH_9A4C     ; Check tokens/char in U-Reg if not ',' branch fwd n
 9A21	C0                VEJ       (C0)                    ; Load next character/token to U-Reg
 
 BRANCH_9A22: ; branched to from 9A1A
@@ -2974,7 +2999,7 @@ BRANCH_9A22: ; branched to from 9A1A
 9A25	D0 00 26          VEJ       (D0),00,BRANCH_9A4E     ; Convert AR-X to integer & load to U-Reg. p specifies the range. If range exceeded: Branch fwd n
 
 BRANCH_9A28: ; branched to from 9A18
-9A28	F6 7B 79          VEJ       (F6),(7B79)             ; Transfers U to pp, pp+1
+9A28	F6 7B 79          VEJ       (F6),(OUT_BUF + 19)     ; Transfers U to pp, pp+1
 9A2B	8E 1B             BCH+	    BRANCH_9A48             ;
 
 
@@ -2986,26 +3011,26 @@ BRANCH_9A28: ; branched to from 9A18
 ; Output:
 ; RegMod:
 SUB_9A2D:
-9A2D	BE DF EE          SJP	    DFEE                    ;
+9A2D	BE DF EE          SJP	    MEM_IN_UREG             ; Calculates the available memory space (MEM) in U-Reg.
 9A30	8E 09             BCH+	    BRANCH_9A3B             ;
 
 SUB_9A32: ; called from 9124
 9A32	6A BB             LDI	    UL,BB                   ;
-9A34	68 00             LDI	    UH,00                   ;
+9A34	68 00             LDI	    UH,00                   ; U = 00BB
 9A36	8E 05             BCH+	    BRANCH_9A3D             ;
 
 SUB_9A38: ; called from 9139
-9A38	BE DF D9          SJP	    DFD9                    ;
+9A38	BE DF D9          SJP	    $DFD9                   ; Inside: Save String buffer pointers to X-Reg and AR-X. Updating pointer with YL
 
 BRANCH_9A3B: ; branched to from 9A30
 9A3B	81 12             BCR+      BRANCH_9A4F             ;
 
 BRANCH_9A3D: ; branched to from 9A36
 9A3D	84                LDA	    XH                      ;
-9A3E	AE 7B 75          STA	    (7B75)                  ;
+9A3E	AE 7B 75          STA	    (OUT_BUF + 15)          ;
 9A41	04                LDA	    XL                      ;
-9A42	AE 7B 76          STA	    (7B76)                  ;
-9A45	F6 7B 77          VEJ	    (F6),(7B77)             ; Transfers U to pp, pp+1
+9A42	AE 7B 76          STA	    (OUT_BUF + 16)          ;
+9A45	F6 7B 77          VEJ	    (F6),(OUT_BUF + 17)     ; Transfers U to pp, pp+1
 9A48	C8 02             VEJ       (C8),BRANCH_9A4C        ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
 
 BRANCH_9A4A: ; branched to from 9A81
@@ -3033,21 +3058,21 @@ SUB_9A50:
 BRANCH_9A52: ; branched to from 9A5F
 9A52	2A                STA	    UL                      ;
 9A53	FB                SEC                               ;
-9A54	A1 7B A7          SBC	    (7BA7)                  ;
+9A54	A1 7B A7          SBC	    (OUT_BUF  + 47)         ;
 9A57	83 13             BCS+      BRANCH_9A6C             ;
-9A59	A5 78 56          LDA	    (ZONE_REG)              ;
+9A59	A5 78 56          LDA	    (ZONE_REG)              ; *** use ZONE command to set a val from 1-31 and then PEEK(7856) to see what is there
 9A5C	B9 1F             ANI	    A,1F                    ;
 9A5E	22                ADC	    UL                      ;
 9A5F	91 0F             BCR-      BRANCH_9A52             ;
-9A61	A1 7B A7          SBC	    (7BA7)                  ;
+9A61	A1 7B A7          SBC	    (OUT_BUF  + 47)         ;
 9A64	2A                STA	    UL                      ;
-9A65	A5 7B A6          LDA	    (7BA6)                  ;
+9A65	A5 7B A6          LDA	    (OUT_BUF  + 46)         ;
 9A68	89 0B             BZR+      BRANCH_9A75             ;
 9A6A	8E 24             BCH+	    BRANCH_9A90             ;
 
 BRANCH_9A6C: ; branched to from 9A57
 9A6C	2A                STA	    UL                      ;
-9A6D	A5 7B A6          LDA	    (7BA6)                  ;
+9A6D	A5 7B A6          LDA	    (OUT_BUF  + 46)         ;
 9A70	8B 1E             BZS+      BRANCH_9A90             ;
 9A72	26                CPA	    UL                      ;
 9A73	83 1B             BCS+      BRANCH_9A90             ;
@@ -3066,16 +3091,16 @@ BRANCH_9A75: ; branched to from 9A68
 SUB_9A78:
 9A78	FB                SEC                               ;
 9A79	68 35             LDI	    UH,35                   ;
-9A7B	A5 7B A6          LDA	    (7BA6)                  ;
+9A7B	A5 7B A6          LDA	    (OUT_BUF  + 46)         ;
 9A7E	8B 03             BZS+      BRANCH_9A83             ;
 9A80	20                SBC	    UL                      ; A = A - UL
 9A81	91 39             BCR-      BRANCH_9A4A             ;
 
 BRANCH_9A83: ; branched to from 9A7E
 9A83	24                LDA	    UL                      ;
-9A84	A1 7B A7          SBC	    (7BA7)                  ;
+9A84	A1 7B A7          SBC	    (OUT_BUF  + 47)         
 9A87	83 06             BCS+      BRANCH_9A8F             ;
-9A89	BE 9B 41          SJP	    SUB_9B41                ;
+9A89	BE 9B 41          SJP	    SUB_9B41                ; No idea, seems to manipualte OUT_BUF
 9A8C	83 0E             BCS+      BRANCH_9A9C             ;
 9A8E	24                LDA	    UL                      ;
 
@@ -3088,7 +3113,7 @@ BRANCH_9A90: ; branched to from 9A6A, 9A70, 9A73
 
 BRANCH_9A93: ; branched to from 9A93
 9A93	B5 20             LDI	    A,20                    ;
-9A95	BE 9B 32          SJP	    SUB_9B32                ;
+9A95	BE 9B 32          SJP	    SUB_9B32                ; No idea, seems to manipualte OUT_BUF
 9A98	83 02             BCS+      BRANCH_9A9C             ;
 9A9A	88 09             LOP	    UL,BRANCH_9A93          ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 
@@ -3096,7 +3121,7 @@ BRANCH_9A9C: ; branched to from9A8C, 9A91, 9A98, 9AA0
 9A9C	9A                RTN                               ;
 
 BRANCH_9A9D:
-9A9D	BE 9A CF          SJP	    SUB_9ACF                ;
+9A9D	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
 9AA0	93 06             BCS-      BRANCH_9A9C             ;   
 9AA2	A4                LDA	    UH                      ;
 9AA3	9E 16             BCH-	    BRANCH_9A8F             ;
@@ -3113,16 +3138,16 @@ SUB_9AA5:
 9AA5	68 00             LDI	    UH,00                   ;
 
 BRANCH_9AA7: ; branched to from 
-9AA7	BE 9B E1          SJP	    SUB_9BE1                ;
+9AA7	BE 9B E1          SJP	    SUB_9BE1                ; Manipulates OUT_BUF
 
 BRANCH_9AAA: ; branched to from 9AC9
-9AAA	83 15             BCS+      SUB_9AC1                ;
-9AAC	BE 9A CF          SJP	    SUB_9ACF                ;
-9AAF	BE 9A E6          SJP	    SUB_9AE6                ;
-9AB2	83 0D             BCS+      SUB_9AC1                ;
-9AB4	A5 7B 99          LDA	    (7B99)                  ;
+9AAA	83 15             BCS+      SUB_9AC1                ; No idea
+9AAC	BE 9A CF          SJP	    SUB_9ACF                ; Copies some stuff in OUT_BUF
+9AAF	BE 9A E6          SJP	    SUB_9AE6                ; No idea
+9AB2	83 0D             BCS+      SUB_9AC1                ; No idea
+9AB4	A5 7B 99          LDA	    (OUT_BUF  + 39)         ;
 9AB7	2A                STA	    UL                      ;
-9AB8	A5 7B 98          LDA	    (7B98)                  ;
+9AB8	A5 7B 98          LDA	    (OUT_BUF  + 38)         ;
 9ABB	28                STA	    UH                      ;
 9ABC	FD 62             DEC	    UH                      ;
 9ABE	93 19             BCS-      BRANCH_9AA7             ;
@@ -3133,22 +3158,22 @@ BRANCH_9AC0: ; branched to from
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_9AC1 - Called from
+; SUB_9AC1 - Called from 9AAA 9AB2 SUB_9AA5
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_9AC1:
-9AC1	BE 9B 5E          SJP       SUB_9B5E                ; 
-9AC4	93 06             BCS-      BRANCH_9AC0             ; borrowing return
-9AC6	BE 9C 32          SJP       SUB_9C32                ;
+9AC1	BE 9B 5E          SJP       SUB_9B5E                ; REC if UH == 3C, 34, 40, 3A
+9AC4	93 06             BCS-      BRANCH_9AC0             ; If no match, borrow a return
+9AC6	BE 9C 32          SJP       SUB_9C32                ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
 9AC9	9E 21             BCH-	    BRANCH_9AAA             ;
 
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
 ; SUB_9ACB - Called from 9AAC
-; 
+; Copies some stuff in OUT_BUF
 ; Arguments:
 ; Output:
 ; RegMod:
@@ -3157,10 +3182,10 @@ BRANCH_9ACB: ; branched to from 9AE2
 9ACD	6A 4F             LD	    UL,4F                   ;
 
 SUB_9ACF: ; Called from 95B6, 95C9, 95E1, 9A9D, 9AAC   branched to from 9AD4
-9ACF	BE 7B AD          SJP       7BAD                    ;
+9ACF	BE 7B AD          SJP       OUT_BUF  + 4D           ;
 9AD2	83 11             BCS+      BRANCH_9AE5             ;
 9AD4	88 07             LOP       SUB_9ACF                ; UL = UL - 1, loop back 'e' if Borrow Flag not set
-9AD6	ED 7B A1 20       BII	    (7BA1),20               ;
+9AD6	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
 9ADA	89 09             BZR+      BRANCH_9AE5             ;
 9ADC	4C 7B             CPI	    XH,7B                   ;
 9ADE	89 04             BZR+      BRANCH_9AE4             ;
@@ -3182,40 +3207,41 @@ BRANCH_9AE5: ; branched to from 9AD2, 9ADA
 ; Output:
 ; RegMod:
 SUB_9AE6:
-9AE6	ED 7B A1 80       BII	    (7BA1),80               ;
-9AEA	8B 24             BZS+      SUB_9B10                ;
-9AEC	81 0A             BCR+      SUB_9AF8                ;
+9AE6	ED 7B A1 80       BII	    (OUT_BUF  + 41),80      ;
+9AEA	8B 24             BZS+      BRANCH_9B10             ;
+9AEC	81 0A             BCR+      BRANCH_9AF8             ;
 9AEE	6C 3F             CPI	    UH,3F                   ;
-9AF0	8B 16             BZS+      SUB_9B08                ;
+9AF0	8B 16             BZS+      BRANCH_9B08             ;
 9AF2	6C 3E             CPI	    UH,3E                   ;
-9AF4	8B 0D             BZS+      SUB_9B03                ;
+9AF4	8B 0D             BZS+      BRANCH_9B03             ;
 
-SUB_9AF6: ; called from 9B14
+BRANCH_9AF6: ; called from 9B14
 9AF6	FB                SEC                               ;
 
-SUB_9AF7: ; called from 9B01, 9B06, 9B0B, 9B10
+BRANCH_9AF7: ; called from 9B01, 9B06, 9B0B, 9B10
 9AF7	9A                RTN                               ;
 
-SUB_9AF8: ; called from 9AEC
-9AF8	ED 7B A1 20       BII	    (7BA1),20               ;
-9AFC	8B 05             BZS+      SUB_9B03                ;
-9AFE	BE 9B C1          SJP	    SUB_9BC1                ;
-9B01	9E 0C             BCH-	    SUB_9AF7                ;
 
-SUB_9B03: ; called from 9AF4, 9AFC
-9B03	BE 9E 54          SJP	    SUB_9E54                ;
-9B06	93 11             BCS-      SUB_9AF7                ;
+BRANCH_9AF8: ; called from 9AEC
+9AF8	ED 7B A1 20       BII	    (OUT_BUF  + 41),20      ;
+9AFC	8B 05             BZS+      BRANCH_9B03             ;
+9AFE	BE 9B C1          SJP	    SUB_9BC1                ; Manipulates OUT_BUF
+9B01	9E 0C             BCH-	    BRANCH_9AF7             ;
 
-SUB_9B08: ; called from 9AF0
-9B08	BE 9C 94          SJP	    SUB_9C94                ;
-9B0B	93 16             BCS-      SUB_9AF7                ;
+BRANCH_9B03: ; called from 9AF4, 9AFC
+9B03	BE 9E 54          SJP	    SUB_9E54                ; No idea
+9B06	93 11             BCS-      BRANCH_9AF7             ;
+
+BRANCH_9B08: ; called from 9AF0
+9B08	BE 9C 94          SJP	    SUB_9C94                ; No idea
+9B0B	93 16             BCS-      BRANCH_9AF7             ;
 9B0D	BA 9C 48          JMP	    BRANCH_9C84             ;
 
-SUB_9B10: ; called from 9AEA
-9B10	91 1B             BCR-      SUB_9AF7                ;
+BRANCH_9B10: 
+9B10	91 1B             BCR-      BRANCH_9AF7             ;
 9B12	6C 3E             CPI	    UH,3E                   ;
-9B14	99 20             BZR-      SUB_9AF6                ;
-9B16	E9 7B 98 00       ANI	    (7B98),00               ;
+9B14	99 20             BZR-      BRANCH_9AF6             ;
+9B16	E9 7B 98 00       ANI	    (OUT_BUF  + 38),00      ;
 9B1A	F9                REC                               ;
 9B1B	9A                RTN                               ;
 
@@ -3227,12 +3253,12 @@ SUB_9B10: ; called from 9AEA
 ; Arguments:
 ; Output:
 ; RegMod:
-9B1C	BE 7B AA          SJP	    7BAA                    ;
+9B1C	BE 7B AA          SJP	    OUT_BUF + 4A            ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 9B1F	83 0E             BCS+      BRANCH_9B2F             ;
 9B21	B7 0D             CPI	    A,0D                    ;
 9B23	F9                REC                               ;
 9B24	89 09             BZR+      BRANCH_9B2F             ;
-9B26	ED 7B A1 04       BII	    (7BA1),04               ;
+9B26	ED 7B A1 04       BII	    (OUT_BUF  + 41),04      ;
 9B2A	8B 03             BZS+      BRANCH_9B2F             ;
 9B2C	FB                SEC                               ;
 9B2D	68 3E             LDI	    UH,3E                   ;
@@ -3253,30 +3279,30 @@ SUB_9B31:
 9B31	45                LIN	    X                       ;
 
 SUB_9B32: ; called from 9A95
-9B32	BE 7B AA          SJP       7BAA                    ;
+9B32	BE 7B AA          SJP       OUT_BUF + 4A            ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 9B35	83 20             BCS+      BRANCH_9B57             ;
-9B37	A5 7B A6          LDA	    (7BA6)                  ;
+9B37	A5 7B A6          LDA	    (OUT_BUF  + 46)         ;
 9B3A	8B 1C             BZS+      BRANCH_9B58             ;
-9B3C	A1 7B A7          SBC	    (7BA7)                  ; A = A - (pp)
+9B3C	A1 7B A7          SBC	    (OUT_BUF  + 47)         ; A = A - (pp)
 9B3F	83 17             BCS+      BRANCH_9B58             ;
 
 SUB_9B41: ; called from  9209, 9239
-9B41	A5 7B A9          LDA	    (7BA9)                  ;
-9B44	BE 7B AA          SJP       7BAA                    ;
+9B41	A5 7B A9          LDA	    (OUT_BUF + 49)          ;
+9B44	BE 7B AA          SJP       OUT_BUF + 4A            ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 9B47	83 0E             BCS+      BRANCH_9B57             ;
 9B49	A5 7B A8          LDA	    (7BA8)                  ;
 9B4C	8B 05             BZS+      BRANCH_9B53             ;
-9B4E	BE 7B AA          SJP       7BAA                    ;
+9B4E	BE 7B AA          SJP       OUT_BUF + 4A            ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 9B51	83 04             BCS+      BRANCH_9B57             ;
 
 BRANCH_9B53: ; branched to from 9B4C
-9B53	E9 7B A7 00       ANI	    (7BA7),00               ;
+9B53	E9 7B A7 00       ANI	    (OUT_BUF  + 47),00      ;
 
 BRANCH_9B57: ; branched to from 9B35, 9B47, 9B51
 9B57	9A                RTN                               ;
 
 BRANCH_9B58: ; branched to from 9B3A, 9B3F
-9B58	EF 7B A7 01       ADI	    (7BA7),01               ;
+9B58	EF 7B A7 01       ADI	    (OUT_BUF  + 47),01      ;
 
 BRANCH_9B5C: ; branched to from 9B66, 9B6A, 9B72
 9B5C	F9                REC                               ; Rest Carry
@@ -3286,21 +3312,22 @@ BRANCH_9B5C: ; branched to from 9B66, 9B6A, 9B72
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9B5E - 
-; 
+; If (OUT_BUF  + 41) * 2 does not overflow then comapre UH to multiple values
 ; Arguments:
-; Output:
+; Output: SEC if (OUT_BUF  + 41) * 2 does not overflow or no match
+;         REC if UH == 3C, 34, 40, 3A
 ; RegMod:
 SUB_9B5E: ; Called from 
-9B5E	A5 7B A1          LDA	    (7BA1)                  ;
-9B61	D9                SHL                               ;
+9B5E	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
+9B61	D9                SHL                               ; (OUT_BUF  + 41) * 2
 9B62	81 10             BCR+      BRANCH_9B74             ;
-9B64	6C 3C             CPI	    UH,3C                   ;
+9B64	6C 3C             CPI	    UH,3C                   ; < 
 9B66	9B 0C             BZS-      BRANCH_9B5C             ; Borrows return
-9B68	6C 34             CPI	    UH,34                   ;
+9B68	6C 34             CPI	    UH,34                   ; 4
 9B6A	9B 10             BZS-      BRANCH_9B5C             ; Borrows return
-9B6C	6C 40             CPI	    UH,40                   ;
+9B6C	6C 40             CPI	    UH,40                   ; &
 9B6E	9B 14             BZS-      BRANCH_9B5C             ; Borrows return
-9B70	6C 3A             CPI	    UH,3A                   ;
+9B70	6C 3A             CPI	    UH,3A                   ; :
 9B72	9B 18             BZS-      BRANCH_9B5C             ; Borrows return
 
 BRANCH_9B74: ; branched to from 9B62
@@ -3316,7 +3343,7 @@ BRANCH_9B74: ; branched to from 9B62
 ; Output:
 ; RegMod:
 SUB_9B76:
-9B76	A5 7B A1          LDA	    (7BA1)                  ;
+9B76	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
 9B79	68 7F             LDI	    UH,7F                   ;
 9B7B	B7 24             CPI	    A,24                    ;
 9B7D	8B 08             BZS+      BRANCH_9B87             ;
@@ -3328,38 +3355,47 @@ SUB_9B76:
 
 BRANCH_9B87: ; called from 9B7D, 9B83
 9B87	A4                LDA	    UH                      ;
-9B88	8E 02             BCH+	    SUB_9B8C                ;
+9B88	8E 02             BCH+	    DELAY_A_MS              ; Time delay of A * 15.625ms
 
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_9B8A, SUB_9B8C - Called from 
+; DELAY500MS - Time delay of 500ms, default. 
+; DELAY_A_MS - Time delay of A * 15.625ms
 ; 
-; Arguments:
+; Arguments: A
 ; Output:
-; RegMod:
-SUB_9B8A:
+; RegMod: A, UH
+DELAY500MS: ; called from 9D38, 
 9B8A	B5 32             LDI	    A,32                    ;
 
-SUB_9B8C: ; called from 9515, 95D6, 95EE
+DELAY_A_MS: ; called from 9515, 95D6, 95EE
 9B8C	68 00             LDI	    UH,00                   ;
 9B8E	FD A8             PSH	    U                       ;
 9B90	2A                STA	    UL                      ;
-9B91	BE E8 8C          SJP       SBRAC                   ;
+9B91	BE E8 8C          SJP       TIMEDELAY               ; Time delay by 15.625 ms* U-Reg 32*15.625ms=500ms
 9B94	FD 2A             POP	    U                       ;
 9B96	68 00             LDI	    UH,00                   ;
 9B98	9A                RTN                               ;
 
-BRANCH_9B99: ; branched to from 9E1A
-9B99	C2 3B 01          VEJ	    (C2),3B,BRANCH_9B9D     ; If next character is not 'p', branch fwd 'n'. If 'p' is Fn then 3 args, if not 2 args
-9B9C	9A                RTN                               ;
+
+
+;--------- ---------------------------------------------------------------------------------------------------
+; SUB_9B99 - 
+; 
+; Arguments: A
+; Output:
+; RegMod: A, UH
+SUB_9B99: ; Jumped to from 9E1A
+9B99	C2 3B 01          VEJ	    (C2),3B,BRANCH_9B9D     ; If next character is not ';', branch fwd 'n'.
+9B9C	9A                RTN                               ; 
 
 BRANCH_9B9D: ; branched to from 9B99
 9B9D	C6                VEJ       (C6)                    ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
 9B9E	FB                SEC                               ; Set Carry
-9B9F	A5 7B 65          LDA	    (7B65)                  ;
+9B9F	A5 7B 65          LDA	    (OUT_BUF + 5)           ;
 9BA2	8B 05             BZS+      BRANCH_9BA9             ;
-9BA4	C4 0D 01          VEJ	    (C4),0D,BRANCH_9BA8     ; Check tokens/char in U-Reg if not p branch fwd n
+9BA4	C4 0D 01          VEJ	    (C4),0D,BRANCH_9BA8     ; Check tokens/char in U-Reg if not CR branch fwd n
 9BA7	9A                RTN                               ;
 
 BRANCH_9BA8: ; branched to from 9BA4
@@ -3372,21 +3408,21 @@ BRANCH_9BA9: ; branched to from 9BA2
 
 ;--------- ---------------------------------------------------------------------------------------------------
 ; SUB_9BAA - Called from 
-; 
+; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_9BAA:
-9BAA	ED 7B A1 40       BII	    (7BA1),40               ;
+9BAA	ED 7B A1 40       BII	    (OUT_BUF  + 41),40      ;
 9BAE	8B 10             BZS+      BRANCH_9BC0             ;
-9BB0	A5 7B A7          LDA	    (7BA7)                  ;
-9BB3	ED 7B 9E 04       BII	    (7B9E),04               ;
+9BB0	A5 7B A7          LDA	    (OUT_BUF  + 47)         ;
+9BB3	ED 7B 9E 04       BII	    (OUT_BUF + 3E),04       ;
 9BB7	89 04             BZR+      BRANCH_9BBD             ;
-9BB9	AE 78 53          STA	    (7853)                  ;
+9BB9	AE 78 53          STA	    (7853)                  ; Unkown CE-158 register
 9BBC	9A                RTN                               ;
 
 BRANCH_9BBD: ; branched to from 9BB7
-9BBD	AE 78 54          STA	    (7854)                  ;
+9BBD	AE 78 54          STA	    (7854)                  ; Unkown CE-158 register
 
 BRANCH_9BC0: ; branched to from 9BAE, 9BCC, 9BD7
 9BC0	9A                RTN                               ;
@@ -3394,52 +3430,62 @@ BRANCH_9BC0: ; branched to from 9BAE, 9BCC, 9BD7
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_9BC1 - Called from 
-; 
+; SUB_9BC1 - Called from 9AFE, 947A, 946D, 920E
+; Manipulates OUT_BUF
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_9BC1:
-9BC1	ED 7B A1 80       BII	    (7BA1),80               ;
+9BC1	ED 7B A1 80       BII	    (OUT_BUF  + 41),80      ;
 9BC5	9B 1F             BZS-      BRANCH_9BA8             ;
 9BC7	B5 03             LDI	    A,03                    ;
 9BC9	BE 9C 5C          SJP       BRANCH_9C5C             ;
 9BCC	93 0E             BCS-      BRANCH_9BC0             ; Borrows return
-9BCE	BE 81 E6          SJP       SUB_81E6                ;
-9BD1	A5 7B A2          LDA	    (7BA2)                  ;
-9BD4	BE 9C 57          SJP       BRANCH_9C57             ;
+9BCE	BE 81 E6          SJP       SUB_81E6                ; Manipulates LPT/UART registers
+9BD1	A5 7B A2          LDA	    (OUT_BUF + 42)          ;
+9BD4	BE 9C 57          SJP       BRANCH_9C57             ; no idea
 9BD7	93 19             BCS-      BRANCH_9BC0             ; Borrows return
 9BD9	FB                SEC                               ; Set Carry
 9BDA	B5 F2             LDI	    A,F2                    ;
-9BDC	BA 9C FD          JMP	    SUB_9CFD                ;
+9BDC	BA 9C FD          JMP	    SUB_9CFD                ; no idea
 
-9BDF	FD 18             LDX       Y                       ; X = Y              
 
-SUB_9BE1: ; called from 9AA7
-9BE1	E9 7B A5 7F       ANI	    (7BA5),7F               ;
+
+;--------- ---------------------------------------------------------------------------------------------------
+; SUB_98DF - called from 93E5, 9371
+; SUB_9BE1 - called from 9AA7, 9587, 9184
+; Manipulates OUT_BUF
+; Arguments:
+; Output:
+; RegMod:
+SUB_98DF:
+98DF	FD 18             LDX       Y                       ; X = Y              
+
+SUB_9BE1: 
+9BE1	E9 7B A5 7F       ANI	    (OUT_BUF + 45),7F      ;
 9BE5	B5 FD             LDI	    A,FD                    ;
 9BE7	AE 7B A4          STA	    (7BA4)                  ;
 9BEA	04                LDA	    XL                      ;
-9BEB	AE 7B 97          STA	    (7B97)                  ;
+9BEB	AE 7B 97          STA	    (OUT_BUF  + 37)         ;
 9BEE	84                LDA	    XH                      ;
-9BEF	AE 7B 96          STA	    (7B96)                  ;
+9BEF	AE 7B 96          STA	    (OUT_BUF  + 36)         ;
 9BF2	24                LDA	    UL                      ;
-9BF3	AE 7B 99          STA	    (7B99)                  ;
+9BF3	AE 7B 99          STA	    (OUT_BUF  + 39)         ;
 9BF6	A4                LDA	    UH                      ;
-9BF7	AE 7B 98          STA	    (7B98)                  ;
+9BF7	AE 7B 98          STA	    (OUT_BUF  + 38)         ;
 
 BRANCH_9BFA: ; branched to from 9C46
 9BFA	8B 02             BZS+      BRANCH_9BFE             ;
 9BFC	6A FF             LDI	    UL,FF                   ;
 
 BRANCH_9BFE: ; branched to from 9BFA
-9BFE	A5 7B A1          LDA	    (7BA1)                  ;
+9BFE	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
 9C01	D9                SHL                               ;
 9C02	81 2D             BCR+      BRANCH_9C31             ;
-9C04	E9 7B A2 00       ANI	    (7BA2),00               ;
+9C04	E9 7B A2 00       ANI	    (OUT_BUF + 42),00       ;
 9C08	D9                SHL                               ;
-9C09	A5 7B A5          LDA	    (7BA5)                  ;
-9C0C	E9 7B A5 00       ANI	    (7BA5),00               ;
+9C09	A5 7B A5          LDA	    (OUT_BUF + 45)         ;
+9C0C	E9 7B A5 00       ANI	    (OUT_BUF + 45),00      ;
 9C10	8F 3A             BVS+      BRANCH_9C4C             ;
 9C12	D9                SHL                               ;
 9C13	81 05             BCR+      BRANCH_9C1A             ;
@@ -3447,13 +3493,13 @@ BRANCH_9BFE: ; branched to from 9BFA
 9C17	BE 9C 31          SJP       BRANCH_9C31             ;
 
 BRANCH_9C1A: ; branched to from 9C13
-9C1A	BE 9C 94          SJP       SUB_9C94                ;
+9C1A	BE 9C 94          SJP       SUB_9C94                ; No idea
 9C1D	83 12             BCS+      BRANCH_9C31             ;
 9C1F	B7 02             CPI	    A,02                    ;
 9C21	F9                REC                               ; Reset Carry
 9C22	8B 0D             BZS+      BRANCH_9C31             ;
 9C24	B7 2D             CPI	    A,2D                    ;
-9C26	8B 20             BZS+      SUB_9C48                ;
+9C26	8B 20             BZS+      SUB_9C48                ; no idea
 9C28	68 42             LDI	    UH,42                   ;
 9C2A	B7 37             CPI	    A,37                    ;
 9C2C	8B 03             BZS+      BRANCH_9C31             ;
@@ -3463,15 +3509,23 @@ BRANCH_9C1A: ; branched to from 9C13
 BRANCH_9C31: ; branched to from 9C4E, 9C53, 9C02, 9C17, 9C1D, 9C22, 9C2C
 9C31	9A                RTN                               ;
 
-SUB_9C32: ; called from 9AC6
-9C32	EB 7B A5 80       ORI	    (7BA5),80               ;
-9C36	A5 7B 97          LDA	    (7B97)                  ;
+
+
+;--------- ---------------------------------------------------------------------------------------------------
+; SUB_9C32 - called from 9AC6
+; Pulls some values out of OUT_BUF and saves to XH, XL, UH, UL, A
+; Arguments:
+; Output:
+; RegMod:
+SUB_9C32: 
+9C32	EB 7B A5 80       ORI	    (OUT_BUF + 45),80      ;
+9C36	A5 7B 97          LDA	    (OUT_BUF  + 37)         ;
 9C39	0A                STA	    XL                      ;
-9C3A	A5 7B 96          LDA	    (7B96)                  ;
+9C3A	A5 7B 96          LDA	    (OUT_BUF  + 36)         ;
 9C3D	08                STA	    XH                      ; 
-9C3E	A5 7B 99          LDA	    (7B99)                  ;
+9C3E	A5 7B 99          LDA	    (OUT_BUF  + 39)         ;
 9C41	2A                STA	    UL                      ;
-9C42	A5 7B 98          LDA	    (7B98)                  ;
+9C42	A5 7B 98          LDA	    (OUT_BUF  + 38)         ;
 9C45	28                STA	    UH                      ;
 9C46	9E 4E             BCH-	    BRANCH_9BFA             ;
 
@@ -3487,10 +3541,11 @@ SUB_9C48:
 9C48	B5 70             LDI	    A,70                    ;
 9C4A	8E 0B             BCH+	    BRANCH_9C57             ;
 
+
 BRANCH_9C4C: ; branched to from 9C10
 9C4C	BF C0             BII	    A,C0                    ;
 9C4E	9B 1F             BZS-      BRANCH_9C31             ; Borrowing Return
-9C50	BE 9C FD          SJP       SUB_9CFD                ;
+9C50	BE 9C FD          SJP       SUB_9CFD                ; no idea
 9C53	93 24             BCS-      BRANCH_9C31             ;
 9C55	B5 02             LDI	    A,02                    ; Borrowing Return
 
@@ -3499,9 +3554,11 @@ BRANCH_9C57: ; branched to from 9C4A, 9BD4
 9C59	2A                STA	    UL                      ;
 9C5A	8E 16             BCH+	    BRANCH_9C72             ;
 
+
 BRANCH_9C5C: ; branched to from 9BC9
 9C5C	FD A8             PSH	    U                       ;
 9C5E	8E 09             BCH+	    BRANCH_9C69             ;
+
 
 JMP_9C60: ; branched to from TBL_9887->9895
 9C60	FD A8             PSH	    U                       ;
@@ -3522,10 +3579,11 @@ BRANCH_9C72: ; branched to from 9C5A
 9C73	B7 40             CPI	    A,40                    ;
 9C75	83 0D             BCS+      BRANCH_9C84             ;
 9C77	B5 10             LDI	    A,10                    ;
-9C79	BE 82 3A          SJP       UNKNOWN_823A            ;
+9C79	BE 82 3A          SJP       SUB_823A                ; Sends charecter in A to RS232 Port.
 9C7C	81 03             BCR+      BRANCH_9C81             ;
 9C7E	FD 0A             POP	    X                       ;
 9C80	9A                RTN                               ;
+
 
 BRANCH_9C81: ; branched to from 9C7C
 9C81	24                LDA	    UL                      ;
@@ -3533,14 +3591,15 @@ BRANCH_9C81: ; branched to from 9C7C
 
 BRANCH_9C84: ; branched to from 9C70, 9C75
 9C84	FD 2A             POP	    U                       ;
-9C86	BA 82 3A          JMP	    UNKNOWN_823A            ;
+9C86	BA 82 3A          JMP	    SUB_823A                ; Sends charecter in A to RS232 Port.
+
 
 BRANCH_9C89: ; branched to from 9C6A, called from 9CBA, 9CD9
-9C89	A5 7B A2          LDA	    (7BA2)                  ;
+9C89	A5 7B A2          LDA	    (OUT_BUF + 42)          ;
 9C8C	D9                SHL                               ;
 9C8D	A2                ADC	    UH                      ;
 9C8E	B3 00             ADI	    A,00                    ;
-9C90	AE 7B A2          STA	    (7BA2)                  ;
+9C90	AE 7B A2          STA	    (OUT_BUF + 42)          ;
 9C93	9A                RTN                               ;
 
 
@@ -3580,7 +3639,7 @@ BRANCH_9CB6: ; branched to from 9CA6
 9CB7	81 28             BCR+      BRANCH_9CE1             ;
 9CB9	2A                STA	    UL                      ;
 9CBA	BE 9C 89          SJP       BRANCH_9C89             ;
-9CBD	A5 7B A2          LDA	    (7BA2)                  ;
+9CBD	A5 7B A2          LDA	    (OUT_BUF + 42)          ;
 9CC0	28                STA	    UH                      ;
 
 BRANCH_9CC1: ; branched to from 9CA1, 9CAF, 9CD1, 9CD6, 9CDF
@@ -3588,6 +3647,7 @@ BRANCH_9CC1: ; branched to from 9CA1, 9CAF, 9CD1, 9CD6, 9CDF
 9CC3	2A                STA	    UL                      ;
 9CC4	A4                LDA	    UH                      ;
 9CC5	9A                RTN                               ;
+
 
 BRANCH_9CC6: ; branched to from 9CAA
 9CC6	62                DEC	    UL                      ;
@@ -3605,6 +3665,7 @@ BRANCH_9CD5: ; branched to from 9CE5
 9CD5	FB                SEC                               ; Set Carry
 9CD6	9E 17             BCH-      BRANCH_9CC1             ;
 
+
 BRANCH_9CD8: ; branched to from 9CCB
 9CD8	28                STA	    UH                      ;
 9CD9	BE 9C 89          SJP       BRANCH_9C89             ;
@@ -3612,23 +3673,26 @@ BRANCH_9CD8: ; branched to from 9CCB
 9CDE	FB                SEC                               ; Set Carry
 9CDF	9E 20             BCH-      BRANCH_9CC1             ;
 
+
 BRANCH_9CE1: ; branched to from 9CB7
 9CE1	68 3C             LDI	    UH,3C                   ;
 9CE3	B7 A2             CPI	    A,A2                    ;
 9CE5	99 12             BZR-      BRANCH_9CD5             ;
 9CE7	FD 8A             POP	    A                       ;
-9CE9	2A    ;             STA	    UL                      ;
-9CEA	9E A4             BCH-      SUB_9C48                ;
+9CE9	2A                STA	    UL                      ;
+9CEA	9E A4             BCH-      SUB_9C48                ; no idea
 
 SUB_9CEC: ; Jumped to from 9166
 9CEC	4A 60             LDI	    XL,60                   ;
-9CEE	48 7B             LDI	    XH,7B                   ; X = 7B60
+9CEE	48 7B             LDI	    XH,7B                   ; X = 7B60 = OUT_BUF
 9CF0	6A 1A             LDI	    UL,1A                   ;
-9CF2	ED 7B A1 80       BII	    (7BA1),80               ;
-9CF6	8B 02             BZS+      9CFA                    ;
+9CF2	ED 7B A1 80       BII	    (OUT_BUF  + 41),80      ;
+9CF6	8B 02             BZS+      BRANCH_9CFA             ;
 9CF8	44                INC	    X                       ;
 9CF9	62                DEC	    UL                      ;
-9CFA	BA 9A A5          JMP	    SUB_9AA5                ;
+
+BRANCH_9CFA:
+9CFA	BA 9A A5          JMP	    SUB_9AA5                ; No idea
 
 
 
@@ -3639,26 +3703,26 @@ SUB_9CEC: ; Jumped to from 9166
 ; Output:
 ; RegMod:
 SUB_9CFD:
-9CFD	BE 81 E6          CALL	    SUB_81E6                ;
+9CFD	BE 81 E6          CALL	    SUB_81E6                ; Manipulates LPT/UART registers
 9D00	FB                SEC                               ; Set Carry
-9D01	EB 7B A5 40       ORI	    (7BA5),40               ;
+9D01	EB 7B A5 40       ORI	    (OUT_BUF + 45),40       ;
 9D05	B5 F2             LDI	    A,F2                    ;
-9D07	E9 7B A5 DF       ANI	    (7BA5),DF               ;
-9D0B	AE 7B A3          STA	    (7BA3)                  ;
+9D07	E9 7B A5 DF       ANI	    (OUT_BUF + 45),DF       ;
+9D0B	AE 7B A3          STA	    (OUT_BUF + 43)          ;
 9D0E	68 00             LDI	    UH,00                   ;
 9D10	83 19             BCS+      BRANCH_9D2B             ;
 
 BRANCH_9D12: ; branched to from 9D26
 9D12	B5 2D             LDI	    A,2D                    ;
-9D14	BE 81 BC          SJP	    SUB_81BC                ;
+9D14	BE 81 BC          SJP	    SUB_81BC                ; Sends charecter in A to RS232 Port
 9D17	81 11             BCR+      BRANCH_9D2A             ;
 9D19	BF 20             BII       A,20                    ;
 9D1B	89 0D             BZR+      BRANCH_9D2A             ;
 
 BRANCH_9D1D: ; branched to from 9D54
-9D1D	BE 9B 8A          SJP	    SUB_9B8A                ;
+9D1D	BE 9B 8A          SJP	    DELAY500MS              ; 500ms delay
 9D20	83 08             BCS+      BRANCH_9D2A             ;
-9D22	EF 7B A3 01       ADI	    (7BA3),01               ;
+9D22	EF 7B A3 01       ADI	    (OUT_BUF + 43),01       ;
 9D26	91 16             BCR-      BRANCH_9D12             ;
 
 BRANCH_9D28: ; branched to from 9D41
@@ -3667,32 +3731,35 @@ BRANCH_9D28: ; branched to from 9D41
 BRANCH_9D2A: ; branched to from 9D17, 9D1B, 9D20, 9D32
 9D2A	9A                RTN                               ;
 
+
 BRANCH_9D2B: ; branched to from 9D10, 9D43, 9D5C
-9D2B	BE 81 E6          SJP	    SUB_81E6                ;
+9D2B	BE 81 E6          SJP	    SUB_81E6                ; Manipulates LPT/UART registers
 9D2E	81 15             BCR+      BRANCH_9D45             ;
 9D30	BF 40             BII       A,40                    ;
 9D32	99 0A             BZR-      BRANCH_9D2A             ;
 9D34	BF 1C             BII       A,1C                    ;
 9D36	89 18             BZR+      BRANCH_9D50             ;
-9D38	BE 9B 8A          SJP	    SUB_9B8A                ;
+9D38	BE 9B 8A          SJP	    DELAY500MS              ; 500ms delay
 9D3B	83 27             BCS+      BRANCH_9D64             ;
-9D3D	EF 7B A3 01       ADI	    (7BA3),01               ;
+9D3D	EF 7B A3 01       ADI	    (OUT_BUF + 43),01       ;
 9D41	93 1B             BCS-      BRANCH_9D28             ;
 9D43	9E 1A             BCH-      BRANCH_9D2B             ;
 
+
 BRANCH_9D45: ; branched to from 9D2E
-9D45	ED 7B A5 20       BII	    (7BA5),20               ;
+9D45	ED 7B A5 20       BII	    (OUT_BUF + 45),20       ;
 9D49	8B 0B             BZS+      BRANCH_9D56             ;
 9D4B	B7 70             CPI	    A,70                    ;
 9D4D	F9                REC                               ; Reset Carry
 9D4E	8B 14             BZS+      BRANCH_9D64             ;
 
 BRANCH_9D50: ; branched to from 9D36, 9D60
-9D50	E9 7B A5 DF       ANI	    (7BA5),DF               ;
+9D50	E9 7B A5 DF       ANI	    (OUT_BUF + 45),DF       ;
 9D54	9E 39             BCH-      BRANCH_9D1D             ;
 
+
 BRANCH_9D56: ; branched to from 9D49
-9D56	EB 7B A5 20       ORI	    (7BA5),20               ;
+9D56	EB 7B A5 20       ORI	    (OUT_BUF + 45),20       ;
 9D5A	B7 10             CPI	    A,10                    ;
 9D5C	9B 33             BZS-      BRANCH_9D2B             ;
 9D5E	B7 3D             CPI	    A,3D                    ;
@@ -3711,22 +3778,22 @@ BRANCH_9D64: ; branched to from 9D3B, 9D4E
 ; Output:
 ; RegMod:
 SUB_9D65:
-9D65	BE 81 E6          SJP	    SUB_81E6                ;
+9D65	BE 81 E6          SJP	    SUB_81E6                ; Manipulates LPT/UART registers
 9D68	4A 7B             LDI	    XL,7B                   ;
 9D6A	6A 1A             LDI	    UL,1A                   ;
-9D6C	ED 7B A1 80       BII	    (7BA1),80               ;
+9D6C	ED 7B A1 80       BII	    (OUT_BUF  + 41),80      ;
 9D70	8B 02             BZS+      BRANCH_9D74             ;
 9D72	40                INC	    XL                      ;
 9D73	62                DEC	    UL                      ;
 
 BRANCH_9D74: ; branched to from 9D70
 9D74	48 7B             LDI	    XH,7B                   ;
-9D76	BE 9A A5          SJP	    SUB_9AA5                ;
+9D76	BE 9A A5          SJP	    SUB_9AA5                ; No idea
 9D79	83 75             BCS+      BRANCH_9DF0             ;
 9D7B	4A 60             LDI	    XL,60                   ;
 9D7D	6A 04             LDI	    UL,04                   ;
 9D7F	FD 98             PSH	    Y                       ;
-9D81	A5 7B A1          LDA	    (7BA1)                  ;
+9D81	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
 9D84	D9                SHL                               ;
 9D85	5A 7B             LDI	    YL,7B                   ;
 9D87	81 03             BCR+      BRANCH_9D8C             ;
@@ -3756,28 +3823,29 @@ BRANCH_9D9D: ; branched to from 9DA1
 
 BRANCH_9DA3: ; branched to from 9D99
 9DA3	FD 1A             POP	    Y                       ;
-9DA5	A5 7B A1          LDA	    (7BA1)                  ;
+9DA5	A5 7B A1          LDA	    (OUT_BUF  + 41)         
 9DA8	D9                SHL                               ;
 9DA9	87 40             BHS+      BRANCH_9DEB             ;
 9DAB	D9                SHL                               ;
 9DAC	87 32             BHS+      BRANCH_9DE0             ;
 9DAE	D9                SHL                               ;
 9DAF	87 17             BHS+      BRANCH_9DC8             ;
-9DB1	F4 7B 92          VEJ	    (F4),(7B92)             ; Loads U-Reg with 16-bit value from address of (pp)
+9DB1	F4 7B 92          VEJ	    (F4),(OUT_BUF + 32)     ; Loads U-Reg with 16-bit value from address of (pp)
 9DB4	FD 28             LDX       U                       ; X = U
-9DB6	F4 7B 77          VEJ	    (F4),(7B77)             ; Loads U-Reg with 16-bit value from address of (pp)
-9DB9	BE DF E2          SJP	    SUB85                   ;
+9DB6	F4 7B 77          VEJ	    (F4),(OUT_BUF + 17)     ; Loads U-Reg with 16-bit value from address of (pp)
+9DB9	BE DF E2          SJP	    U_MINUS_X               ;
 9DBC	81 31             BCR+      BRANCH_9DEF             ;
-9DBE	F4 7B 75          VEJ	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
+9DBE	F4 7B 75          VEJ	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
 
 BRANCH_9DC1: ; branched to from 9DD4, 9DDE
 9DC1	FD 28             LDX       U                       ; X = U
-9DC3	F4 7B 92          VEJ	    (F4),(7B92)             ; Loads U-Reg with 16-bit value from address of (pp)
+9DC3	F4 7B 92          VEJ	    (F4),(OUT_BUF + 32)     ; Loads U-Reg with 16-bit value from address of (pp)
 9DC6	F9                REC                               ; Reset Carry
 9DC7	9A                RTN                               ;
 
+
 BRANCH_9DC8: ; branched to from 9DAF
-9DC8	F4 7B 79          VEJ	    (F4),(7B79)             ; Loads U-Reg with 16-bit value from address of (pp)
+9DC8	F4 7B 79          VEJ	    (F4),(OUT_BUF + 19)     ; Loads U-Reg with 16-bit value from address of (pp)
 9DCB	26                CPA	    UL                      ;
 9DCC	89 08             BZR+      BRANCH_9DD6             ;
 9DCE	DD                INC	    A                       ;
@@ -3785,20 +3853,23 @@ BRANCH_9DC8: ; branched to from 9DAF
 9DD1	F4 7B 90          VEJ	    (F4),(7B90)             ; Loads U-Reg with 16-bit value from address of (pp)
 9DD4	9E 15             BCH-	    BRANCH_9DC1             ;
 
+
 BRANCH_9DD6: ; branched to from 9DCC, 9DCF
 9DD6	EB 7B 94 FF       ORI	    (7B94),FF               ;
 9DDA	EB 7B 95 FF       ORI	    (7B95),FF               ;
 9DDE	9E 1F             BCH-	    BRANCH_9DC1             ;
 
+
 BRANCH_9DE0: ; branched to from 9DAC
-9DE0	F4 7B 75          VEJ	    (F4),(7B75)             ; Loads U-Reg with 16-bit value from address of (pp)
-9DE3	F6 78 69          VEJ	    (F6),(MERGEBASIC)       ; Transfers U to pp, pp+1
-9DE6	F6 78 67          VEJ	    (F6),(ENDBASIC)         ; Transfers U to pp, pp+1
+9DE0	F4 7B 75          VEJ	    (F4),(OUT_BUF + 15)     ; Loads U-Reg with 16-bit value from address of (pp)
+9DE3	F6 78 69          VEJ	    (F6),(BASPRG_EDT_H)     ; Transfers U to Start of Basic program edit (H)
+9DE6	F6 78 67          VEJ	    (F6),(BASPRG_END_H)     ; Transfers U to End of Basic program in RAM (H)
 9DE9	6B FF             ORI	    (U),FF                  ;
 
 BRANCH_9DEB: ; branched to from 9DA9
 9DEB	F9                REC                               ; Reset Carry
 9DEC	9A                RTN                               ;
+
 
 BRANCH_9DED: ; branched to from 9D94, 9D9F
 9DED	FD 1A             POP	    Y                       ;
@@ -3818,23 +3889,23 @@ BRANCH_9DF0: ; branched to from 9D79
 ; Output:
 ; RegMod:
 SUB_9DF1:
-9DF1	CD 36             VMJ	    (36)                    ; Unconditional Indexed Vectored Call. HB = $FF, LB =  n ($00-$F6) unknown # of subs
-9DF3	83 28             BCS+      SUB_9E1D                ;
+9DF1	CD 36             VMJ	    (36)                    ; Stores CSI of a text/text var in AR-X (C=1). If no string in Y-Reg, C=0.
+9DF3	83 28             BCS+      BRANCH_9E1D                ; no idea
 9DF5	FD 88             PSH	    X                       ;
 9DF7	5A 62             LDI	    YL,62                   ;
-9DF9	58 7B             LDI	    YH,7B                   ; Y = 7B62
+9DF9	58 7B             LDI	    YH,7B                   ; Y = 7B62, OUT_BUF + 2
 9DFB	6A 15             LDI	    UL,15                   ;
 
-SUB_9DFD: ; called from 9E38, 9E3E
+BRANCH_9DFD: ; called from 9E38, 9E3E
 9DFD	B5 00             LDI	    A,00                    ;
 
-SUB_9DFF: ; called from 9E00
+BRANCH_9DFF: ; called from 9E00
 9DFF	51                SIN	    Y                       ; (Y) = A. Then Y = Y + 1
-9E00	88 03             LOP	    UL,SUB_9DFF             ; UL = UL - 1, loop back 'e' if Borrow Flag not set
+9E00	88 03             LOP	    UL,BRANCH_9DFF          ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 9E02	5A 60             LDI	    YL,60                   ;
 9E04	B5 01             LDI	    A,01                    ;
 9E06	51                SIN	    Y                       ; (Y) = A. Then Y = Y + 1
-9E07	A5 7B A1          LDA	    (7BA1)                  ;
+9E07	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
 9E0A	B9 4F             ANI	    A,4F                    ;
 9E0C	BB 40             ORI	    A,40                    ;
 9E0E	51                SIN	    Y                       ; (Y) = A. Then Y = Y + 1
@@ -3845,53 +3916,56 @@ SUB_9DFF: ; called from 9E00
 9E15	B5 4D             LDI	    A,4D                    ;
 9E17	51                SIN	    Y                       ; (Y) = A. Then Y = Y + 1
 9E18	FD 1A             POP	    Y                       ;
-9E1A	BA 9B 99          JMP	    BRANCH_9B99             ;
+9E1A	BA 9B 99          JMP	    SUB_9B99                ; no idea
 
-SUB_9E1D: ; called from 9DF3
+
+BRANCH_9E1D: ; called from 9DF3
 9E1D	FD 98             PSH	    Y                       ;
 9E1F	5A 65             LDI	    YL,65                   ;
-9E21	58 7B             LDI	    YH,7B                   ; Y = 7B65
+9E21	58 7B             LDI	    YH,7B                   ; Y = OUT_BUF + 5
 9E23	DC                VEJ       (DC)                    ; Loads CSI from AR-X: Address by X-Reg length by UL & accumulator CSI = 'Character String Information', 
 9E24	B7 10             CPI	    A,10                    ;
-9E26	81 02             BCR+      SUB_9E2A                ;
+9E26	81 02             BCR+      BRANCH_9E2A             ;
 9E28	B5 10             LDI	    A,10                    ;
 
-SUB_9E2A: ; called from 9E26
+BRANCH_9E2A: ; called from 9E26
 9E2A	2A                STA	    UL                      ;
-9E2B	8E 01             BCH+	    SUB_9E2E                ;
+9E2B	8E 01             BCH+	    BRANCH_9E2E             ;
 
-SUB_9E2D: ; called from 9E2E
-9E2D	F5                TIN                               ;(Y) = (X) then X = X + 1, Y = Y + 1
 
-SUB_9E2E: ; called from 9E28
-9E2E	88 03             LOP	    UL,SUB_9E2D             ;
+BRANCH_9E2D: ; called from 9E2E
+9E2D	F5                TIN                               ; (Y) = (X) then X = X + 1, Y = Y + 1
+
+BRANCH_9E2E: ; called from 9E28
+9E2E	88 03             LOP	    UL,BRANCH_9E2D          ;
 9E30	6A 05             LDI	    UL,05                   ;
 9E32	B5 0F             LDI	    A,0F                    ;
 9E34	FB                SEC                               ;
-9E35	A1 7A 07          SBC	    (7A07)                  ;
-9E38	91 3D             BCR-      SUB_9DFD                ;
+9E35	A1 7A 07          SBC	    (ARX + 7)               ;
+9E38	91 3D             BCR-      BRANCH_9DFD             ;
 9E3A	22                ADC	    UL                      ;
 9E3B	2A                STA	    UL                      ;
-9E3C	9E 41             BCH-	    SUB_9DFD                ;
+9E3C	9E 41             BCH-	    BRANCH_9DFD             ;
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB9E3E, SUB_9E47 - Called from
-; 
+; SUB_9E3E - Called from 9607
+; SUB_9E47 - Called from called from 9639
 ; Arguments:
 ; Output:
 ; RegMod:
-SUB_9E3E: ; CAlled from 9607
-9E3E	A5 7B A1          LDA	    (7BA1)                  ;
+SUB_9E3E:
+9E3E	A5 7B A1          LDA	    (OUT_BUF  + 41)         ;
 9E41	D9                SHL                               ;
 9E42	81 2F             BCR+      BRANCH_9E73             ;
 9E44	D9                SHL                               ;
-9E45	8D 05             BVR+      BRANCHB_9E45            ;
+9E45	8D 05             BVR+      BRANCH_9E4C             ;
 
-SUB_9E47: ; called from 9639
+SUB_9E47: 
 9E47	B5 37             LDI	    A,37                    ;
-9E49	BA 82 3A          JMP	    UNKNOWN_823A            ;
+9E49	BA 82 3A          JMP	    SUB_823A                ; Sends charecter in A to RS232 Port.
+
 
 BRANCH_9E4C: ; called from 9E45
 9E4C	68 37             LDI	    UH,37                   ;
@@ -3899,7 +3973,13 @@ BRANCH_9E4C: ; called from 9E45
 9E50	68 2D             LDI	    UH,2D                   ;
 9E52	8E 06             BCH+ 	    BRANCH_9E5A             ;
 
-SUB_9E54: ; called from 9B03
+
+;------------------------------------------------------------------------------------------------------------
+; SUB_9E54 - called from 9B03
+; Arguments:
+; Output:
+; RegMod:
+SUB_9E54: 
 9E54	68 03             LDI	    UH,03                   ;
 9E56	8E 02             BCH+ 	    BRANCH_9E5A             ;
 9E58	68 02             LDI	    UH,02                   ;
@@ -3912,7 +3992,8 @@ BRANCH_9E5A: ; branched to from 9E4E, 9E52, 9E56
 9E62	B7 2D             CPI	    A,2D                    ;
 9E64	F9                REC                               ; Reset Carry
 9E65	8B 0C             BZS+      BRANCH_9E73             ;
-9E67	BA 9C 48          JMP	    SUB_9C48                ;
+9E67	BA 9C 48          JMP	    SUB_9C48                ; no idea
+
 
 BRANCH_9E6A: ; branched to from 9E60
 9E6A	68 3B             LDI	    UH,3B                   ;
@@ -3923,6 +4004,7 @@ BRANCH_9E6A: ; branched to from 9E60
 
 BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 9E73	9A                RTN                               ;
+
 
 
 SEPARATOR_9E74:
