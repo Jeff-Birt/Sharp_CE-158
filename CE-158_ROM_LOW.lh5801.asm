@@ -1245,7 +1245,7 @@ BRANCH_902F: ; branched to from 9031                            ; LLIST 906A=5E 
 
 9043	8B 09             BZS+      BRANCH_904E                 ; 1st byte in table does not match SETDEV mode
 9045	BE 93 CB          SJP	    BRANCH_93CB                 ; Compares C0 to (BASIC_EXT_TBL)
-9048	AE 7B 9E          STA	    (OUT_BUF + 3E)                      ; A=C0, set in BRANCH_93CB, (79BE) in OUTPUT_BUFFER
+9048	AE 7B 9E          STA	    (OUT_BUF + 3E)              ; A=C0, set in BRANCH_93CB, (79BE) in OUTPUT_BUFFER
 904B	44                INC	    X                           ; skip three bytes in table if in SETDEV mode
 904C	44                INC	    X                           ; use 1st three bytes if mode does not match
 904D	44                INC	    X                           ; yse 2nd three bytes if mode does match
