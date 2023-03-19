@@ -1,0 +1,2 @@
+lhDump -o CE-150.asm -F CE-150.ROM.frag CE-150.ROM
+
