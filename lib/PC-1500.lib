@@ -1,7 +1,7 @@
  ; PC-1500 library file
-RAM_ST            = $4000 ; Start of RAM w/o RAM expansion
-RESMEM_ST         = $4008 ; Reserve memroy area area w/o RAM expansion (4008-40C4)
-PRGMEM_ST         = $40C5 ; Start of program memory w/o RAM expansion
+;RAM_ST            = $4000 ; Start of RAM w/o RAM expansion
+;RESMEM_ST         = $4008 ; Reserve memroy area area w/o RAM expansion (4008-40C4)
+;PRGMEM_ST         = $40C5 ; Start of program memory w/o RAM expansion
 SHADOW_RAM        = $7000 ; Shadow of RAM from (4000-45FF?)
 SHADOW_RAM_SIZE   = $0600 ; 
 DISP_BUFF         = $7600 ; Display Buffer (7600-774F)

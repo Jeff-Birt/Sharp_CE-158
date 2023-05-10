@@ -1,36 +1,13 @@
 ; CE-158_ROM_LOW.lh5801.asm
 ; Low Bank of Sharp CE-158 RS232/LPT interface
 
-#INCLUDE    "PC-1500.lib"
-#INCLUDE    "CE-158.lib"
+#INCLUDE    "lib/PC-1500.lib"
+#INCLUDE    "lib/CE-158.lib"
+#INCLUDE    "lib/PC-1500_Macros.lib"
 
-#define EQU .EQU
+;#DEFINE REDIREXIT
 
-;------------------------------------------------------------------------------------------------------------
-; Assembly macros used to encode arguments for lh5801 'macros' that take arguments inline after CALL
-COMMA:      EQU $2C                     ; ',' used for macros
-DASH:       EQU $2D                     ; '-' used for macros
-HASH:       EQU $23                     ; '#' used for macros
-SEMI:       EQU $3B                     ; ';' used for macros
-QUOTE:      EQU $22                     ; '-' used for macros
-DOLLAR:     EQU $24                     ; '#' used for macros
-PERCENT:    EQU $25                     ; ';' used for macros
-
-
-TOK_OFF:    EQU $F19E                   ; OFF   command token
-TOK_ON:     EQU $F19C                   ; ON    command token
-TOK_TAB:    EQU $F0BB                   ; TAB   command token
-TOK_USING:  EQU $F085                   ; USING command token
-
-
-#define ABRF(n8)      .BYTE n8 - $ - 1  ; calculate forward branch
-#define ABYT(n8)      .BYTE n8          ; use byte verbatium
-#define ACHR(ch)      .BYTE ch          ; character
-#define AWRD(n16)     .WORD n16         ; use word value verbatum
-
-.MSFIRST
 .ORG $8000
-
 
 ;------------------------------------------------------------------------------------------------------------
 ; BASIC Command Table 8000
@@ -57,27 +34,27 @@ B_TBL_8000_JMPS:
     .BYTE $9A,$9A,$9A,$9A,$9A,$9A,$9A,$9A,$9A,$9A       ; Unused jumps                 
 
 B_TBL_8000_TRACE:
-    VEJ (C4)                                            ; is correct per the book
-            ABYT($AF)                                   ;
+    VEJ (C4) \                                          ; is correct per the book
+            ABYT($AF) \                                 ;
             ABRF($811F)                                 ; Forward branch to label   
 
 B_TBL_8000_A_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_B_KW:
-    .WORD   $8056                                       ; $8056
+    .WORD   LET_B                                       ; $8056
 
 B_TBL_8000_C_KW:
-    .WORD   $8060                                       ; $8060
+    .WORD   LET_C                                       ; $8060
 
 B_TBL_8000_D_KW:
-    .WORD   $8089                                       ; $8089
+    .WORD   LET_D                                       ; $8089
 
 B_TBL_8000_E_KW:
-    .WORD   $809A                                       ; $809A
+    .WORD   LET_E                                       ; $809A
 
 B_TBL_8000_F_KW:
-    .WORD   $80AA                                       ; $80AA
+    .WORD   LET_F                                       ; $80AA
 
 B_TBL_8000_G_KW:
     .WORD   $0000                                       ;
@@ -86,7 +63,7 @@ B_TBL_8000_H_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_I_KW:
-    .WORD   $80B3                                       ; $80B3
+    .WORD   LET_I                                       ; $80B3
 
 B_TBL_8000_J_KW:
     .WORD   $0000                                       ;
@@ -95,31 +72,31 @@ B_TBL_8000_K_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_L_KW:
-    .WORD   $80C8                                       ; $80C8
+    .WORD   LET_L                                       ; $80C8
 
 B_TBL_8000_M_KW:
-    .WORD   $80DD                                       ; $80DD
+    .WORD   LET_M                                       ; $80DD
 
 B_TBL_8000_N_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_O_KW:
-    .WORD   $80E7                                       ; $80E7
+    .WORD   LET_O                                       ; $80E7
 
 B_TBL_8000_P_KW:
-    .WORD   $80F3                                       ; $80F3
+    .WORD   LET_P                                       ; $80F3
 
 B_TBL_8000_Q_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_R_KW:
-    .WORD   $810A                                       ; $810A
+    .WORD   LET_R                                       ; $810A
 
 B_TBL_8000_S_KW:
-    .WORD   $8116                                       ; $8116
+    .WORD   LET_S                                       ; $8116
 
 B_TBL_8000_T_KW:
-    .WORD   $8137                                       ; $8137
+    .WORD   LET_T                                       ; $8137
 
 B_TBL_8000_U_KW:
     .WORD   $0000                                       ;
@@ -137,45 +114,90 @@ B_TBL_8000_Y_KW:
     .WORD   $0000                                       ;
 
 B_TBL_8000_Z_KW:
-    .WORD   $8159                                       ; $8159
+    .WORD   LET_Z                                       ; $8159
 
-B_TBL_8000_CMD_LST:     ;Command           Token  Address
-    .BYTE	$B5 \ .TEXT "BREAK"    \ .WORD $F0B3, $CD89 ; $CD89 - Basic command P___/STEP/OFF/OR/ERROR/AND/THEN/TO
-    .BYTE   $B5 \ .TEXT "CLOAD"    \ .WORD $F089, $82EC ; $82EC - MAIN_ENTRY
-    .BYTE   $C5 \ .TEXT "CSAVE"    \ .WORD $F095, $82DD ; $82DD - Drops through to MAIN_ENTRY
-    .BYTE   $C4 \ .TEXT "COM$"     \ .WORD $E858, $82D3 ; $82D3 - Drops through to MAIN_ENTRY
-    .BYTE   $C7 \ .TEXT "CONSOLE"  \ .WORD $F0B1, $82DE ; $82DE - Drops through to MAIN_ENTRY      
-    .BYTE   $D4 \ .TEXT "DEV$"     \ .WORD $E857, $82D4 ; $82D4 - Drops through to MAIN_ENTRY 
-    .BYTE   $C3 \ .TEXT "DTE"      \ .WORD $E884, $82D1 ; $82D1 - Drops through to MAIN_ENTRY
-    .BYTE   $D3 \ .TEXT "ERN"      \ .WORD $F052, $82DF ; $82DF - Drops through to MAIN_ENTRY 
-    .BYTE   $C3 \ .TEXT "ERL"      \ .WORD $F053, $82E0 ; $82E0 - Drops through to MAIN_ENTRY
-    .BYTE   $D4 \ .TEXT "FEED"     \ .WORD $F0B0, $82E1 ; $82E1 - Drops through to MAIN_ENTRY 
-    .BYTE   $D5 \ .TEXT "INPUT"    \ .WORD $F091, $82E2 ; $82E2 - Drops through to MAIN_ENTRY 
-    .BYTE   $C6 \ .TEXT "INSTAT"   \ .WORD $E859, $82E3 ; $82E3 - Drops through to MAIN_ENTRY
-    .BYTE   $D6 \ .TEXT "LPRINT"   \ .WORD $F0B9, $82E4 ; $82E4 - Drops through to MAIN_ENTRY
-    .BYTE   $C5 \ .TEXT "LLIST"    \ .WORD $F0B8, $82E5 ; $82E5 - Drops through to MAIN_ENTRY 
-    .BYTE   $D5 \ .TEXT "MERGE"    \ .WORD $F08F, $82C0 ; $82C0 - Sets XL=F0, branches to MAIN_ENTRY
-    .BYTE   $97 \ .TEXT "OUTSTAT"  \ .WORD $E880, $82E6 ; $82E6 - Drops through to MAIN_ENTRY
-    .BYTE   $C5 \ .TEXT "PRINT"    \ .WORD $F097, $82E7 ; $82E7 - Drops through to MAIN_ENTRY
-    .BYTE   $C8 \ .TEXT "PROTOCOL" \ .WORD $E881, $82E8 ; $82E8 - Drops through to MAIN_ENTRY
-    .BYTE   $D7 \ .TEXT "RINKEY$"  \ .WORD $E85A, $82E9 ; $82E9 - Drops through to MAIN_ENTRY 
-    .BYTE   $D6 \ .TEXT "SETCOM"   \ .WORD $E882, $82D6 ; $82D6 - Drops through to MAIN_ENTRY
-    .BYTE   $C6 \ .TEXT "SETDEV"   \ .WORD $E886, $82D5 ; $82D5 - Drops through to MAIN_ENTRY  
-    .BYTE   $C6 \ .TEXT "SPACE$"   \ .WORD $F061, $82EA ; $82EA - Drops through to MAIN_ENTRY 
-    .BYTE   $B8 \ .TEXT "TERMINAL" \ .WORD $E883, $82D2 ; $82D2 - Drops through to MAIN_ENTRY 
-    .BYTE   $C8 \ .TEXT "TRANSMIT" \ .WORD $E885, $82D7 ; $82D7 - Drops through to MAIN_ENTRY
-    .BYTE   $C3 \ .TEXT "TAB"      \ .WORD $F0BB, $880D ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
-    .BYTE   $D4 \ .TEXT "ZONE"     \ .WORD $F0B4, $82EB ; $82EB - Drops through to MAIN_ENTRY 
+B_TBL_8000_CMD_LST:     ;Token LB < 80 command is function, else is proceedure
+;Ctrl nibble    Ctrl nib calc            Name              Token  Vector
+LET_B: EQU ($ + 2) ; First keyword starting with 'B'. LET_B = Address of 'R' in BREAK
+#IFNDEF REDIREXIT
+CN1:   EQU $B5 \ CNIB($B5,CN1)   \ .TEXT "BREAK"   \ .WORD $F0B3, $CD89         ; $CD89 - Basic command P
+#ENDIF
+#IFDEF REDIREXIT
+CN1:   EQU $A5 \ CNIB($A5,CN1)   \ .TEXT "BREAK"   \ .WORD $F0B3, $CD89         ; $CD89 - Basic command P
+#ENDIF
+
+#IFDEF REDIREXIT
+CN2_2: EQU $C3 \ CNIB(CN1,CN2_2) \ .TEXT "BPD"     \ .WORD $E887, BPD_8888      ; 
+#ENDIF
+    
+LET_C: EQU ($ + 2) ; First keyword starting with 'C'. LET_C = Address of 'L' in BREAK
+#IFDEF REDIREXIT
+CN2:  EQU $C5 \ CNIB(CN2_2,CN2) \ .TEXT "CLOAD"    \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
+#ENDIF
+#IFNDEF REDIREXIT
+CN2:  EQU $C5 \ CNIB(CN1,CN2)   \ .TEXT "CLOAD"    \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
+#ENDIF
+
+CN3:  EQU $C5 \ CNIB(CN2,CN3)   \ .TEXT "CSAVE"    \ .WORD $F095, CSAVE_V       ; $82DD - Drops through to MAIN_ENTRY
+CN4:  EQU $C4 \ CNIB(CN3,CN4)   \ .TEXT "COM$"     \ .WORD $E858, COM_STR_V     ; $82D3 - Drops through to MAIN_ENTRY
+CN5:  EQU $D7 \ CNIB(CN4,CN5)   \ .TEXT "CONSOLE"  \ .WORD $F0B1, CONSOLE_V     ; $82DE - Drops through to MAIN_ENTRY
+
+LET_D: EQU ($ + 2) ; First keyword starting with 'D'. LET_D = Address of 'E' in DEV$
+CN6:  EQU $C4 \ CNIB(CN5,CN6)   \ .TEXT "DEV$"     \ .WORD $E857, DEV_STR_V     ; $82D4 - Drops through to MAIN_ENTRY
+CN7:  EQU $D3 \ CNIB(CN6,CN7)   \ .TEXT "DTE"      \ .WORD $E884, DTE_V         ; $82D1 - Drops through to MAIN_ENTRY
+
+LET_E: EQU ($ + 2) ; First keyword starting with 'E'. LET_E = Address of 'R' in ERN
+CN8:  EQU $C3 \ CNIB(CN7,CN8)   \ .TEXT "ERN"      \ .WORD $F052, ERN_V         ; $82DF - Drops through to MAIN_ENTRY
+CN9:  EQU $D3 \ CNIB(CN8,CN9)   \ .TEXT "ERL"      \ .WORD $F053, ERL_V         ; $82E0 - Drops through to MAIN_ENTRY
+
+LET_F: EQU ($ + 2) ; First keyword starting with 'F'. LET_F = Address of 'E' in FEED
+CN10: EQU $D4 \ CNIB(CN9,CN10)  \ .TEXT "FEED"     \ .WORD $F0B0, FEED_V        ; $82E1 - Drops through to MAIN_ENTRY
+
+LET_I: EQU ($ + 2) ; First keyword starting with 'I'. LET_I = Address of 'N' in INPUT
+CN11: EQU $C5 \ CNIB(CN10,CN11) \ .TEXT "INPUT"    \ .WORD $F091, INPUT_V       ; $82E2 - Drops through to MAIN_ENTRY
+CN12: EQU $D6 \ CNIB(CN11,CN12) \ .TEXT "INSTAT"   \ .WORD $E859, INSTAT_V      ; $82E3 - Drops through to MAIN_ENTRY
+
+LET_L: EQU ($ + 2) ; First keyword starting with 'L'. LET_L = Address of 'P' in LPRINT
+CN13: EQU $C6 \ CNIB(CN12,CN13) \ .TEXT "LPRINT"   \ .WORD $F0B9, LPRINT_V      ; $82E4 - Drops through to MAIN_ENTRY
+CN14: EQU $D5 \ CNIB(CN13,CN14) \ .TEXT "LLIST"    \ .WORD $F0B8, LLIST_V       ; $82E5 - Drops through to MAIN_ENTRY
+
+LET_M: EQU ($ + 2) ; First keyword starting with 'M'. LET_M = Address of 'E' in MERGE
+CN15: EQU $95 \ CNIB(CN14,CN15) \ .TEXT "MERGE"    \ .WORD $F08F, MERGE_V       ; $82C0 - Sets XL=F0, branches to MAIN_ENTRY
+
+LET_O: EQU ($ + 2) ; First keyword starting with 'O'. LET_O = Address of 'U' in OUTSTAT
+CN16: EQU $C7 \ CNIB(CN15,CN16) \ .TEXT "OUTSTAT"  \ .WORD $E880, OUTSTAT_V     ; $82E6 - Drops through to MAIN_ENTRY
+
+LET_P: EQU ($ + 2) ; First keyword starting with 'P'. LET_P = Address of 'R' in PRINT
+CN17: EQU $C5 \ CNIB(CN16,CN17) \ .TEXT "PRINT"    \ .WORD $F097, PRINT_V       ; $82E7 - Drops through to MAIN_ENTRY
+CN18: EQU $D8 \ CNIB(CN17,CN18) \ .TEXT "PROTOCOL" \ .WORD $E881, PROTOCOL_V    ; $82E8 - Drops through to MAIN_ENTRY
+
+LET_R: EQU ($ + 2) ; First keyword starting with 'R'. LET_R = Address of 'I' in RINKY$
+CN19: EQU $D7 \ CNIB(CN18,CN19) \ .TEXT "RINKEY$"  \ .WORD $E85A, RINKEY_STR_V  ; $82E9 - Drops through to MAIN_ENTRY
+
+LET_S: EQU ($ + 2) ; First keyword starting with 'S'. LET_S = Address of 'E' in SETCOM
+CN20: EQU $C6 \ CNIB(CN19,CN20) \ .TEXT "SETCOM"   \ .WORD $E882, SETCOM_V      ; $82D6 - Drops through to MAIN_ENTRY
+CN21: EQU $C6 \ CNIB(CN20,CN21) \ .TEXT "SETDEV"   \ .WORD $E886, SETDEV_V      ; $82D5 - Drops through to MAIN_ENTRY
+CN22: EQU $B6 \ CNIB(CN21,CN22) \ .TEXT "SPACE$"   \ .WORD $F061, SPACE_STR_V   ; $82EA - Drops through to MAIN_ENTRY
+
+LET_T: EQU ($ + 2) ; First keyword starting with 'T'. LET_T = Address of 'E' in TERMINAL
+CN23: EQU $C8 \ CNIB(CN22,CN23) \ .TEXT "TERMINAL" \ .WORD $E883, TERMINAL_V    ; $82D2 - Drops through to MAIN_ENTRY
+CN24: EQU $C8 \ CNIB(CN23,CN24) \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V    ; $82D7 - Drops through to MAIN_ENTRY
+CN25: EQU $D3 \ CNIB(CN24,CN25) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
+
+LET_Z: EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
+CN26: EQU $D4 \ CNIB(CN25,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
+CN27: EQU $D0 \ .BYTE CN27
 
 B_TBL_8000_END:
-    .BYTE   $D0 
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; Unused address range 8161-8168
+#IFNDEF REDIREXIT
 SEPARATOR_8161:
-    .BYTE   $DF,$00,$FF,$00,$FF,$00,$CB,$00 ; FF 00 - Used as seperator / space filler
+     .BYTE   $DF,$00,$FF,$00,$FF,$00,$CB,$00 ; - Used as seperator / space filler
+#ENDIF
 
 
 
@@ -186,7 +208,7 @@ SEPARATOR_8161:
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
-CHAR2LPT:
+CHAR2LPT: ; 8169
     PSH	    A                               ; A is the ASCII charecter from input buffer?
     LDI	    A,$7F                           ; 
     STA     #(CE158_PRT_B_DIR)              ; Bit 7 Read (BUSY), (ME1)
@@ -285,7 +307,7 @@ RXCOM:
     AND     #(CE158_PRT_A)                  ; Filter out changes
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
-    LDA     #(CE158_UART_REGR)            ; UART status register
+    LDA     #(CE158_UART_REGR)              ; UART status register
     BII	    (SETDEV_REG),$40                ; Test Bit6 
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_81FD                     ; If TSRE not set branch fwd (last byte not done)
@@ -328,7 +350,7 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF
 
 BRANCH_8230: ; Branched to from 81F0
     PSH	    A                               ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
-    LDA     #(CE158_UART_DATAR)            ; A = Data read from UART (ME1), clear Rx register
+    LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register
     SEC                                     ; SEC = Failure
 
 BRANCH_8237: ; Branched to from 824A to borrow return
@@ -485,10 +507,10 @@ DTE_V:
 TERMINAL_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-COM_STR:
+COM_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-DEV_STR:
+DEV_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 SETDEV_V:
@@ -500,16 +522,16 @@ SETCOM_V:
 TRANSMIT_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-CONSOLE_2:
+CONSOLE_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-FEED_2:
+FEED_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LPRINT_2:
+LPRINT_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LLIST_2:
+LLIST_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
     REC                                     ; Reset Carry Flag, does nothing drop through
 
@@ -549,10 +571,10 @@ PRINT_V:
 PROTOCOL_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-RINKEY_STR:
+RINKEY_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-SPACE_STR:
+SPACE_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 ZONE_V:
@@ -562,14 +584,14 @@ ZONE_V:
 
 ;------------------------------------------------------------------------------------------------------------
 ; MAIN_ENTRY - Called from 82BE, 82C3, 82C7, 82CB, 82CF ***JMP : Uses a calculated jump
-; Arguments: XL = INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF, MERGE=F0
+; Arguments: X=Vector of address of BASIC table vector, XL=INIT=D0, INPUT#=ED,PRINT#=EE, PRINT#2=EF, MERGE=F0
 ; Outputs:
 ; RegMod: U, A, X
 MAIN_ENTRY: ;82EC
     RIE                                     ; Disable interrupts
-    ANI     (OUTSTAT_REG),$F7               ; Clear Bit 3 = DCD
-    LDI	    UH,$7A                          ; Point U to ARW
-    LDI	    UL,$28                          ; U = 7A28 = ARW
+    ANI     (OUTSTAT_REG),$F7               ; Clear Bit 3 = DCD (opposite of high bank)
+    LDI	    UH,HB(ARW)                      ; Point U to ARW
+    LDI	    UL,LB(ARW)                      ; U = 7A28 = ARW
     LDI	    A,$E1                           ; Intialize $7A28-$7A31 to: 
     SIN     U                               ; $E1 $BA $82 $F0 ->
     LDI	    A,$BA                           ; SPU, JMP $82F0
@@ -597,7 +619,7 @@ BRANCH_8302:
 ; "LPRINT"    F0B9    (9056)  Low   "PRINT#"    NNNN    (93D0)  Low
 ; "LLIST"     F0B8    (901D)  Low   "PRINT#2"   NNNN    (93D4)  Low
  
-BACK_FROM_HI_BANK:                          ; High bank jumps back here for the above commands
+BACK_FROM_HI_BANK: ; 8305                   ; High bank jumps back here for the above commands
     SIE                                     ; X = new address passed from high bank
     STX     P                               ; Jump to address by poking program counter ***JMP
 
@@ -611,8 +633,8 @@ BACK_FROM_HI_BANK:                          ; High bank jumps back here for the 
 ERL_F:
     VEJ     (F4)                            ; Loads U-Reg with 16-bit value from address of ($78B4)
                 AWRD(ERR_LINE_H)            ; 
-    LDI     XL,$6C                          ; X = DA6C? Inside BASIC command MEM
-    LDI     XH,$DA                          ; 
+    LDI     XL,LB($DA6C)                    ; X = DA6C? Inside BASIC command MEM
+    LDI     XH,HB($DA6C)                    ; 
     BCH 	BRANCH_8363                     ; Borrows exit of SPACE_STR__ZONE
 
 
@@ -680,12 +702,12 @@ BRANCH_8330: ;branched to from 8315
 ; Outputs:
 ; RegMod:
 OUTSTAT:
-    VEJ     (DE)                            ; Calc formula Y-reg points to, res to AR-X, Branch fwd to 8356 on error
+    VEJ     (DE)                            ; Calc formula Y-reg points to, result to AR-X, Branch fwd to 8356 on error
                 ABRF(BRANCH_8356)           ; Forward branch to label
     VEJ     (D0)                            ; Convert AR-X to INT send to U, range of 4, branch fwd to 8356 on error
                 ABYT($04)                   ; Low byte of address
                 ABRF(BRANCH_8356)           ; Forward branch to label
-    ANI	    (ARX + $06),$03                 ; keep bits 0-1
+    ANI	    (ARX + $06),$03                 ; keep bits 0-1 or argument
     LDA	    (OUTSTAT_REG)                   ;
     ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
     ORA     (ARX + $06)                     ; 
@@ -713,10 +735,10 @@ RINKY_STR:
     LDI	    A,$00                           ; 
 
 BRANCH_835E: ; branched to from 835A
-    LDI     XL,$AD                          ;
+    LDI     XL,LB($D9AD)                    ;
 
 BRANCH_8360: ; branched to from 8332
-    LDI     XH,$D9                          ; X = D9AD, inside INKEY$
+    LDI     XH,HB($D9AD)                    ; X = D9AD, inside INKEY$
     STA     UL                              ;
 
 BRANCH_8363: ;branched to from 8310
@@ -851,8 +873,8 @@ SPACE_STR__ZONE:
     CPI	    UL,$21                          ;
     LDI	    UH,$19                          ; U = 1921
     BCS     BRANCH_83F8                     ; If UL >= 33d branch fwd, out of range
-    LDI	    XL,$08                          ;
-    LDI	    XH,$7A                          ; X=7A08, ARZ
+    LDI	    XL,LB(ARZ)                      ;
+    LDI	    XH,HB(ARZ)                      ; X=7A08, ARZ
     LDA     UL                              ; UL is command's argument
     BZS     BRANCH_83F2                     ; If argument=0 branch fwd
     STA	    UH                              ; UH = argument (1-31d)
@@ -871,8 +893,8 @@ BRANCH_83F2: ;branched to from 83E6         ; Branch here if is argument = 0
     LDI	    UH,$00                          ;
 
 BRANCH_83F8: ;branched to from 83D8, 83DF, 83F2 ; Branched to if argument out of range
-    LDI	    XH,$80                          ; Setting the destination address for 840A
-    LDI	    XL,$13                          ; X=8013
+    LDI	    XH,HB($8013)                    ; Setting the destination address for 840A
+    LDI	    XL,LB($8013)                    ; X=8013
 
 BRANCH_83FC: ;branched to from 8363 RINKY$
     LDI 	A,$38                           ; Is this finding if this is OUTSTAT or CR/LF command?
@@ -990,8 +1012,8 @@ B_TBL_8800_JMPS:
     .BYTE $9A,$9A,$9A,$9A,$9A,$9A,$9A,$9A,$9A,$BA   ; 
 
 B_TBL_8800_TRACE:
-    VEJ     (C4)                            ; Correct per book. Not used?
-                ABYT($AF)                   ; Low byte of address
+    VEJ     (C4) \                          ; Correct per book. Not used?
+                ABYT($AF) \                 ; Low byte of address
                 ABRF($811F)                 ; Forward branch to label
 
 B_TBL_8800_A_KW:
@@ -1001,7 +1023,7 @@ B_TBL_8800_B_KW:
     .WORD   $0000                           ; 
 
 B_TBL_8800_C_KW:
-    .WORD   $8856                           ; 8856 
+    .WORD   LET_C2                          ; 8856 
 
 B_TBL_8800_D_KW:
     .WORD   $0000                           ; 
@@ -1010,10 +1032,10 @@ B_TBL_8800_E_KW:
     .WORD   $0000                           ; 
 
 B_TBL_8800_F_KW:
-    .WORD    $8862                          ; 8862
+    .WORD   LET_F2                          ; 8862
 
 B_TBL_8800_G_KW:
-    .WORD    $0000                          ; 
+    .WORD   $0000                           ; 
 
 B_TBL_8800_H_KW:
     .WORD   $0000                           ; 
@@ -1028,7 +1050,7 @@ B_TBL_8800_K_KW:
     .WORD   $0000                           ; 
 
 B_TBL_8800_L_KW:
-    .WORD   $886B                           ; 886B
+    .WORD   LET_L2                          ; 886B
 
 B_TBL_8800_M_KW:
     .WORD   $0000                           ; 
@@ -1052,7 +1074,7 @@ B_TBL_8800_S_KW:
     .WORD   $0000                           ; 
 
 B_TBL_8800_T_KW:
-    .WORD   $8880                           ; 8880
+    .WORD   LET_T2                          ; 8880
 
 B_TBL_8800_U_KW:
     .WORD   $0000                           ; 
@@ -1072,25 +1094,47 @@ B_TBL_8800_Y_KW:
 B_TBL_8800_Z_KW:
     .WORD   $0000                           ;  
 
-B_TBL_8800_CMD_LST:                      ; Token   Address   
-    .BYTE	$D7 \ .TEXT "CONSOLE"  \ .WORD $F0B1, $82D8 ; 82D8
-    .BYTE	$D4 \ .TEXT "FEED"     \ .WORD $F0B0, $82D9 ; 82D9 
-    .BYTE	$D6 \ .TEXT "LPRINT"   \ .WORD $F0B9, $82DA ; 82DA 
-    .BYTE	$C5 \ .TEXT "LLIST"    \ .WORD $F0B8, $82DB ; 82DB 
-    .BYTE	$D3 \ .TEXT "TAB"      \ .WORD $F0BB, $880D ; 880D 
+B_TBL_8800_CMD_LST:                      
+;                                        Token LB < 80 command is function, else is proceedure
+;Ctrl nibble    Ctrl nib calc            Name               Token  Vector
+LET_C2: EQU ($ + 2) ; First keyword starting with 'C'. LET_C2 = Address of 'O' in CONSOLE
+CN28: EQU $D7 \ CNIB($D7,CN28)  \ .TEXT "CONSOLE"  \ .WORD $F0B1, CONSOLE_2V; 82D8
+
+LET_F2: EQU ($ + 2) ; First keyword starting with 'F'. LET_F2= Address of 'E' in FEED
+CN29: EQU $D4 \ CNIB(CN28,CN29) \ .TEXT "FEED"     \ .WORD $F0B0, FEED_2V   ; 82D9
+
+LET_L2: EQU ($ + 2) ; First keyword starting with 'L'. LET_L2= Address of 'P' in LPRINT
+CN30: EQU $C6 \ CNIB(CN29,CN30) \ .TEXT "LPRINT"   \ .WORD $F0B9, LPRINT_2V ; 82DA
+CN31: EQU $D5 \ CNIB(CN30,CN31) \ .TEXT "LLIST"    \ .WORD $F0B8, LLIST_2V  ; 82DB 
+
+LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
+CN32: EQU $D3 \ CNIB(CN31,CN32) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM ; 880D
+CN33: EQU $D0 \ .BYTE CN33 
 
 
 B_TBL_8800_CMD_LST_END:
-    .BYTE $D0                     ; Why two D0s here and one in 8000 command list?
+.BYTE $D0
 
 
 ;------------------------------------------------------------------------------------------------------------
-; TABLE_8887
+; TABLE_8888
 ; Seems like nonsense that is not used
-TABLE_8887:
-    .BYTE $D0,$00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00 
-    .BYTE $FD,$82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00 
-    .BYTE $DF,$04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04 
+BPD_8888:
+
+#IFNDEF REDIREXIT
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD
+#ENDIF
+
+#IFDEF REDIREXIT
+    SJP	    TXT2STRBUF                      ; Copies string argument into string buffer
+    VEJ     (E2)                            ; Start of Basic Interpreter
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF;,$00,$FF,$00,$FD
+#ENDIF
+
+
+    ;.BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
+    .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
+    .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04 
     .BYTE $FF,$20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00 
     .BYTE $FB,$12,$EE,$00,$FF,$00,$FF,$28,$FB,$00,$AA,$00,$FF,$00,$FF,$00 
     .BYTE $77,$A8,$9F,$00,$FF,$00,$FF,$40,$D9,$14,$FF,$00,$FF,$00,$FF,$60 
@@ -1216,7 +1260,7 @@ TABLE_8887:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Output:
 ; RegMod:
-INPUT:
+INPUT: ;8FFF
     VEJ       (C2)                          ; If not an INPUT# skip ahead
                 ACHR(HASH)                  ; Character
                 ABRF(BRANCH_9025)           ; Forward branch to label     
@@ -1283,11 +1327,11 @@ MERGE:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; LLIST - Jumped to from 8307 via High Bank ***JMP - Does a calcualted jump
+; CLD_CSV_LPR - Jumped to from 8307 via High Bank ***JMP - Does a calcualted jump
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-LLIST: ; branched to from 905C, 905F (LPRINT X=9056, LLIST X=901D)
+CLD_CSV_LPR: ; branched to from 905C, 905F (LPRINT X=9056, LLIST X=901D)
     VEJ     (C0)                            ; Load next character/token to U-Reg
     LDI	    A,$04                           ; X = X + A + Carry
     ADR	    X                               ; LLIST=901D+04=9021, LPRINT=9018+04=901C, LPRINT=9019+04=901D
@@ -1306,11 +1350,13 @@ BRANCH_9025: ; branched to from 8FFF (INPUT X=9002)
     VEJ     (C6)                            ; DEC Y-Reg by 2 for tokens or 1 for chars in U-Reg
     LDA	    XL                              ; XL is low byte of Command address
     PSH	    A                               ; Original LB of X-REG
-    LDI	    UL,$09                          ; Loop counter
-    LDI	    UH,$7A                          ; U = 7A09 (ARZ + $01)
+    LDI	    UL,LB(ARZ + $01)                ; Loop counter
+    LDI	    UH,HB(ARZ)                      ; U = 7A09 (ARZ + $01)
     LDI	    XL,$6A                          ; XH = HB of command, XL=6A 
                                                                 
 BRANCH_902F: ; branched to from 9031        ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
+                                            ; CLOAD CD 3C      FD 28   68 1B        C9 E0      FD 5E   4F 41 44
+                                            ; 7A00  VMJ (3C) : LDX U : LDI UH,$1B : VZR (E0) : STX P :
                                             ; copied backwards 7A00-7A08, LPRINT 906A, **PRINT 906A, INPUT 8F6A**
     LDE	    X                               ; A = (X) then X = X - 1
     STA	    (U)                             ;
@@ -1323,7 +1369,7 @@ BRANCH_902F: ; branched to from 9031        ; LLIST 906A=5E FD E0 C9 1B 68 28 FD
     SHL                                     ; PRINT  10-1C=## C=# -> PRINT  ##<<3=#  C=#, PRINT  18-1C=## C=# -> PRINT  ##<<3=# C=#
     LDI	    XL,$6B                          ; INPUT  0A-1C=## C=# -> INPUT  ##<<3=#  C=#, INPUT  02-1C=## C=# -> INPUT  ##<<3=# C=#
     ADR	    X                               ; LLIST 9093 C=0, LPRINT(1C) 906B C=0, LPRINT(1D) 9073 C=0
-    LIN	    X                               ; LLIST A=4 -> X=9094, A = (X) then INC X
+    LIN	    X                               ; LLIST A=4 -> X=9094, A = (X) then INC X. Uses TABLE_906B 
     AND	    (SETDEV_REG)                    ; Clear bits based on A. A = A & X
                                             ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
 
@@ -1336,11 +1382,11 @@ BRANCH_902F: ; branched to from 9031        ; LLIST 906A=5E FD E0 C9 1B 68 28 FD
 
 BRANCH_904E: ; branched to from 9043
     LIN	    X                               ; A = (X) then INC X
-    STA	    UH                              ;
+    STA	    UH                              ; Uses TABLE_906B
     LIN	    X                               ; A = (X) then INC X
     STA	    UL                              ; LLIST U=B754, CE-150 LLIST function
     LDA	    (X)                             ; A = 58
-    JMP	    ARX                             ; ***JMP to what was poked in to ARX by $902F
+    JMP	    ARX                             ; (9053) ***JMP to what was poked in to ARX by $902F
 
 
 
@@ -1352,9 +1398,9 @@ BRANCH_904E: ; branched to from 9043
 LPRINT:
     LDI	    XL,$18                          ; X=$9018
     BII	    (ZONE_REG),$40                  ; Test for bit 6 set
-    BZS     LLIST                           ; If Bit 6 not set branch to LLIST, bit indicates?
+    BZS     CLD_CSV_LPR                     ; If Bit 6 not set branch to LLIST, bit indicates?
     INC	    XL                              ; XL = $19, X=$9019
-    BCH     LLIST                           ; Unconditional Branch to LLIST
+    BCH     CLD_CSV_LPR                     ; Unconditional Branch to LLIST
 
 
 ;-----------------------------------------------------------------------------------------------------------
@@ -1387,21 +1433,21 @@ TABLE_906B:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; UNKNOWN_SUB_90BB - Jumped to from 
-; Looks like a big, long parsing routine
+; CLOAD_SAVE_MERGE - Jumped to from 
+; Handles CLOAD, CSAVE and ??
 ; Arguments: 
 ; Outputs:
 ; RegMod:
-UNKNOWN_SUB_90BB:
-    LDI     A,$20                           ;
+CLOAD_SAVE_MERGE: ; $9081
+    LDI     A,$20                           ; $9081 - CSAVE entry
     BCH     BRANCH_90C5                     ;
-    LDI     A,$10                           ;
-    BCH     BRANCH_90C5                     ;
-    LDI     A,$00                           ;
+    LDI     A,$10                           ; $90BF - MERGE entry
+    BCH     BRANCH_90C5                     ; 
+    LDI     A,$00                           ; $90C3 - CLOAD entry
 
 BRANCH_90C5:
     STA     (OUT_BUF + $41)                 ;
-    LIN     Y                               ;
+    LIN     Y                               ; Next character in Input BUffer
     CPI     A,$E0                           ;
     BCS     BRANCH_90F0                     ;
     STA     UL                              ;
@@ -1449,7 +1495,7 @@ BRANCH_910D:
     VCR     ($E4)                           ; Output Error 1 and return to the editor
     LDA     (OUT_BUF + $41)                 ;
     SHR                                     ;
-    BCR     BRANCH_9129                    ;
+    BCR     BRANCH_9129                     ;
     VMJ     ($38)                           ; Determines reserve memory start address +8
     BCS     BRANCH_9124                     ;
     LDI     UH,$18                          ;
@@ -1535,12 +1581,12 @@ BRANCH_9187:
     STA     UL                              ;
     INC     X                               ;
     PSH     X                               ;
-    LDI     YL,$20                          ;
-    LDI     YH,$7A                          ; Y = $7A20 = ARV
+    LDI     YL,LB(ARV)                      ;
+    LDI     YH,HB(ARV)                      ; Y = $7A20 = ARV
     VMJ     ($10)                           ; Convert U-Reg according to data bytes, $40 = Save to (Y-Reg) in ASCII
                 ABYT($40)                   ; n1
-    LDI     XL,$1F                          ; ARU + 7
-    LDI     XH,$7A                          ; X = $7A1F ARU 7A18
+    LDI     XL,LB(ARU + $07)                ; ARU + 7
+    LDI     XH,HB(ARU)                      ; X = $7A1F ARU 7A18
     LDA     YL                              ;
     SEC                                     ;
     SBI     A,$21                           ;
@@ -1574,8 +1620,8 @@ BRANCH_91B5:
     BCH     BRANCH_9209                     ; 
 
 BRANCH_91C2:
-    LDI     XL,$08                          ; 
-    LDI     XH,$7A                          ; X = $7A08 = ARZ
+    LDI     XL,LB(ARZ)                      ; 
+    LDI     XH,HB(ARZ)                      ; X = $7A08 = ARZ
     PSH     Y                               ; 
     STX     Y                               ; 
     LDA     UH                              ; 
@@ -1673,7 +1719,7 @@ BRANCH_924B: ; branched to from 9244
     POP	    Y                               ;
 
 BRANCH_924D: ; branched to from 9259
-    JMP	    BRANCH_962B                     ;
+    JMP	    BRANCH_962B                     ; Maybe exit if not arg used, i.e. CLOAD not CLOAD "file"
 
 
 
@@ -1686,9 +1732,9 @@ BRANCH_924D: ; branched to from 9259
 SUB_9250:
     BII     (OUT_BUF + $41),$04             ; Is Bit3 set? In Output Buffer
     BZR     BRANCH_92BB                     ; If bit set branch
-    SJP     SUB_9D65                        ; Seems like it might have to do with MERGE
+    SJP     SUB_9D65                        ; Does CLOAD UART output
     BCS     BRANCH_924D                     ; Jumps to BRANCH_962B, looks at (OUT_BUF  + 41) and ??
-    SJP     BRANCH_9AA7                     ; No idea
+    SJP     BRANCH_9AA7                     ; Does UART Rx
     BCS     BRANCH_9263                     ;
     SJP     SUB_9E3E                        ; No idea
 
@@ -1781,8 +1827,8 @@ BRANCH_92C6: ; branched to from 92C2
     PSH	    Y                               ;
 
 BRANCH_92CE: ; branched to from 9317
-    LDI	    XL,$10                          ;
-    LDI	    XH,$7B                          ; X= 7B10 = STR_BUF
+    LDI	    XL,LB(STR_BUF)                  ;
+    LDI	    XH,HB(STR_BUF)                  ; X= 7B10 = STR_BUF
     LDI	    UL,$4F                          ;
     SJP     SUB_9AA5                        ; No idea
     BCS     SUB_934A                        ;
@@ -1855,10 +1901,10 @@ BRANCH_9334: ; branched to from 932F
 ; Output:
 ; RegMod:
 SUB_9337:
-    LDI	    XL,$10                          ;
-    LDI	    XH,$7B                          ; X = 7B10 = STR_BUF
-    LDI	    YL,$60                          ;
-    LDI	    YH,$7B                          ; Y = 7B60 = OUT_BUF
+    LDI	    XL,LB(STR_BUF)                  ;
+    LDI	    XH,HB(STR_BUF)                  ; X = 7B10 = STR_BUF
+    LDI	    YL,LB(OUT_BUF)                  ;
+    LDI	    YH,HB(OUT_BUF)                  ; Y = 7B60 = OUT_BUF
     LDI	    UL,$4F                          ;
 
 BRANCH_9341: ; branched to from 9347
@@ -2013,19 +2059,19 @@ SEPERATOR_93CF:
 
 ;------------------------------------------------------------------------------------------------------------
 ; PRINT# Jumped to from 8307 via High Bank
-; 
+; Handles PRINT#-8
 ; Arguments:
 ; Output:
 ; RegMod:
-PRINT_NUM
-    LDI	    A,$C0                           ; Not reached?
+PRINT_NUM:
+    LDI	    A,$C0                           ; 
     BCH 	BRANCH_93DB                     ;
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; PRINT#2 Jumped to from 8307 via High Bank
-; 
+; Does not actually handle PRINT # commands!
 ; Arguments:
 ; Output:
 ; RegMod:
@@ -2035,7 +2081,7 @@ PRINT_NUM_2: ;Jumped to from 8307
 
     SJP     BRANCH_93C1                     ; Not reached?
 
-BRANCH_93DB: ; branched to from 93D2, 93D6
+BRANCH_93DB: ; branched to from 93D2, 93D6  ; Entry for PRINT#-8
     STA	    (OUT_BUF + $3E)                 ;
     LDI	    A,$6C                           ;
     SJP     SUB_98B7                        ;
@@ -2114,7 +2160,7 @@ BRANCH_943B: ; branched to from 942A
     CPI	    A,$C1                           ;
     BZR     BRANCH_9466                     ;
     LDI	    A,$00                           ;
-    LDI	    XH,$7A                          ;
+    LDI	    XH,HB(ARX)                      ;
     STA	    XL                              ; X = 7A00 = ARX
     STA	    (X)                             ;
     LDI	    UL,$01                          ;
@@ -2139,7 +2185,7 @@ BRANCH_945C: ; branched to from 9439, 9450
 
 BRANCH_945E: ; branched to from 9458
     DEC	    UL                              ;
-    SJP     BRANCH_9A9D                     ;
+    SJP     BRANCH_9A9D                     ; Outputs text
     BCR     BRANCH_9466                     ;
 
 BRANCH_9464: ; branched to from 93E3, 93E8, 9414, 9416, 941C, 9428, 9436
@@ -2173,7 +2219,7 @@ BRANCH_947A: ; branched to from 93B3, 9420, 948C
 
 BRANCH_9482:
     VEJ     (C4)                            ; Check tokens/char in U-Reg if not ',' branch fwd n
-                ACHR(COMMA)                  ;
+                ACHR(COMMA)                 ;
                 ABRF(BRANCH_9491)           ;
     SJP	    SUB_9A50                        ;
     BCS     BRANCH_9493                     ;
@@ -2212,9 +2258,9 @@ BRANCH_94A0: ; branched to from 9518, 9544
 
 
 ;--------------------------------------------------------------------------------------------------
-; SUB_94E0
-; Called from
-SUB_94E0:
+; PRINT_NUM_HANDLER 94E0
+; Called from 8307 (calc jump)->900D->9053(calc jump)->7A00
+PRINT_NUM_HANDLER: ; Called for PRINT#
     LDI	    A,$C0                           ;
     STA	    (OUT_BUF + $3E)                 ;
     LDI	    A,$28                           ;
@@ -2222,9 +2268,9 @@ SUB_94E0:
     BZS     BRANCH_94EF                     ;
     LDI	    A,$08                           ;
 
-BRANCH_94EF: ; jumped to from 94EB
-    SJP	    SUB_98C0                        ;
-    SJP	    SUB_9DF1                        ;
+BRANCH_94EF: ; jumped to from 94EB          ; Token and arg at 7BB0
+    SJP	    SUB_98C0                        ; 94EF - Poke two JMPs into 7BA0-7BAF
+    SJP	    SUB_9DF1                        ; 94F2 - HCOMT & text to 7B60
     BCR     BRANCH_94A0                     ;
     BII	    (OUT_BUF + $41),$20             ;
     BZR     BRANCH_9502                     ;
@@ -2233,7 +2279,7 @@ BRANCH_94EF: ; jumped to from 94EB
 
 
 BRANCH_9502: ; jumped to from 
-    SJP	    SUB_9CEC                        ;
+    SJP	    SUB_9CEC                        ; Outputs 27 byte header
     BCS     BRANCH_94A0                     ;
 
 JMP_9507: ; jumped to from 9626
@@ -2250,7 +2296,7 @@ BRANCH_9518: ; branched to from 9511
 BRANCH_951A: ; branched to from 950B
     VEJ 	(CE)                            ; Determines variable 'F1' address all variable types allowed, if errors continue at P+n2
                 ABYT($F1)                   ;
-                ABRF(BRANCH_9542 )          ;    
+                ABRF(BRANCH_9542)           ; no variable argument so skip ahead
     BII	    (OUT_BUF + $41),$20             ;
     BZR     BRANCH_955C                     ;
     BII	    A,$01                           ;
@@ -2288,8 +2334,8 @@ BRANCH_9542: ; branched to from 951A
     SHR                                     ;
     SHR                                     ;
     LDI	    A,$00                           ;
-    LDI	    XL,$1F                          ;
-    LDI	    XH,$7A                          ; X = 7A1F = ARU
+    LDI	    XL,LB(ARU+$07)                  ;
+    LDI	    XH,HB(ARU)                      ; X = 7A1F = ARU
     LDI	    UL,$0F                          ;
 
 BRANCH_9552: ; branched to from 9553
@@ -2304,8 +2350,8 @@ BRANCH_9559: ; branched to from 9555
 
 BRANCH_955C: ; branched to from 9521, 9525, 9529, 9540
     STA	    (CASS_FLAG)                     ;
-    LDI	    XH,$94                          ;
-    LDI	    XL,$A7                          ; X = 94A7
+    LDI	    XH,HB($94A7)                    ;
+    LDI	    XL,LB($94A7)                    ; X = 94A7
     ADR	    X                               ; X = X + A + Carry
     SHR                                     ;
     LDI	    A,$05                           ;
@@ -2316,8 +2362,8 @@ BRANCH_955C: ; branched to from 9521, 9525, 9529, 9540
 
 BRANCH_956F: ; branched to from 9568
     VEJ     (DA)                            ; Cache/remember variable address from U-Reg and length from AR-X (7A07)
-    LDI	    UH,$7A                          ;
-    LDI	    UL,$04                          ; U = ARX + $04
+    LDI	    UH,HB(ARX)                      ;
+    LDI	    UL,LB(ARX+$04)                  ; U = ARX + $04 = $7A04
 
 BRANCH_9574: ; branched to from 9576
     LDE     X                               ; A = (X) then X = X - 1
@@ -2336,12 +2382,12 @@ BRANCH_9582: ; branched to from 957E
 
 BRANCH_958A: ; branched to from 9603
     BCS     BRANCH_95FB                     ;
-    SJP	    SUB_9ACF                        ; Copies some stuff in OUT_BUF
+    SJP	    SUB_9ACF                        ; Outputs 00 0B 00 00 88
     BCS     BRANCH_95FB                     ;
     BII	    (OUT_BUF + $41),$20             ;
     BZR     BRANCH_95A2                     ;
-    LDI	    UH,$7A                          ;
-    LDI	    UL,$04                          ; U = $7A04 = (ARX + 4)
+    LDI	    UH,HB(ARX)                      ;
+    LDI	    UL,LB(ARX+$04)                  ; U = $7A04 = (ARX + 4)
 
 BRANCH_959B: ; branched to from 95A0
     DEC	    X                               ;
@@ -2365,7 +2411,7 @@ BRANCH_95A2: ; branched to from 9595
 
 BRANCH_95B4: ; branched to from 95BE, 95F9
     PSH	    A                               ;
-    SJP	    SUB_9ACF                        ; Copies some stuff in OUT_BUF
+    SJP	    SUB_9ACF                        ; Outputs 00 00 00 00 00 00 00 00
     POP	    A                               ;
     BCS     BRANCH_95FB                     ;
     DEC	    A                               ;
@@ -2391,8 +2437,8 @@ BRANCH_95C7: ; branched to from 95A9
     BCS     BRANCH_95FB                     ;
 
 BRANCH_95DB: ; branched to from 95D2
-    LDI	    XL,$50                          ;
-    LDI	    XH,$76                          ; X = 7650 = STRING_VARS
+    LDI	    XL,LB(STRING_VARS)              ;
+    LDI	    XH,HB(STRING_VARS)              ; X = 7650 = STRING_VARS
     LDI	    UL,$AF                          ;
     SJP	    SUB_9ACF                        ; Copies some stuff in OUT_BUF
     BCS     BRANCH_95FB                     ;
@@ -2416,19 +2462,27 @@ BRANCH_95FB: ; branched to from 958A, 958F, 95BB, 95CC, 95D6, 95D6, 95E4, 95F1
 
 
 BRANCH_9605: ; branched to from 95C0
-    VEJ	    (C8)                            ; Jump fwd (p) if following character doesn’t represent end to command sequence or line. 
-                ABRF(BRANCH_9616)           ;
-JMP_9607: ; jumped from from 923E, 917A
+    VEJ	    (C8)                            ; If following char not end of command sequence or line. 
+                ABRF(BRANCH_9616)           ; Jump fwd (p). Handles compound statement?
+JMP_9607: ; jumped from from 923E, 917A     ; PRINT#-8 uses this exit
     SJP	    SUB_9E3E                        ;
     BCS     BRANCH_962B                     ;
 
 JMP_960C: ; jumped to from 928C, 9859
     SJP	    SUB_9BAA                        ; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
     ORI     #(PC1500_MSK_REG),$01           ; PC-1500 - Set interrupt mask for ON Key
+
+#IFNDEF REDIREXIT                           ; If we are not redirecting exit for CLOAD/CSAVE/PRINT#
     DEC	    Y                               ;
     VEJ     (E2)                            ; Start of Basic Interpreter
+#ENDIF
 
-BRANCH_9616:
+#IFDEF REDIREXIT                            ; If we are redirecting exit for CLOAD/CSAVE/PRINT#
+    BCH     PRNT_NUM8                       ; A hack to handle ML calling PRINT#-8
+#ENDIF
+
+
+BRANCH_9616:                                ; Handles compound statement?
     VEJ     (C4)                            ; Check tokens/char in U-Reg if not ',' branch fwd n
                 ACHR(COMMA)                 ;
                 ABRF(BRANCH_9629)           ;
@@ -2466,11 +2520,28 @@ JMP_9641: ; Jumped to from 92B5
     JMP	    BCMD_DATA                       ; Basic Command DATA / ARUN / AREAD
 
 
-
 ;--------------------------------------------------------------------------------------------------
 ; 9651 ~ 965F
 SEPARATOR_9651:
+#IFNDEF REDIREXIT
     .BYTE $FF,$00,$FF,$00,$FF,$00,$FF,$00, $FF,$00,$FF,$00,$FF,$00,$FF 
+#ENDIF
+
+#IFDEF REDIREXIT 
+PRNT_NUM8:                                  ; Hack to allow a ML routine to call PRINT#-8
+    DEC	    Y                               ; Part of original exit code
+    LDA (IN_BUF+$4F)                        ; We sat last byte of IN_BUF to $A5
+    CPI A,$A5                               ; to designate that a ML routine called PRINT#-8
+    BZS PRNT_NUM8_ML                        ; If = then PRINT#-8 wsa called by a ML routine
+    VEJ     (E2)                            ; Was BASIC call so jump to start of Basic Interpreter
+
+PRNT_NUM8_ML:
+    RTN                                     ; Was ML call so return directly
+
+    .BYTE $FF,$00,$FF,$00,$FF               ; Remaining filler bytes
+#ENDIF
+
+
 
 
 
@@ -2479,7 +2550,7 @@ SEPARATOR_9651:
 ; Arguments: XREG = Address, YREG = Token,
 ; Output:
 ; RegMod:
-INPUT_NUM:
+INPUT_NUM: ; 9660
     LDI	    A,$C0                           ;
     STA	    (OUT_BUF + $3E)                 ; In OUTPUT_BUFFER
     VEJ	    (C2)                            ; If next character is not '%', branch fwd 'n'.
@@ -2553,8 +2624,8 @@ BRANCH_96C0: ; branched to from 96B8
                 ABRF(BRANCH_96E4)           ;
     VMJ	    (0C)                            ; Determine string length, create CSI in AR-X
     PSH	    Y                               ; Y-REG contains end address marker
-    LDI	    YL,$B0                          ;
-    LDI	    YH,$7B                          ; Y = 7BB0, INPUT_BUFFER
+    LDI	    YL,LB(IN_BUF)                   ;
+    LDI	    YH,HB(IN_BUF)                   ; Y = 7BB0, IN_BUF
     LDA	    (ARX + $07)                     ; last byte of AR-X
     STA	    UL                              ;
     SJP	    XREG2YREG                       ; Transfers UL bytes from X-Reg to Y-Reg
@@ -2754,7 +2825,7 @@ BRANCH_97B6: ; branched to from 9784, 9792, 97B2
 BRANCH_97EA: ; branched to from 97C7
     VEJ     (C4)                            ; Check tokens/char in U-Reg if not ',' branch fwd n
                 ACHR(COMMA)                 ;
-                ABRF($9813)                 ;
+                ABRF(BRANCH_9813)           ;
     POP	    X                               ;
     PSH	    Y                               ; 
     LIN	    X                               ; A = (X) then INC X
@@ -2779,6 +2850,8 @@ BRANCH_97FC: ; branched to from 97F4
     PSH	    Y                               ;    
     STX     Y                               ; Y = X
     BCH     BRANCH_9774                     ;
+    
+BRANCH_9813:    
     LDI	    UH,$01                          ;
 
 BRANCH_9815: ; branched to from 9800
@@ -2803,7 +2876,7 @@ SEPARATOR_981B:
 ; Outputs:
 ; RegMod:
 FEED:
-    LDA     (OPN)                 ; This table might be some sort of mode mask
+    LDA     (OPN)                           ; This table might be some sort of mode mask
     STA     (OUT_BUF + $3E)                 ; In OUTPUT_BUFFER
     LDI     A,$6C                           ;
     SJP     SUB_98B7                        ;
@@ -2823,7 +2896,7 @@ BRANCH_9831:
                 ABRF(BRANCH_985C)           ;
     VEJ     (F4)                            ; Loads U-Reg with $7A05
                 AWRD(ARX + $05)             ;
-    DEC         U
+    DEC     U
 
 BRANCH_983D:
     LDA    (OUT_BUF + $46)                 ; In OUT_BUF
@@ -2923,21 +2996,21 @@ SUB_98B7:
 ; Output:
 ; RegMod:
 SUB_98BD: 
-    LDA	    (OUT_BUF + $41)                 ; In OUT_BUF
+    LDA	    (OUT_BUF + $41)                 ; 
 
-SUB_98C0: ; called from 936C
-    NOP                                     ;
+SUB_98C0: ; called from 936C, 94EF PRINT#
+    NOP                                     ; PRINT# A=&08
 
 BRANCH_98C1: ; branched to from 98BB 
     ANI     A,$7F                           ;
-    STA	    (OUT_BUF + $41)                 ; In OUT_BUF
+    STA	    (OUT_BUF + $41)                 ; PRINT# A=&08
     ANI     #(PC1500_MSK_REG),$FC           ; Clear IRQ and ON Key interrupt mask for PC-1500
-    LDI	    XL,$87                          ;
-    LDI	    XH,$98                          ; X = 9887, TBL_9887 X used in 9924
-    PSH	    Y                               ;
-    LDI	    YL,$A6                          ;
-    LDI	    YH,$7B                          ; Y = (OUT_BUF + $46)
-    ANI     A,$40                           ;
+    LDI	    XL,LB(TBL_9887)                 ;
+    LDI	    XH,HB(TBL_9887)                 ; X = Pointer to JMP in TBL_9887 X, used in 9924
+    PSH	    Y                               ; Y is pointer to location in program line
+    LDI	    YL,LB(OUT_BUF + $46)            ;
+    LDI	    YH,HB(OUT_BUF + $46)            ; Y = $7BA6
+    ANI     A,$40                           ; PRINT# A=&00
     BZS     BRANCH_98F8                     ;
     LDA	    (OUT_BUF + $3E)                 ; in OUT_BUF
     CPI	    A,$C4                           ;
@@ -2960,61 +3033,61 @@ BRANCH_98F2: ; branched to from 98ED
     LDA	    (CRLF_REG)                      ; *** need to figure out what this is
     BCH 	BRANCH_98FA                     ;
 
-BRANCH_98F8: ; branched to from 98D7
-    SIN	    Y                               ; (Y) = A. Then Y = Y + 1. 7BA8 + 1 = 7AB9
-    SIN	    Y                               ; (Y) = A. Then Y = Y + 1. OUT_BUF + 49 + 1 = 7ABA
+BRANCH_98F8: ; branched to from 98D7        ; A = $00 for PRINT#, Y = &7BA6 (OUT_BUF + $46)
+    SIN	    Y                               ; (Y) = A. Then Y = Y + 1. 7BA6+1=7BA7 (OUT_BUF + $47)
+    SIN	    Y                               ; (Y) = A. Then Y = Y + 1. 7BA7+1=7BA8 (OUT_BUF + $48)
 
 BRANCH_98FA: ; branched to from 98F6
-    BCR     BRANCH_98FD                     ;
+    BCR     BRANCH_98FD                     ; PRINT# C=1
     AEX                                     ; Accumulator High nibble & low nibble swapped
 
 BRANCH_98FD: ; branched to from 98FA
-    LDI	    UL,$0D                          ;
-    ANI     A,$07                           ;
-    SHR                                     ;
-    BCR     BRANCH_9906                     ;
-    LDI	    UL,$0A                          ;
+    LDI	    UL,$0D                          ; PRINT# U=1B0D
+    ANI     A,$07                           ; PRINT# A=0
+    SHR                                     ; PRINT# A=0
+    BCR     BRANCH_9906                     ; PRINT# C=0
+    LDI	    UL,$0A                          ; 
 
 BRANCH_9906: ; branched to from 9902
-    BZS     BRANCH_990F                     ;
+    BZS     BRANCH_990F                     ; PRINT# Z=1
     SHR                                     ;
     LDI	    A,$0D                           ;
     BCS     BRANCH_990F                     ;
     LDI	    A,$0A                           ;
 
 BRANCH_990F: ; branched to from 9906, 990B
-    SIN	    Y                               ; (Y) = A. Then Y = Y + 1
-    LDA	    UL                              ;
-    SIN	    Y                               ; (Y) = A. Then Y = Y + 1
-    LDA	    (OUT_BUF + $3E)                 ;
+    SIN	    Y                               ; PRINT# Y=7BA8. (Y)=A=00. Then Y=Y+1=7BA9
+    LDA	    UL                              ; PRINT# A=0D
+    SIN	    Y                               ; PRINT# A=7BA9. (Y)=A=0D. Then Y=Y+1=7BAA
+    LDA	    (OUT_BUF + $3E)                 ; PRINT# A=C0
     CPI	    A,$C4                           ;
-    BZS     BRANCH_991A                     ;
+    BZS     BRANCH_991A                     ; PRINT# Z=0
     
 BRANCH_9919:    
     REC                                     ; Reset Carry
 
 BRANCH_991A: ; branched to from 9917
-    LDA	    (OUT_BUF + $41)                 ; In OUT_BUF
-    AEX                                     ;
-    ANI     A,$0A                           ;
-    BCR     BRANCH_9924                     ;
+    LDA	    (OUT_BUF + $41)                 ; PRINT# A=28
+    AEX                                     ; PRINT# A=82
+    ANI     A,$0A                           ; PRINT# A=02
+    BCR     BRANCH_9924                     ; PRINT# C=0
     LDI	    A,$06                           ;
 
-BRANCH_9924: ; branched to from 9920        ; X = X = 9887, uses TBL_9887
-    ADR	    X                               ; X = X + A + Carry. A = ?? or 06.  X = 9887 + 1 = 9888
-    SHL                                     ;
-    ADR	    X                               ; X = X + A + Carry
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 9888 + 1 = 9889
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 9889 + 1 = 988A
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 988A + 1 = 988B
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 988B + 1 = 988C
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 988C + 1 = 988D
-    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1. X = 988D + 1 = 988E
-    POP	    Y                               ;
-    BII	    A,$04                           ;
-    BZS     BRANCH_9944                     ;
+BRANCH_9924: ; branched to from 9920        ; PRINT# X=9887, Y=7BAA, A=02
+    ADR	    X                               ; PRINT# X=9889
+    SHL                                     ; PRINT# A=04
+    ADR	    X                               ; PRINT# X=988D, Y=7BAA 
+    TIN                                     ; (BA) PRINT# X=988E, Y=7BAB (Y)=(X) then X=X+1, Y=Y+1.
+    TIN                                     ; (82) PRINT# X=988F, Y=7BAC
+    TIN                                     ; (3A) PRINT# X=9890, Y=7BAD [JMP TXCOM]
+    TIN                                     ; (BA) PRINT# X=9891, Y=7BAE
+    TIN                                     ; (93) PRINT# X=9892, Y=7BAF
+    TIN                                     ; (B1) PRINT# X=9893, Y=7BB0 [JMP SUB_9B31]
+    POP	    Y                               ; Retrieve original pointer to program line
+    BII	    A,$04                           ; PRINT# A=4
+    BZS     BRANCH_9944                     ; PRINT# Z=0
     BII	    A,$10                           ;
-    BZS     BRANCH_9943                     ;
+    BZS     BRANCH_9943                     ; PRINT# Z=1
 
 BRANCH_9939: ; branched to from 9940
     SJP	    SUB_9CFD                        ;
@@ -3024,7 +3097,7 @@ BRANCH_9939: ; branched to from 9940
     SEC                                     ; Set Carry
 
 BRANCH_9943: ; branched to from 9937, 993C
-    RTN                                     ;
+    RTN                                     ; PRINT# return
 
 BRANCH_9944: ; branched to from 9933
     SJP	    RXCOM                           ; Manipulates LPT/UART registers
@@ -3514,6 +3587,8 @@ BRANCH_9B10:
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9B1C - Called from 988A, 98A2
 ; 
+; CLOAD: BA 82 8E                           BA 9B 1C F0 89 -> 
+; 7BAA   JMP $828E -> Branch to MAIN_ENTRY: JMP $9B1C 
 ; Arguments:
 ; Output:
 ; RegMod:
@@ -3647,7 +3722,7 @@ DELAY_A_MS: ; called from 9515, 95D6, 95EE
 
 
 ;--------- ---------------------------------------------------------------------------------------------------
-; SUB_9B99 - 
+; SUB_9B99 - Seems to work like end of line detection for PRINT#
 ; 
 ; Arguments: A
 ; Output:
@@ -4050,7 +4125,7 @@ BRANCH_9D64: ; branched to from 9D3B, 9D4E
 ; Output:
 ; RegMod:
 SUB_9D65:
-    SJP	    RXCOM                        ; Manipulates LPT/UART registers
+    SJP	    RXCOM                           ; Manipulates LPT/UART registers
     LDI	    XL,$7B                          ;
     LDI	    UL,$1A                          ;
     BII	    (OUT_BUF  + $41),$80            ;
@@ -4062,7 +4137,7 @@ BRANCH_9D74: ; branched to from 9D70
     LDI	    XH,$7B                          ;
     SJP	    SUB_9AA5                        ; No idea
     BCS     BRANCH_9DF0                     ;
-    LDI	    XL,$60                          ; X = 7B60 = OUT_BUF
+    LDI	    XL,LB(OUT_BUF)                  ; X = 7B60 = OUT_BUF
     LDI	    UL,$04                          ;
     PSH	    Y                               ;
     LDA	    (OUT_BUF + $41)                 ;
@@ -4171,19 +4246,19 @@ BRANCH_9DF0: ; branched to from 9D79
 ; RegMod:
 SUB_9DF1:
     VMJ	    ($36)                           ; Stores CSI of a text/text var in AR-X (C=1). If no string in Y-Reg, C=0.
-    BCS     BRANCH_9E1D                     ; no idea
+    BCS     BRANCH_9E1D                     ; PRINT# C=1
     PSH	    X                               ;
-    LDI	    YL,$62                          ;
-    LDI	    YH,$7B                          ; Y = 7B62, (OUT_BUF + 2)
+    LDI	    YL,LB(OUT_BUF+$02)              ;
+    LDI	    YH,HB(OUT_BUF)                  ; Y = 7B62, (OUT_BUF + 2)
     LDI	    UL,$15                          ;
 
 BRANCH_9DFD: ; called from 9E38, 9E3E
-    LDI	    A,00                            ;
+    LDI	    A,00                            ; PRINT# A=0, X=7BB9, Y=7B6A, U=7A10
 
 BRANCH_9DFF: ; called from 9E00
-    SIN	    Y                               ; (Y) = A. Then Y = Y + 1
+    SIN	    Y                               ; (Y) = A. Then Y = Y + 1. Zeros out 7B6A to 7B7A
     LOP	    UL,BRANCH_9DFF                  ; UL = UL - 1, loop back 'e' if Borrow Flag not set
-    LDI	    YL,$60                          ;
+    LDI	    YL,LB(OUT_BUF)                  ; Y=7B60 = OUT_BUF
     LDI	    A,$01                           ;
     SIN	    Y                               ; (Y) = A. Then Y = Y + 1
     LDA	    (OUT_BUF + $41)                 ;
@@ -4200,29 +4275,30 @@ BRANCH_9DFF: ; called from 9E00
     JMP	    SUB_9B99                        ; no idea
 
 
-BRANCH_9E1D: ; called from 9DF3
-    PSH	    Y                               ;
-    LDI	    YL,$65                          ;
-    LDI	    YH,$7B                          ; Y = (OUT_BUF + 5)
+BRANCH_9E1D: ; branched to from 9DF3 PRINT#     
+    PSH	    Y                               ; Pointer to position in BASIC line
+    LDI	    YL,LB(OUT_BUF+$05)              ; Y = (OUT_BUF + 5)
+    LDI	    YH,HB(OUT_BUF)                  ; First character of argument
     VEJ     (DC)                            ; Loads CSI from AR-X: Address by X-Reg length by UL & A 
-    CPI	    A,$10                           ;
-    BCR     BRANCH_9E2A                     ;
+    CPI	    A,$10                           ; PRINT# A=05
+    BCR     BRANCH_9E2A                     ; PRINT# C=0
     LDI	    A,$10                           ;
 
-BRANCH_9E2A: ; called from 9E26
+BRANCH_9E2A: ; branched to from 9E26
     STA	    UL                              ;
     BCH 	BRANCH_9E2E                     ;
 
 
-BRANCH_9E2D: ; called from 9E2E
+BRANCH_9E2D: ; branched to from 9E2E
     TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
+                                            ; Y points to ARX, X points to Input Buffer
 
-BRANCH_9E2E: ; called from 9E28
-    LOP	    UL,BRANCH_9E2D                  ;
+BRANCH_9E2E: ; branched to from 9E28
+    LOP	    UL,BRANCH_9E2D                  ; PRINT# X=7BB4, Y=7A04, UL=04. UL= UL-1, loop back 'e' if Borrow Flag not set
     LDI	    UL,$05                          ;
     LDI	    A,$0F                           ;
     SEC                                     ;
-    SBC	    (ARX + $07)                     ;
+    SBC	    (ARX + $07)                     ; (ARX + $07) = Length of string
     BCR     BRANCH_9DFD                     ;
     ADC	    UL                              ;
     STA	    UL                              ;
@@ -4289,8 +4365,6 @@ BRANCH_9E6A: ; branched to from 9E60
 
 BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
     RTN                                     ;
-
-
 
 ;------------------------------------------------------------------------------------------------------------
 ; SEPARATOR_9E74 - Unused

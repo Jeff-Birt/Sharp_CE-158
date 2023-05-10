@@ -1,0 +1,34 @@
+ ; PC-1500 Macros
+;------------------------------------------------------------------------------------------------------------
+; Assembly macros used to encode arguments for lh5801 'macros' that take arguments inline after CALL
+
+#define EQU .EQU
+
+.MSFIRST
+.ORG $8000
+
+COMMA:      EQU $2C                         ; ',' used for macros
+CR:         EQU $0D                         ; '/CR' used for macros
+DASH:       EQU $2D                         ; '-' used for macros
+EQUALS:     EQU $3D                         ; '-' used for macros
+HASH:       EQU $23                         ; '#' used for macros
+SEMI:       EQU $3B                         ; ';' used for macros
+QUOTE:      EQU $22                         ; '-' used for macros
+DOLLAR:     EQU $24                         ; '#' used for macros
+PERCENT:    EQU $25                         ; ';' used for macros
+
+
+TOK_OFF:    EQU $F19E                       ; OFF   command token
+TOK_ON:     EQU $F19C                       ; ON    command token
+TOK_TAB:    EQU $F0BB                       ; TAB   command token
+TOK_USING:  EQU $F085                       ; USING command token
+
+
+#define ABRF(n8)        .BYTE n8 - $ - 1    ; calculate forward branch
+#define ABYT(n8)        .BYTE n8            ; use byte verbatium
+#define ABYTL(n16)      .BYTE n16 & $FF     ; use byte verbatium
+#define ACHR(ch)        .BYTE ch            ; character
+#define AWRD(n16)       .WORD n16           ; use word value verbatum
+#define CNIB(n81,n82)   .BYTE ((n81 & $F0) | (n82 & $0F))   ; calculates control nibble
+#define HB(n16)         (n16 >> 8)          ; Return HB of 16bit value
+#define LB(n16)         (n16 & $FF)         ; Return HB of 16bit value
