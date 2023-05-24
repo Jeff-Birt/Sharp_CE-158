@@ -32,3 +32,17 @@ TOK_USING:  EQU $F085                       ; USING command token
 #define CNIB(n81,n82)   .BYTE ((n81 & $F0) | (n82 & $0F))   ; calculates control nibble
 #define HB(n16)         (n16 >> 8)          ; Return HB of 16bit value
 #define LB(n16)         (n16 & $FF)         ; Return HB of 16bit value
+
+; CE-158 related
+#define HIGH_BANK       SPU \ SPV           ; Switch to High Bank
+#define LOW_BANK        RPU \ SPV           ; Switch to High Bank
+#define SETCOM_M        LDI A,$F9 \ STA (SETCOM_REG)    ; SETDEV to 2400,8,N,1
+#define SETDEV_M(n8)    LDI A,n8 \ STA (SETDEV_REG)     ; SETCOM to device passed
+#define SETOPN_M(n8)    LDI A,n8 \ STA (OPN)            ; Set OPN to n8 table
+
+KI:                 EQU $01 
+DO:                 EQU $02
+PO:                 EQU $04
+CI:                 EQU $08
+CO:                 EQU $10
+BP:                 EQU $18

@@ -127,7 +127,7 @@ CN1:   EQU $A5 \ CNIB($A5,CN1)   \ .TEXT "BREAK"   \ .WORD $F0B3, $CD89         
 #ENDIF
 
 #IFDEF REDIREXIT
-CN2_2: EQU $C3 \ CNIB(CN1,CN2_2) \ .TEXT "BPD"     \ .WORD $E887, BPD_8888      ; 
+CN2_2: EQU $C3 \ CNIB(CN1,CN2_2) \ .TEXT "BPD"     \ .WORD $E886, SETDEV_V      ; .WORD $E887, BPD_8888
 #ENDIF
     
 LET_C: EQU ($ + 2) ; First keyword starting with 'C'. LET_C = Address of 'L' in BREAK
@@ -596,13 +596,13 @@ MAIN_ENTRY: ;82EC
     SIN     U                               ; $E1 $BA $82 $F0 ->
     LDI	    A,$BA                           ; SPU, JMP $82F0
     SIN     U                               ; This code segment sets PU to 
-    LDI	    A,$82                           ; bank in upper half of
+    LDI	    A,HB($82F0)                     ; bank in upper half of
     SIN     U                               ; the CE-158 ROM
-    LDI	    A,$F0                           ; 
+    LDI	    A,LB($82F0)                     ; 
     STA     (U)                             ; Jumps to $7A28, runs code segment
 
 BRANCH_8302:
-    JMP	    ARW                             ; poked in above, swtiches to HI bank.
+    JMP	    ARW                             ; POKED in above, swtiches to HI bank.
 
 ;------------------------------------------------------------------------------------------------------------
 ; Return from High Bank
@@ -1117,22 +1117,169 @@ B_TBL_8800_CMD_LST_END:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; TABLE_8888
-; Seems like nonsense that is not used
+; BPD_8888
+; We are using the unused space in TBL_8888 for BPD code
+; On entering Y points to first "
 BPD_8888:
 
-#IFNDEF REDIREXIT
-    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD
-#ENDIF
-
 #IFDEF REDIREXIT
-    SJP	    TXT2STRBUF                      ; Copies string argument into string buffer
-    VEJ     (E2)                            ; Start of Basic Interpreter
-    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF;,$00,$FF,$00,$FD
+INJCMD:     EQU $7BF0                       ; Start address of injected command
+INJFLGA:    EQU $7BFF                       ; Address of flag used to signal injected command
+
+    PSH Y                                   ; On entering Y points to first " after command
+    PSH A                                   ; A=00=CSAVE, A=01=CLOAD or MERGE
+
+    ; Step #1 - configure UART - Set values for BPD use
+    LDI A,$F9                               ; SETCOM 2400,8,N,1
+    STA (SETCOM_REG)                        ; 
+
+    LDA (SETDEV_REG)                        ;
+    ANI A,$E0                               ; clears bits 4-0
+    ORI A,BP                                ; Set both CI and CO bits, make sure we stay in BPD mode
+    STA (SETDEV_REG)                        ;
+
+    LDI A,$C0                               ; Set OPN to point to CE-158 Basic Tables
+    STA (OPN)                               ; 
+
+    ; Copy high bank calling code into RAM
+    LDI XH,HB(ORIGPC)                       ; Copy high bank calling code into RAM
+    LDI XL,LB(ORIGPC)                       ; Set up pointers to copy code into RAM
+    LDI YH,HB(ARW)                          ; which calls functions in High Bank
+    LDI YL,LB(ARW)                          ; $7A28 = AR-W
+
+CLOOP:
+    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
+    CPI YL,LB(ARW + $09)                    ; Stop if now at $7A31
+    BZR CLOOP                               ; If XL < $90 keep copying
+
+    ; Now call code just POKED in
+    SJP ARW                                 ; Call code we just POKED into RAM
+
+    ; We do OUTSTAT CFG here as it is simple
+    LDA	(OUTSTAT_REG)                       ; Configure OUTSTAT
+    ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
+    STA (OUTSTAT_REG)                       ; Sets DTR and RTS from calc in 8334? OUTSTAT 7850
+    LDA #(CE158_PRT_A)                      ; 
+    ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
+    STA #(CE158_PRT_A)                      ; Also set DTR/RTS bits on CE-158
+
+
+
+    ; Step #2 - Inject PRINT#"L)filename", this is done by poking code into RAM
+    ; First copy PRINT#"L)  then POP A to derive mode char. A=0 char=S, A=1 char=L
+    ; Then POKE in " and $0D
+    ; POP Y / PSH to get pointer to filename and still preserve it for CLOAD/CSAVE/MERGE
+    LDI XH,HB(PRNUM_DAT)                    ; Set up pointers to program line to inject
+    LDI XL,LB(PRNUM_DAT)                    ;
+    LDI YH,HB(INJCMD)                       ; Set up pointer to location to copy line to
+    LDI YL,LB(INJCMD)                       ;    
+
+CLOOP1:
+    TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
+    CPI YL,LB(INJCMD + $10)                 ; $00
+    BZR CLOOP1                              ; If XL < $00 keep copying
+
+    POP A                                   ; $00=CSAVE (char=S), $01=CLOAD or MERGE (char=L)
+    BZR PRFIN                               ; If A = 1 skip ahead
+    LDI A,'S'                               ; If A = 0 POKE in the S cahracter, for SAVE
+    STA (INJCMD + 4)                        ;
+
+PRFIN:
+    LDI YH,HB(INJCMD + $06)                 ; Set up pointer to next byte past )
+    LDI YL,LB(INJCMD + $06)                 ; 
+
+    POP X                                   ; X=Y from original CLOAD/CSAVE/MERGE call
+    PSH X                                   ; Points to first ", save it again for CLOAD/CSAVE/MERGE use later
+    INC X                                   ; Now X points to first character of file name
+
+CLOOP2:
+    LDA (X)                                 ; A = (X) get char from file name
+    INC X                                   ; INC X
+    SIN Y                                   ; Y=A, Y=Y+1
+    CPI A,$22                               ; Did we just copy trailing "
+    BZR CLOOP2                              ; If not keep copying    
+
+
+    LDI YH,HB(INJCMD + $03)                 ; Set up pointer to next byte past )
+    LDI YL,LB(INJCMD + $03)                 ; 
+
+    SJP PRINT_NUM_HANDLER                   ; Call Print#""
+
+    ANI (IN_BUF+$4F),$00                    ; Clear marker byte so CLOAD/CSAVE/MERGE will exit as normal
+    POP Y                                   ; Get back original Y used for CLOAD/CSAVE/MERGE
+    RET                                     ; Return to _REDIRECT which sets A properly and jumps back to CLOAD/CSAVE/MERGE
+
+
+ORIGPC:     EQU $                           ; Save current PC
+.ORG INJCMD                                 ; Set new PC to where this code will be POKE into RAM
+
+; UART CFG code POKE into ARW-ARS in Step #1. Calls routines in High Bank (9 bytes)
+BPD_ARW:
+
+CFG_UART_BAUD:   EQU $8B3D
+CFG_UART_LPT:    EQU $8B72
+    SPU                                     ; ($E1) High bank: SPV SPU 
+    
+    SJP CFG_UART_BAUD                       ; ($BE,$8B,$3D) CALL CFG_UART_BAUD (&8B3D)
+    SJP CFG_UART_LPT                        ; ($BE,$8B,$72) CALL CFG_UART_LPT (&8B72)
+    
+    RPU                                     ; ($E3) Low bank: SPV RPU
+    RTN                                     ; ($9A) Back to RAM routine
+
+
+.ORG (ORIGPC + ($-INJCMD))                  ; Set PC back to original range
+
+PRNUM_DAT: ; used by Step #2
+    ;     PRINT   #    "   L   )
+    .BYTE $F0,$97,$23,$22,$4C,$29,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"TST"
+
+
+    
+; We intercept the CSAVE, MERGE and CLOAD entries to here
+; If in BPD mode run BPD set up code first, then jump back to normal command handler
+CSAVE_INTERCEPT: ;  Intercept CSAVE, CLOAD, MERGE
+    BII     ($79DD),$18                     ; BPD mode flag
+    BZS     CSI_EXIT                        ;
+    LDI     A,$00                           ; A=$00=CSAVE was called (for BPD code)
+    SJP     BPD_8888                        ; Configure for BPD use
+
+CSI_EXIT:                                   ; Returns to here and back to CSAVE
+    LDI     A,$20                           ; $9081 - CSAVE entry
+    STA     (OUT_BUF + $41)                 ;
+    JMP     BRANCH_90C8                     ;
+
+
+MERGE_INTERCEPT:
+    BII     ($79DD),$18                     ; BPD mode flag
+    BZS     MRI_EXIT                        ;
+    LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
+    SJP     BPD_8888                        ; Configure for BPD use
+
+MRI_EXIT:                                   ; Returns to here and back to MERGE
+    LDI     A,$10                           ; $90BF - MERGE entry
+    STA     (OUT_BUF + $41)                 ;
+    JMP     BRANCH_90C8                     ;
+
+
+CLOAD_INTERCEPT:
+    BII     ($79DD),$18                     ; BPD mode flag
+    BZS     CLI_EXIT                        ;
+    LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
+    SJP     BPD_8888                        ; Configure for BPD use
+
+CLI_EXIT:                                   ; Returns to here and back to CLOAD
+    LDI     A,$00                           ; $90C3 - CLOAD entry
+    STA     (OUT_BUF + $41)                 ;
+    JMP     BRANCH_90C8                     ;
 #ENDIF
 
+;------------------------------------------------------------------------------------------------------------
+; TABLE_8888
+; Seems like nonsense that is not used, so we use it for BPD
+TABLE_8888:
 
-    ;.BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
+#IFNDEF REDIREXIT
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
     .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
     .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04 
     .BYTE $FF,$20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00 
@@ -1144,18 +1291,21 @@ BPD_8888:
     .BYTE $FF,$A3,$7E,$00,$FF,$00,$FF,$80,$EE,$04,$D6,$00,$FF,$00,$FF,$98 
     .BYTE $DF,$81,$FB,$00,$FF,$00,$FF,$04,$43,$10,$7C,$00,$FF,$00,$FF,$0A 
     .BYTE $FF,$16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A 
-    .BYTE $27,$44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01 
-    .BYTE $7A,$5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80 
-    .BYTE $FC,$21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00 
-    .BYTE $DF,$11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01 
-    .BYTE $5B,$A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01 
-    .BYTE $6F,$18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00 
+    .BYTE $27
+#ENDIF
+    
+    .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
+    .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
+    .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
+    .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01,$5B
+    .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
+    .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00 ; 8998
     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
     .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
     .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
     .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
     .BYTE $CF,$12,$E6,$00,$FF,$00,$FF,$40,$77,$00,$FF,$00,$FF,$00,$FF,$29 
-    .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09 
+    .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09
     .BYTE $7E,$9C,$7A,$00,$FF,$00,$FF,$83,$BE,$92,$FF,$00,$FF,$00,$FF,$0A 
     .BYTE $DF,$05,$F7,$00,$FF,$00,$FF,$A1,$B9,$46,$F9,$00,$FF,$00,$FF,$07 
     .BYTE $DD,$11,$FF,$00,$FF,$00,$FF,$4B,$F7,$C1,$FF,$00,$FF,$00,$FF,$04 
@@ -1281,7 +1431,7 @@ BRANCH_900A:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-PRINT:
+PRINT: ;900D
     VEJ     (C2)                        ; If not a PRINT# skip ahead
                 ACHR(HASH)              ; Character
                 ABRF(BRANCH_9022)       ; Forward branch to label 
@@ -1301,7 +1451,7 @@ PRINT:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-CSAVE:
+CSAVE: ; 901A
     REC                                   ; Reset Carry
 
 
@@ -1311,7 +1461,7 @@ CSAVE:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-CLOAD:
+CLOAD: ; 901B
     REC                                   ; Reset Carry
 
 
@@ -1321,7 +1471,7 @@ CLOAD:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-MERGE:
+MERGE: ; 901C
     REC                                   ; Reset Carry
 
 
@@ -1331,7 +1481,7 @@ MERGE:
 ; Arguments: X-REG address of function, Y-REG Token
 ; Outputs:
 ; RegMod:
-CLD_CSV_LPR: ; branched to from 905C, 905F (LPRINT X=9056, LLIST X=901D)
+CLD_CSV_LPR: ; 901D branched to from 905C, 905F (LPRINT X=9056, LLIST X=901D)
     VEJ     (C0)                            ; Load next character/token to U-Reg
     LDI	    A,$04                           ; X = X + A + Carry
     ADR	    X                               ; LLIST=901D+04=9021, LPRINT=9018+04=901C, LPRINT=9019+04=901D
@@ -1352,15 +1502,18 @@ BRANCH_9025: ; branched to from 8FFF (INPUT X=9002)
     PSH	    A                               ; Original LB of X-REG
     LDI	    UL,LB(ARZ + $01)                ; Loop counter
     LDI	    UH,HB(ARZ)                      ; U = 7A09 (ARZ + $01)
-    LDI	    XL,$6A                          ; XH = HB of command, XL=6A 
+    LDI	    XL,LB(TABLE_9061 + $09)         ; XH = HB of command, XL=6A 
                                                                 
-BRANCH_902F: ; branched to from 9031        ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
+BRANCH_902F: ; branched to from 9031        ; POKES in code from TABLE_9061
+                                            ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
                                             ; CLOAD CD 3C      FD 28   68 1B        C9 E0      FD 5E   4F 41 44
                                             ; 7A00  VMJ (3C) : LDX U : LDI UH,$1B : VZR (E0) : STX P :
                                             ; copied backwards 7A00-7A08, LPRINT 906A, **PRINT 906A, INPUT 8F6A**
     LDE	    X                               ; A = (X) then X = X - 1
     STA	    (U)                             ;
     LOP	    UL,BRANCH_902F                  ; UL = UL - 1, loop back 'e' if Borrow Flag not set
+
+                                            ; POKES in code from TABLE_906B
     POP	    A                               ; A = original low byte of command before $902F
     SEC                                     ; Set carry flag
     SBI	    A,$1C                           ; LLIST  21-1C=05 C=1 -> LLIST  05<<3=28 C=0, MERGE  20-1C=## C=# -> MERGE  ##<<3=## C=#
@@ -1386,7 +1539,7 @@ BRANCH_904E: ; branched to from 9043
     LIN	    X                               ; A = (X) then INC X
     STA	    UL                              ; LLIST U=B754, CE-150 LLIST function
     LDA	    (X)                             ; A = 58
-    JMP	    ARX                             ; (9053) ***JMP to what was poked in to ARX by $902F
+    JMP	    ARX                             ; (9053) ***JMP to what was POKED in to ARX by $902F
 
 
 
@@ -1395,7 +1548,7 @@ BRANCH_904E: ; branched to from 9043
 ; Arguments: XREG = Address, YREG = Token,
 ; Outputs:
 ; RegMod:
-LPRINT:
+LPRINT: ;9056
     LDI	    XL,$18                          ; X=$9018
     BII	    (ZONE_REG),$40                  ; Test for bit 6 set
     BZS     CLD_CSV_LPR                     ; If Bit 6 not set branch to LLIST, bit indicates?
@@ -1408,27 +1561,36 @@ LPRINT:
 ; Code copied reverse order to 7A09->00 
 TABLE_9061:
     .BYTE $CD,$3C,$FD,$28,$68,$1B,$C9,$E0,  $FD,$5E ; 
-;7A00   5E FD           CPI         YL,FD           ; Maybe looking for token in Y? Why would FD be low byte?
-;7A02   E0              VEJ         (E0)            ; Display error message from UH?
-;7A03   C9 1B           VZR         (1B)            ; If Z=0, CALL (FF1B)
-;7A05   68 28           LDI         UH,28           ; UH=28
-;7A07   FD 3C CD        VCS#        (CD)            ; If C=1 CALL (FFCD)
+    ; Keyword 
+    ; CLOAD:  CD 3C FD 28 68 1B C9 E0 FD 5E 4F 41 44
+    ; CSAVE:  CD 3C FD 28 68 1B C9 E0 FD 5E 41 56 45
+    ; MERGE:  CD 3C FD 28 68 1B C9 E0 FD 5E 52 47 45
+    ; PRINT:  CD 3C FD 28 68 1B C9 E0 FD 5E 49 4E 54
+    ; LPRINT: CD 3C FD 28 68 1B C9 E0 FD 5E 52 49 4E 54
+    ; LLIST:  CD 3C FD 28 68 1B C9 E0 FD 5E 49 53 54
 
+    ; CD 3C  VMJ (3C)       ; Checks whether token table exists
+    ; FD 28  LDX U
+    ; 68 1B  LDI UH,$1B     ; Error type to report
+    ; C9 E0  VZR (E0)       ; Output error from UH, Return to editor
+    ; FD 5E  STX P          ; Change program counter to what is in X
 
 
 ;-----------------------------------------------------------------------------------------------------------
 ; TABLE_906B - Used by 903F
 TABLE_906B:
-    .BYTE $04,$B2,$F4,$58,$93,$DE,$C0,$00   ; Byte 0 is SETDEV mode mask
-    .BYTE $04,$B2,$EC,$58,$93,$DE,$C0,$00   ; Byte 1 -> UH
-    .BYTE $10,$B8,$A6,$5C,$90,$BB,$C0,$00   ; Byte 2 -> UL
-    .BYTE $08,$B8,$F9,$5C,$90,$C3,$C0,$00   ; Byte 3 -> A   if SETDEV mode does not match mask
-    .BYTE $08,$B9,$95,$5C,$90,$BF,$C0,$00   ; Byte 4 -> UH
-    .BYTE $04,$B7,$54,$58,$93,$56,$C0,$00   ; Byte 5 -> UL
-    .BYTE $02,$E6,$B6,$60,$93,$6A,$C0,$00   ; Byte 6 -> A   if SETDEV mode does match mask
-    .BYTE $10,$E4,$F3,$5C,$94,$E0,$C0,$00   ; Byte 7 -> 00 delimiter
-    .BYTE $08,$E4,$F3,$5C,$94,$E0,$C0,$00   ;
-    .BYTE $01,$C8,$FA,$60,$96,$60,$C0,$00   ;
+        ;      PC-1500
+        ; ?     CE-150   ?          CE-158                    OPN EOL
+    .BYTE $04, $B2,$F4, $58 \ .WORD JMP_93DE          \ .BYTE $C0,$00   ; Byte 0 is SETDEV mode mask
+    .BYTE $04, $B2,$EC, $58 \ .WORD JMP_93DE          \ .BYTE $C0,$00   ; Byte 1 -> UH
+    .BYTE $10, $B8,$A6, $5C \ .WORD CSAVE_ENTRY       \ .BYTE $C0,$00   ; Byte 2 -> UL
+    .BYTE $08, $B8,$F9, $5C \ .WORD CLOAD_ENTRY       \ .BYTE $C0,$00   ; Byte 3 -> A   if SETDEV mode does not match mask
+    .BYTE $08, $B9,$95, $5C \ .WORD MERGE_ENTRY       \ .BYTE $C0,$00   ; Byte 4 -> UH
+    .BYTE $04, $B7,$54, $58 \ .WORD JMP_9356          \ .BYTE $C0,$00   ; Byte 5 -> UL
+    .BYTE $02, $E6,$B6, $60 \ .WORD JMP_936A          \ .BYTE $C0,$00   ; Byte 6 -> A   if SETDEV mode does match mask
+    .BYTE $10, $E4,$F3, $5C \ .WORD PRINT_NUM_HANDLER \ .BYTE $C0,$00   ; Byte 7 -> 00 delimiter
+    .BYTE $08, $E4,$F3, $5C \ .WORD PRINT_NUM_HANDLER \ .BYTE $C0,$00   ;
+    .BYTE $01, $C8,$FA, $60 \ .WORD INPUT_NUM         \ .BYTE $C0,$00   ;
 
 
 
@@ -1438,25 +1600,49 @@ TABLE_906B:
 ; Arguments: 
 ; Outputs:
 ; RegMod:
-CLOAD_SAVE_MERGE: ; $9081
-    LDI     A,$20                           ; $9081 - CSAVE entry
+CLOAD_SAVE_MERGE: ; $90BB
+#IFNDEF REDIREXIT
+CSAVE_ENTRY:
+    LDI     A,$20                           ; $90BB - CSAVE entry
     BCH     BRANCH_90C5                     ;
+    
+MERGE_ENTRY:   
     LDI     A,$10                           ; $90BF - MERGE entry
     BCH     BRANCH_90C5                     ; 
+    
+CLOAD_ENTRY:    
     LDI     A,$00                           ; $90C3 - CLOAD entry
 
 BRANCH_90C5:
     STA     (OUT_BUF + $41)                 ;
-    LIN     Y                               ; Next character in Input BUffer
+#ENDIF
+
+#IFDEF REDIREXIT
+CSAVE_ENTRY:
+    JMP     CSAVE_INTERCEPT                 ; $90BB - CSAVE entry intercept
+    NOP                                     ; Take up extra bytes
+    
+ MERGE_ENTRY:   
+    JMP     MERGE_INTERCEPT                 ; $90BF - MERGE entry intercept
+    NOP                                     ; Take up extra bytes
+    
+CLOAD_ENTRY:   
+    JMP     CLOAD_INTERCEPT                 ; $90C3 - CLOAD entry intercept
+    NOP
+    NOP
+
+BRANCH_90C8:
+#ENDIF
+    LIN     Y                               ; Load char in Input Buffer after first " 
     CPI     A,$E0                           ;
-    BCS     BRANCH_90F0                     ;
+    BCS     BRANCH_90F0                     ; iF >= E0
     STA     UL                              ;
     LDI     A,$01                           ;
     CPI     UL,$72                          ;
-    BZS     BRANCH_90E8                     ;
+    BZS     BRANCH_90E8                     ; If < 72
     SHL                                     ;
     CPI     UL,$4D                          ;
-    BZS     BRANCH_90E8                     ;
+    BZS     BRANCH_90E8                     ; If < 4D
     SHL                                     ;
     CPI     UL,$61                          ;
     BZR     BRANCH_90F0                     ;
@@ -1941,6 +2127,8 @@ SUB_934A:
 SUB_9350:
     SJP	    BRANCH_93C1                     ;
     STA	    (OUT_BUF + $3E)                 ;
+    
+JMP_9356:    
     SJP	    PRGST2XREG                      ; X-Reg = Program Start Address. U-Reg = STATUS 1-2
     VCR	    ($42)                           ; If Carry, Editor warm start
     SJP	    SUB_9949                        ;
@@ -1950,7 +2138,7 @@ SUB_9350:
     BCS     BRANCH_93BE                     ;  
     JMP	    BRANCH_917D                     ;
 
-
+JMP_936A:
     LDI	    A,$6C                           ;
     SJP	    SUB_98C0                        ;
     BCS     BRANCH_937A                     ;  
@@ -2039,7 +2227,7 @@ BRANCH_93C1: ; branched to from 9350
 
 BRANCH_93C3: ; branched to from 93CD
     LDI	    UH,$1B                          ;
-    CPA	    (OPN)                 ; This table might be some sort of mode mask
+    CPA	    (OPN)                           ; This table might be some sort of mode mask
     VZR	    ($E0)                           ; If Z=0 output error code in UH
     RTN                                     ;
 
@@ -2083,6 +2271,8 @@ PRINT_NUM_2: ;Jumped to from 8307
 
 BRANCH_93DB: ; branched to from 93D2, 93D6  ; Entry for PRINT#-8
     STA	    (OUT_BUF + $3E)                 ;
+
+JMP_93DE: ; Jumped to from by way of TABLE_906B
     LDI	    A,$6C                           ;
     SJP     SUB_98B7                        ;
     BCS     BRANCH_9464                     ;
@@ -2700,7 +2890,7 @@ BRANCH_971A: ; branched to from 97FA
     LDA	    (X)                             ;
     CPI	    A,$0D                           ; Look for CR?
     BZR     BRANCH_976C                     ;
-    BII	    (OUT_BUF + $3F),$01              ; In IN_BUF
+    BII	    (OUT_BUF + $3F),$01             ; In IN_BUF
     BZR     BRANCH_9757                     ;
     BII	    (LASTVARTYPE),$80               ;
     BZS     BRANCH_9757                     ;
@@ -2778,7 +2968,7 @@ BRANCH_9799: ; branched to from 97A6
 
 BRANCH_97A8: ; branched to from 979C, 97F8
     LDI	    UH,$1C                          ;
-    BCH     BRANCH_976C                 ;
+    BCH     BRANCH_976C                     ;
 
 BRANCH_97AC: ; branched to from 97A0, 97A4
     DEC	    Y                               ;
@@ -2899,11 +3089,11 @@ BRANCH_9831:
     DEC     U
 
 BRANCH_983D:
-    LDA    (OUT_BUF + $46)                 ; In OUT_BUF
-    BZS    BRANCH_9847                     ;
-    INC    A                               ;
-    CPI    A,$A7                           ;
-    BZS    BRANCH_984E                     ;
+    LDA    (OUT_BUF + $46)                  ; In OUT_BUF
+    BZS    BRANCH_9847                      ;
+    INC    A                                ;
+    CPI    A,$A7                            ;
+    BZS    BRANCH_984E                      ;
 
 BRANCH_9847:
     LDI     A,$20                           ;
@@ -4080,7 +4270,7 @@ BRANCH_9D2A: ; branched to from 9D17, 9D1B, 9D20, 9D32
 
 
 BRANCH_9D2B: ; branched to from 9D10, 9D43, 9D5C
-    SJP	    RXCOM                        ; Manipulates LPT/UART registers
+    SJP	    RXCOM                           ; Manipulates LPT/UART registers
     BCR     BRANCH_9D45                     ;
     BII     A,$40                           ;
     BZR     BRANCH_9D2A                     ;
@@ -4321,7 +4511,7 @@ SUB_9E3E:
 
 SUB_9E47: 
     LDI	    A,$37                           ;
-    JMP	    TXCOM                        ; Sends charecter in A to RS232 Port.
+    JMP	    TXCOM                           ; Sends charecter in A to RS232 Port.
 
 
 BRANCH_9E4C: ; called from 9E45

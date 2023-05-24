@@ -646,6 +646,7 @@ ME_FRM_LOW_BANK: ; 82F0 - Entry point from Low Bank
 
 BRANCH_8303:
     LDI	    UL,$63                          ; U = 8363   
+       
     BCS     BRANCH_830F                     ; If UL <= D7, High Bank command, skip ahead.
     DEC	    UH                              ; DEC UH 83 -> 82, U = 8263
     RIE                                     ; Disable interrupts
@@ -653,7 +654,7 @@ BRANCH_8303:
                                             ; Used as flag to swtich back to Low Bank
 
 BRANCH_830F: ;Branched to by 8305.          ; Calc index into Command Vector Table @ 8331
-    SHL                                     ; A << 1: Before: A = INIT=07, A = INIT=A0
+    SHL                                     ; A << 1: Before: A = INIT=07, A = INIT=A0   
     ADR	    U                               ; U = U + A. U-REG is pointer into vector table
     LIN	    U                               ; A = (U) then INC U. Reading from Command Vector Table below
     STA	    XH                              ; XH = A. i.e. INIT A=88
@@ -673,18 +674,18 @@ BRANCH_831E: ; Branched to from 831A        ; Go back to low bank to handle some
     SIN     U                               ; $E3  $BA  $83 $05, which is
     LDI	    A,$BA                           ; RPU  
     SIN     U                               ; JMP  $8305
-    LDI	    A,$83                           ; This code segent sets PU to 
+    LDI	    A,HB($8305)                     ; This code segent sets PU to 
     SIN     U                               ;   bank in lower half of the CE-158 ROM
-    LDI	    A,$05                           ;
+    LDI	    A,LB($8305)                     ;
     STA	    (U)                             ; 
-    JMP	    ARW                             ; Jumps to $7A28, runs code segment poked in above
+    JMP	    ARW                             ; Jumps to $7A28, runs code segment POKED in above
 
 
 
 ;------------------------------------------------------------------------------------------------------------
 ; Command Vector Table
 ; Used as a vector jump table by MAIN_ENTRY
-; 813C Pokes value into program counter to jump to function/command handler
+; 813C POKES value into program counter to jump to function/command handler
 MERGE_VECTOR_8331:
     .WORD   $901C                           ; 901C - MERGE - Low Bank
 
@@ -823,9 +824,12 @@ BRANCH_839D: ; Branched to from 8384, 838B, 8390, 8399
 
 
 ;------------------------------------------------------------------------------------------------------------
-FILLER_83A5:
+; Unused space on original build
+; For modded build we will shift the rest of the tables up and add this to bottom of TBL_SETDEV_TEXT
+FILLER_83A4:
+#IFNDEF REDIREXIT
     .BYTE $00,$FF,$00,$FF,$00,$FF,$00,$FF,  $00,$FF,$00,$FF
-
+#ENDIF 
 
 
 ;-------------------------------------------------------------------------------------------------------------
@@ -858,9 +862,9 @@ TBL_BAUD: ;83C0                         ;C7                               ;CF
     .BYTE   $00,$32,$00,$64,$00,$6E,$00,$C8,  $01,$2C,$02,$58,$04,$B0,$09,$60 
 
 ;-------------------------------------------------------------------------------------------------------------
-; TBL_1854_BAUD
+; TBL_WORDLEN
 ; Used by PARSE_WORDLEN:$8B4D
-TBL_1854_BAUD: ; 83D0
+TBL_WORDLEN: ; 83D0
     ;.BYTE   $99,$0D,$85,$0A,$09,$85,$18,$0B
     .BYTE   $70,$58,$56,$4C,$48,$44,$42,$41
 
@@ -875,6 +879,15 @@ TBL_SETDEV_TEXT: ; 83D8
     .BYTE $43, $49, $08                     ; CI,  8 = Bit 3 in SETDEV
     .BYTE $43, $4F, $10                     ; CO, 10 = Bit 4 in SETDEV
 
+
+#IFDEF REDIREXIT
+    ; 12 bytes from 83A4~83AF shifted to here, last 3 used in SETDEV_EXT1
+    .BYTE $55, $31, $80                     ; U1, use UART 1 (Bit0=0=UART1)
+    .BYTE $55, $32, $81                     ; U2, use UART 2 (Bit0=1=UART2)
+    .BYTE $45, $4E, $98                     ; EN, enable BDP mode. 
+                                            ; B4-3 set to pass mode mask in LB &903F
+    .BYTE $00, $00, $00                     ; spare
+#ENDIF 
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -899,7 +912,11 @@ TBL_8475:
     .BYTE $00,$0B,$07,$00,$00,$00,$7F,$41,$41,$00,$02,$04,$08,$10,$20,$00 
     .BYTE $41,$41,$7F,$00,$04,$02,$7F,$02,$04,$08,$1C,$2A,$08,$08,$00,$00 
     .BYTE $07,$0B,$00,$06,$27,$03,$2E,$02,$32,$03,$35,$04,$39,$05,$3E,$05 
-    .BYTE $44,$08,$4A,$03,$53,$07,$57,$15,$5F,$00,$FF,$19,$85,$7F,$17,$85
+    .BYTE $44,$08,$4A,$03,$53,$07,$57,$15,$5F,$00,$FF
+    
+
+TBL_84B0:
+    .BYTE $19,$85,$7F,$17,$85 ;84B0
     .BYTE $3F,$0A,$85,$67,$0C,$85,$72,$0D,$85,$B8,$04,$84,$EF,$05,$84,$F4
     .BYTE $08,$85,$57,$0A,$85,$A6,$06,$85,$B1,$0C,$85,$99,$0D,$85,$0A,$09
     .BYTE $85,$18,$0B,$85,$29,$06,$85,$22,$09,$85,$35,$0F,$84,$FA,$17,$85
@@ -948,10 +965,21 @@ TEXT_84EF:
     .TEXT "Etx"                             ; 
 
 
+#IFNDEF REDIREXIT
+SEPERATOR_8624: 
+.BYTE  $00,$FF,$00,$FF,$00,$FF,$00,$FF, $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00  ;
+#ENDIF
 
-SEPERATOR_8624:
-.BYTE  $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00  ;
+#IFDEF REDIREXIT
+SETDEV_EXT2:
+    ANI     (SETDEV_REG),$E0                ; clears bits 4-3 of SETDEV MODE (CO CI)
+    ANI     A,$18                           ; keeps bits 4-3 of A, to pass mode mask at LB $903F
+    ORA     (SETDEV_REG)                    ; 
+    STA     (SETDEV_REG)                    ; 
+    RTN
 
+    .BYTE  $00,$FF,$00,$FF
+#ENDIF
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -981,7 +1009,7 @@ TBL_8669:
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_7A50_1 and SUB_7A50_2
-; Either one is poked into 7A50 by SUB_9976, this code is called by 933F
+; Either one is POKED into 7A50 by SUB_9976, this code is called by 933F
 ;
 SUB_7A50_1: ; 8684
     .BYTE   $19,$88,$43,$A2,$FD,$BE,$B8,$A4, $BE,$EE,$48,$FD,$18,$5A,$00,$58
@@ -1018,7 +1046,7 @@ SUB_7A50_1: ; 8684
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_7A50_2 - Poked into 7A50 by SUB_9976
+; SUB_7A50_2 - POKED into 7A50 by SUB_9976
 ; Something to do with printing on CE-150
 SUB_7A50_2: ; 86A2
     .BYTE   $B8,$FD,$BE,$89,$16,$ED,$78,$56,$40,$89,$0B,$ED,$78,$56,$20
@@ -1084,7 +1112,7 @@ UNKNOWN_86E6:
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_86F0 -  ***JMP
-; Calculates a new address to set P to (Program Counter) and it is poked into P.
+; Calculates a new address to set P to (Program Counter) and it is POKED into P.
 ; Part of Terminal program
 ; Arguments: A
 ; Output:
@@ -1139,8 +1167,8 @@ BRANCH_8700: ; Branched to from 8743
 TERMTXT_2INBUF:
     LDI	    YL,LB(IN_BUF)                   ; (Y)=7BB0, INPUT BUFFER Byte 0 START
     LDI	    YH,HB(IN_BUF)                   ; Setting up pointer?
-    LDI	    XL,LB($84B0)                    ; (X)=84B0, inside text @ TEXT_84EF
-    LDI	    XH,HB($84B0)                    ; Setting up pointer?
+    LDI	    XL,LB(TBL_84B0)                 ; (X)=84B0, inside text @ TEXT_84EF
+    LDI	    XH,HB(TBL_84B0)                 ; Setting up pointer?
     CPI	    A,$22                           ; A is index into text table.
     BCR     BRANCH_8723                     ; Branch fwd if A < 22
     CPI	    A,$2E                           ; 
@@ -1526,9 +1554,8 @@ BPD_8888:
 #ENDIF
 
 #IFDEF REDIREXIT
-    SJP	    TXT2STRBUF                      ; Copies string argument into string buffer
-    VEJ     (E2)                            ; Start of Basic Interpreter
-    .BYTE $00,$FF,$00,$FF,$00,$FF,$00;,$FF,$00,$FF,$00   ; Unused
+    JMP     SETDEV                          ; 
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$00,$FF,;$00,$FF,$00   ; Unused
 #ENDIF
 
 
@@ -1547,7 +1574,7 @@ COM_STR: ; 8893
 ;------------------------------------------------------------------------------------------------------------
 ; DEV$ - Called from Command Vector Table at $8331
 ; Converts SETDEV and SETCOM settings into ASCII
-; Then it pokes in either 'RPU, RTN' or just 'RTN' to 7A30 and calls it. 
+; Then it POKES in either 'RPU, RTN' or just 'RTN' to 7A30 and calls it. 
 ; Arguments:
 ; Output:
 ; RegMod: Y, U, A
@@ -1800,8 +1827,16 @@ BRANCH_8991: ; Branched to from 89B2
     CIN                                     ; FLAGS = A CPI (X),INC X
     BZR     BRANCH_89AF                     ; If A != (X) branch fwd
     LDA	    (X)                             ; Both chars matched so pull SETDEV bit value from table
+
+    #IFNDEF REDIREXIT
     ORA	    (SETDEV_REG)                    ; ORs it in
     STA	    (SETDEV_REG)                    ; and saves it
+    #ENDIF
+
+    #IFDEF REDIREXIT
+    SJP     SETDEV_EXT1
+    STA	    (SETDEV_REG)                    ; The ORA part in done in SETDEV_EXT1
+    #ENDIF
                                             ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
     LDI	    A,$C0                           ;
     STA	    (OPN)                           ; (OPN) Parse CE-158 BASIC tables first
@@ -1821,7 +1856,15 @@ BRANCH_89AE: ; Branched to from 8993
 
 BRANCH_89AF: ; Branched to from 8997
     INC	    X                               ; X = X + 1
-    CPI	    XL,$E7                          ; X is TBL_SETDEV_TEXT
+
+#IFNDEF REDIREXIT
+    CPI	    XL,$E7                          ; X is TBL_SETDEV_TEXT $E7 is LB of 1st address past table end
+#ENDIF
+
+#IFDEF REDIREXIT
+    CPI	    XL,$E4                          ; X is TBL_SETDEV_TEXT $E4 is LB of 1st address past table end
+#ENDIF
+    
     BCR     BRANCH_8991                     ; If XL < E7 branch back, try again for a match?
     BCH     BRANCH_89BC                     ; Unconditional jump fwd
 
@@ -1892,7 +1935,6 @@ SEPARATOR_89F1:
     .BYTE $FF, $00, $FF, $00                ; Not used
 
 
-
 ;------------------------------------------------------------------------------------------------------------
 ; TRANSMIT - Called from Command Vector Table
 ; Alt entry at 8A07 - Called from JMP_9ED0:9F13
@@ -1951,7 +1993,7 @@ SEPARATOR_8A1F:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; RELOC_CODE_8A20 - Poked into Sytem RAM by PORTS_UPDATE to read a value in from (A297) with SPC reset
+; RELOC_CODE_8A20 - POKED into Sytem RAM by PORTS_UPDATE to read a value in from (A297) with SPC reset
 ;                   A297 is in CE-150 ROM
 ; Arguments:
 ; Output: A = (A297)
@@ -2056,7 +2098,7 @@ BRANCH_8A93:  ; Branched to from 8A99       ; Sets default state of #(D00F~D008)
     SJP	    SUB_9F75                        ; Initializes some CE-158 registers
 
 BRANCH_8AA0: ; Branched to from 8A79
-    SJP	    SUB_9FD0                        ; Sets DTR/RTS based on OUTSTAT_REG
+    SJP	    SET_DTR_RTS                     ; Sets DTR/RTS based on OUTSTAT_REG
     BII	    (TRACE),$01                     ; FLAGS = (TRACE) & 01, mask all but bit 0 off
     BZR     CFG_UART_BAUD                   ; If bit 0 in (TRACE) set, branch fwd
                                             ; Branch fwd, set BAUD rate, then return
@@ -2115,8 +2157,8 @@ PARSE_BAUD: ; Branched to from 8921, Jumped to from 8709 vector calculation
     VEJ     (D0)                            ; Convert AR-X to INT & load to U-Reg. 06 is range. If range exceeded: Branch fwd
                 ABYT($06)                   ;    
                 ABRF(BRANCH_8B2B)           ;    
-    LDI	    XL,$C0                          ; 
-    LDI	    XH,$83                          ; X = 83C0, 'TBL_BAUD'
+    LDI	    XL,LB(TBL_BAUD)                 ; 
+    LDI	    XH,HB(TBL_BAUD)                 ; X = 83C0, 'TBL_BAUD'
 
 BRANCH_8ADC: ; Branched to from 8AE7        ; TBL_BAUD: 00 32  00 64  00 6E  00 C8  01 2C  02 58  04 B0  09 60 
     LIN	    X                               ; A = (X) then INC X.   X=83C1
@@ -2128,7 +2170,7 @@ BRANCH_8ADC: ; Branched to from 8AE7        ; TBL_BAUD: 00 32  00 64  00 6E  00 
 
 BRANCH_8AE4: ; Branched to from 8ADE
     INC	    X                               ; X = 83C2
-    CPI	    XL,$D0                          ; range of comparison is 83C0 to 83D0?
+    CPI     XL,LB(TBL_BAUD + $10)           ; Check for end of table: XL Orig: $D0, Mod: $C4
     BCR     BRANCH_8ADC                     ; Brach back if XL < D0
 
 BRANCH_8AE9: ; Branched to from 8A64
@@ -2136,8 +2178,8 @@ BRANCH_8AE9: ; Branched to from 8A64
 
 
 BRANCH_8AEA: ; Branched to from 8AE2        ; Got here is match found
-    LDA	    XL                              ; LB of last adddress read. X >= 8C31?, A >= 31?
-    SBI	    A,$C1                           ; Distance of match from end of first data pair
+    LDA	    XL                              ; LB of last adddress read. X >= 8C31?, A >= 31?     
+    SBI     A,LB(TBL_BAUD + 01)             ; Distance of match from end of first data pair
     AEX                                     ; Swap hi and low nibbles of Accumulator. 3 2 1 0 7 6 5 4
     ANI	    (SETCOM_REG),$1F                ; Keeps Bits 7-5. Bits 0,1 Parity. Bit 2 Stop Bit. Bits 3,4 Word Length. Bits 5,6,7 Baud. 
     BCH     BRANCH_8B37                     ; Branch fwd if any bits 7-6-5 not set
@@ -2225,9 +2267,9 @@ CFG_UART_BAUD: ; 8B3D, brancnched from 8AA7 ; Sets Baud rate in CDP1854ACE UART 
     AEX                                     ; Swap hi and low nibbles of Accumulator. 3 2 1 0 7 6 5 4
     ANI	    A,$0E                           ; Keep x x x x 7 6 5 x of (SETCOM), i.e. BAUD
     SHR                                     ; A = A >> 1. x x x x x 7 6 5
-    LDI	    XL,LB(TBL_1854_BAUD)            ; 
-    LDI	    XH,HB(TBL_1854_BAUD)            ; X = 83D0, TBL_1854_BAUD                         A = 0, 50 BUAD
-    ADR	    X                               ; X = X + A. Offset into TBL_1854_BAUD            X = 83D0 + 0
+    LDI	    XL,LB(TBL_WORDLEN)              ; 
+    LDI	    XH,HB(TBL_WORDLEN)              ; X = 83D0, TBL_WORDLEN                         A = 0, 50 BUAD
+    ADR	    X                               ; X = X + A. Offset into TBL_WORDLEN            X = 83D0 + 0
     LDA	    (X)                             ; A = (X).                                              A = 99
     ORI	    #(CE158_PRT_A_DIR),$C0          ; Bits 6,7 output, Baud rate select, PC0-4 also (ME1)
     SEC                                     ; Set carry flag
@@ -2661,7 +2703,7 @@ BRANCH_8D09: ; Branched to from 8CF7
 
 SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
     ANI	    #(PC1500_MSK_REG),$FC           ; PC-1500 - Clear mask for IRQ and PB7 (ON button)
-    SJP	    SUB_9FD0                        ; Sets DTR/RTS based on OUTSTAT_REG
+    SJP	    SET_DTR_RTS                        ; Sets DTR/RTS based on OUTSTAT_REG
     PSH	    A                               ;
     LDI	    A,$9A                           ;
     STA	    (CE158_REG_79FA)                ;
@@ -3765,7 +3807,7 @@ BRANCH_930E: ; Branched to from 92ED, 92F0
 BRANCH_9312: ; Branced to from 938E, 
     SDP                                     ; Sets LCD ON/OFF control flip-flop
     LDA	    UL                              ; UL >=20 or UL = 20 or UL = 0D or UL = 0A
-    STA	    (ARZ)                          ; Math reg Z
+    STA	    (ARZ)                           ; Math reg Z
     SJP	    SUB_9A9E                        ; jump code, A indexs into unknown table at X = 92B0?, sets PC
                                             ; probably does not return
 
@@ -4850,14 +4892,35 @@ SUB_98C3:
     BCH     BRANCH_9906                     ; Unconditional fwd branch
 
 
-
+#IFnDEF REDIREXIT
 ;------------------------------------------------------------------------------------------------------------
-; SEPERATOR_8D1 - FF 00 fills unuseed space
+; SEPERATOR_98D1 - FF 00 fills unuseed space
 SEPARATOR_98D1:
     .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00,  $FF,$00,$FF,$00,$FF,$00,$FF,$00 
     .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF 
+#ENDIF
 
 
+#IFDEF REDIREXIT
+; Extensinon of SETDEV to handle BPD 
+; 3rd byte of TBL_SETDEV_TEXT is in A. Values with Bit 7 set are for BPD
+; Can use $79DD as a flags regsiter for BPD settings
+SETDEV_EXT1: ; 98D1
+    BII     A,$80                           ;
+    BZR     SETDEV_EXT_DONE                 ; If Bit 7 set value is for BPD
+    ORA	    (SETDEV_REG)                    ; ORs it in
+    RTN                                     ; (8 bytes)
+
+SETDEV_EXT_DONE:  
+    ANI     ($79DD),~$19                    ; clears bits 4-3 of BPD flag
+    ANI     A,$19                           ; keeps bits 4-3 of A, to pass mode mask at LB $903F
+    ORA     ($79DD)                         ;  and bit 0 for UART 1 or 2 selection
+    STA     ($79DD)                         ; 
+    JMP     SETDEV_EXT2
+
+    ;.BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00,  $FF,$00,$FF,$00,$FF,$00,$FF,$00 
+    ;.BYTE   $FF,$00;,$FF,$00,$FF,$00,$FF 
+#ENDIF
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_98E8 - Called from 936B, 95C0
@@ -5371,7 +5434,7 @@ BRANCH_9B3F: ; Branched to from 9B2A, 9B40
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9B47 Entry at 9B47 Called from 9BA7, 9BB8, 9C01
-; May return or poke new address into Stack Pointer
+; May return or POKE new address into Stack Pointer
 ; Arguments: 
 ; Output: 
 ; RegMod: A
@@ -5383,7 +5446,7 @@ SUB_9B47:
     ANI	    (KEY_LAST),$00                  ; Clear it. Last pressed key code
 
 BRANCH_9B54: ; Branched to from 9B4E
-    STA	    (CE158_7B08)                    ; (7B0B) = A = FF
+    STA	    (CE158_7B08)                    ; (7B08) = A = FF
     PSH	    Y                               ; Save Y before calling sub
     SJP     SUB_97BA                        ; UL = 0E or byte read from LCD charecter matrix based on what is read from IN0-IN7?
     POP	    Y                               ; Get the Y back
@@ -6061,7 +6124,7 @@ BRANCH_9F03: ; Branched to from 9EF3
 ; Output: 
 ; RegMod: X
 JMP_9F06:
-    AND     (ERR_LINE_H)                     ; A = A & (ERR_LINE_H)
+    AND     (ERR_LINE_H)                    ; A = A & (ERR_LINE_H)
     BZS     BRANCH_9F18                     ; If (ERR_LINE_H) = 0
     LDI	    XL,$0E                          ;
     LDI	    XH,$00                          ; X = 000E
@@ -6214,12 +6277,12 @@ BRANCH_9FCF:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_9FD0 - Called from 8D10, 8AA0
+; SET_DTR_RTS - Called from 8D10, 8AA0
 ; Sets DTR/RTS based on OUTSTAT_REG
 ; Arguments: 
 ; Output: 
 ; RegMod:
-SUB_9FD0:
+SET_DTR_RTS:
     PSH	    A                               ; #(CE158_PRT_A) Bit 0 = DTR, Bit 1 = RTS
     LDA	    #(CE158_PRT_A)                  ; A = #(CE158_PRT_A)
     ANI	    A,$FC                           ; A = #(CE158_PRT_A) & FC. Mask off Bits 0,1
