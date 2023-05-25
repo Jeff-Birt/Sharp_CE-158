@@ -10,6 +10,7 @@ SETDEV_REG        = $7857 ; CE-158 SETDEV value
 SETCOM_REG        = $7858 ; CE-158 SETCOM
 CE158_7859_UNDEF  = $7859 ; CE-158 Undefined
 CE158_785A_UNDEF  = $785A ; CE-158 Undefined
+CE158_REG_79DD    = $79DD ; Used for BPD command flags
 CE158_REG_79DE    = $79DE ; Unknown use
 CE158_REG_79DF    = $79DF ; Unknown use
 CE158_REG_79FA    = $79FA ; Used by CE-158
