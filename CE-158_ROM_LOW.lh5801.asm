@@ -11,6 +11,7 @@
 
 ;#DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE
+#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
 
 .ORG $8000
 
@@ -271,7 +272,7 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
 ; Arguments: A charecter to send
 ; Outputs: REC = Success, A = #(CE158_PRT_A) Bits 5-2  on failure
 ; RegMod: A
-CHAR2COM:
+CHAR2COM: ; 81BC
     SEC                                     ; Set Carry Flag
     PSH     U                               ; Save U.
     STA	    UL                              ; A is character to send
@@ -308,15 +309,15 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Arguments: None
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
-RXCOM: 
+RXCOM: ; 81E6
     LDA	    #(CE158_PRT_A)                  ; #(CE158_PRT_A) is LPT/RS232 control
     AND     #(CE158_PRT_A)                  ; Filter out changes
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
     LDA     #(CE158_UART_REGR)              ; UART status register
-    BII	    (SETDEV_REG),$40                ; Test Bit6 
+    BII	    (SETDEV_REG),$40                ; Test Bit6 which is set if set by BRANCH_9F8E (HB) to 2400bps
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
-    BZS     BRANCH_81FD                     ; If TSRE not set branch fwd (last byte not done)
+    BZS     BRANCH_81FD                     ; If THRE not set branch fwd (last byte not done)
     SHL                                     ; A = A << 1. UART Status register
 
 BRANCH_81FD: ; Branched to from 81FA
@@ -330,8 +331,9 @@ BRANCH_81FD: ; Branched to from 81FA
 BRANCH_8208: ; Branched to from 8205
     BII	    A,$70                           ; Keep bit 6-4, Bits 4-2 from original (CE_158_UART_REG_R)
     BZS     BRANCH_8226                     ; Bits 6-4 -> ES FE PE, if all bits clear branch (no error?)
+
     LDA     #(CE158_UART_DATAR)             ; Read UART Data Register to clear it
-    BII	    (SETDEV_REG),$20                ; Test Bit5
+    BII	    (SETDEV_REG),$20                ; Test Bit5 which is set if set by BRANCH_9F8E (HB) to 2400bps
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
     LDI	    A,$15                           ; sets: Bit4 WLS2, Bit2 SBS, Bit0 PI
@@ -345,7 +347,7 @@ BRANCH_8222: ; Branched to from 8214
     RTN                                     ; SEC = Failure
 
 BRANCH_8226: ; Branched to from 820A
-    LDA     #(CE158_UART_DATAR)            ; Read data byte
+    LDA     #(CE158_UART_DATAR)             ; Read data byte
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
 
@@ -371,7 +373,7 @@ BRANCH_8237: ; Branched to from 824A to borrow return
 ; Arguments: A charecter to send
 ; Outputs:
 ; RegMod: UH
-TXCOM:
+TXCOM: ; 823A
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
 
 BRANCH_823E: ; Branched to from 8250, 8256
@@ -401,7 +403,7 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 ; Arguments: A = character to send
 ; Outputs: A = Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
-TXLPT:
+TXLPT: ; 825b
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
 
 BRANCH_825F: ; Branched to from 828A
@@ -1509,7 +1511,7 @@ BRANCH_9025: ; branched to from 8FFF (INPUT X=9002)
     LDI	    UH,HB(ARZ)                      ; U = 7A09 (ARZ + $01)
     LDI	    XL,LB(TABLE_9061 + $09)         ; XH = HB of command, XL=6A 
                                                                 
-BRANCH_902F: ; branched to from 9031        ; POKES in code from TABLE_9061
+BRANCH_902F: ; branched to from 9031        ; POKES in code from TABLE_906B
                                             ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
                                             ; CLOAD CD 3C      FD 28   68 1B        C9 E0      FD 5E   4F 41 44
                                             ; 7A00  VMJ (3C) : LDX U : LDI UH,$1B : VZR (E0) : STX P :
@@ -1731,15 +1733,15 @@ BRANCH_914D:
 
 BRANCH_9150:
     VCR     ($E0)                           ; Display error from UH or carry out 'ON-ERROR routine'.
-    SJP     SUB_98BD                        ;
+    SJP     SUB_98BD                        ; ***BAR Called to read byte from UART
     BCR     BRANCH_915A                     ;
 
 BRANCH_9157:
     JMP     BRANCH_962B                     ;
 
 BRANCH_915A:
-    BII     (OUT_BUF + $41),$20             ;
-    BZS     BRANCH_916D                     ;
+    BII     (OUT_BUF + $41),$20             ; ***BAR here on success of reading byte
+    BZS     BRANCH_916D                     ; ***BAR then we branch here
     BII     (OUT_BUF + $41),$04             ;
     BZR     BRANCH_917D                     ;
     SJP     SUB_9CEC                        ;
@@ -1747,12 +1749,12 @@ BRANCH_915A:
     BCH     BRANCH_916F                     ;
 
 BRANCH_916D:
-    BCH       SUB_9250                      ;
+    BCH       SUB_9250                      ; ***BAR and then branch here
 
 
 BRANCH_916F:
     VEJ     (F4)                            ; Loads U-Reg with a 16-bit value from the address of the data bytes (D1 D2).
-                AWRD(OUT_BUF + $15)          ; Address
+                AWRD(OUT_BUF + $15)         ; Address
     LDX     U                               ;
     VEJ     (F4)                            ; Loads U-Reg with a 16-bit value from the address of the data bytes (D1 D2).
                 AWRD(OUT_BUF + $17)         ; Address
@@ -3302,7 +3304,7 @@ BRANCH_9939: ; branched to from 9940
 BRANCH_9943: ; branched to from 9937, 993C
     RTN                                     ; PRINT# return
 
-BRANCH_9944: ; branched to from 9933
+BRANCH_9944: ; branched to from 9933 ***BAR
     SJP	    RXCOM                           ; Manipulates LPT/UART registers
     REC                                     ; Reset Carry
     RTN                                     ;
@@ -3722,7 +3724,7 @@ BRANCH_9ACB: ; branched to from 9AE2
     LDI	    UL,$4F                          ;
 
 SUB_9ACF: ; Called from 91B8, 95B6, 95C9, 95E1, 9A9D, 9AAC   branched to from 9AD4
-    SJP     (OUT_BUF + $4D)                 ;
+    SJP     (OUT_BUF + $4D)                 ; ***BAR 9ACF is main load loop for CLOAD?
     BCS     BRANCH_9AE5                     ;
     LOP     UL,SUB_9ACF                     ; UL = UL - 1, loop back 'e' if Borrow Flag not set
     BII	    (OUT_BUF + $41),$20             ;
@@ -3790,18 +3792,29 @@ BRANCH_9B10:
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9B1C - Called from 988A, 98A2
 ; 
-; CLOAD: BA 82 8E                           BA 9B 1C F0 89 -> 
-; 7BAA   JMP $828E -> Branch to MAIN_ENTRY: JMP $9B1C 
 ; Arguments:
 ; Output:
 ; RegMod:
-SUB_9B1C:
+; 
+; CLOAD: BA 82 8E                           BA 9B 1C F0 89 -> 
+; 7BAA   JMP $828E -> Branch to MAIN_ENTRY: JMP $9B1C 
+;
+; All CLOAD operations go through here after the first three bytes.
+; The CPI A,$0D seems to look for EOL marker, perhaps to know when to tokenize an ASCII load?
+SUB_9B1C:                                   
+#IFNDEF BUSY
     SJP	    (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
-    BCS     BRANCH_9B2F                     ;
-    CPI	    A,$0D                           ;
+#ENDIF
+
+#IFDEF BUSY
+    SJP	    (BUSY_BLINK)                    ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
+#ENDIF
+    
+    BCS     BRANCH_9B2F                     ; 
+    CPI	    A,$0D                           ; Detects EOL for CLOAD
     REC                                     ;
     BZR     BRANCH_9B2F                     ;
-    BII	    (OUT_BUF + $41),$04             ;
+    BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
     BZS     BRANCH_9B2F                     ;
     SEC                                     ;
     LDI	    UH,$3E                          ;
@@ -3818,12 +3831,21 @@ BRANCH_9B2F: ; called from 9B1F, 9B24, 9B2A
 ; Arguments:
 ; Output:
 ; RegMod:
+;
+; All CSAVE variations go through here. The (OUT_BUF + $4A) calls TXCOM from RAM (I think).
 SUB_9B31:
     LIN	    X                               ; A = (X), X = X + 1
 
 SUB_9B32: ; called from 9A95
+#IFNDEF BUSY
     SJP     (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
-    BCS     BRANCH_9B57                     ;
+#ENDIF
+
+#IFDEF BUSY
+    SJP     (BUSY_BLINK)                    ; Jumps to BUSY annunciator blink routine
+#ENDIF
+    
+    BCS     BRANCH_9B57                     ; ***
     LDA	    (OUT_BUF + $46)                 ;
     BZS     BRANCH_9B58                     ;
     SBC	    (OUT_BUF + $47)                 ; A = A - (pp)
@@ -4327,7 +4349,7 @@ BRANCH_9D64: ; branched to from 9D3B, 9D4E
 ; Arguments:
 ; Output:
 ; RegMod:
-SUB_9D65:
+SUB_9D65:                                   ; ***BAR We wind up here are RX one byte on CLOAD
     SJP	    RXCOM                           ; Manipulates LPT/UART registers
     LDI	    XL,$7B                          ;
     LDI	    UL,$1A                          ;
@@ -4569,12 +4591,43 @@ BRANCH_9E6A: ; branched to from 9E60
 BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
     RTN                                     ;
 
+
+;------------------------------------------------------------------------------------------------------------
+; BUSY BLINK LOAD- Blinks the BUSY annunciator while loading
+;
+#IFDEF BUSY
+BUSY_BLINK:
+    PSH     A                               ; (2) Save original A
+    LDA     ($79DF)                         ; (3) Grab current counter value
+    INC     A                               ; (1) INC counter
+    STA     ($79DF)                         ; (3) Update counter
+
+    EOR     (SETCOM_REG)                    ; (3) XOR  with BAUD (bits 7-5)
+    ANI     A,$E0                           ; (2) keep only bits 7-5
+
+    BZR     BLINK_SKIP                      ; (2) Skip the blink if A != 0
+
+    LDI     A,$01                           ; (2) B0 is BUSY annunciator
+    EOR     (DISP_BUFF + $4E)               ; (3) Toggle B0
+    STA     (DISP_BUFF + $4E)               ; (3) Write it back
+    ANI     ($79DF),$00                     ; (4) zero counter
+
+BLINK_SKIP:
+    POP     A                               ; (2) Get original A back
+    SJP	    (OUT_BUF + $4A)                 ; (3) Now do the CLOAD
+    RTN                                     ; (1) [34]
+
+#ENDIF
+
+
+
+
 ;------------------------------------------------------------------------------------------------------------
 ; SEPARATOR_9E74 - Unused
 SEPARATOR_9E74:
-    .BYTE $00,$FF,$03,$D7,$26,$F7,$00,$FF,  $00,$FF,$00,$BF,$04,$EE,$00,$FF
-    .BYTE $00,$FF,$82,$FF,$06,$FE,$00,$FF,  $00,$FF,$09,$FE,$00,$FF,$00,$FF
-    .BYTE $00,$FF,$80,$FF,$05,$FE,$00,$FF,  $00,$FF,$00,$FF,$00,$3F,$00,$FF
+    ;.BYTE $00,$FF,$03,$D7,$26,$F7,$00,$FF,  $00,$FF,$00,$BF,$04,$EE,$00,$FF
+    ;.BYTE $00,$FF,$82,$FF,$06,$FE,$00,$FF,  $00,$FF,$09,$FE,$00,$FF,$00,$FF
+    .BYTE $00,$FF,$80,$FF,$05,$FE,$00,$FF,  $00,$FF,$00,$FF,$00,$3F;,$00,$FF
     .BYTE $00,$FF,$40,$FF,$04,$FF,$00,$FF,  $00,$FF,$00,$FF,$80,$FF,$00,$FF
     .BYTE $00,$FF,$00,$FF,$21,$DF,$00,$FF,  $00,$FF,$00,$FF,$80,$FF,$00,$FF
     .BYTE $00,$FF,$82,$FF,$50,$FD,$00,$FF,  $00,$FF,$00,$FF,$00,$E2,$00,$FF

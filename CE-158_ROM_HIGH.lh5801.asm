@@ -11,8 +11,8 @@
 #INCLUDE    "lib/CE-158.lib"
 #INCLUDE    "lib/PC-1500_Macros.lib"
 
-;#DEFINE ENBPD                               ; Include BPD/BPD$ commands
-;#DEFINE E7BUG                               ; Fixes bug in CFG_UART_LPT at $8BAC
+#DEFINE ENBPD                               ; Include BPD/BPD$ commands
+#DEFINE E7BUG                               ; Fixes bug in CFG_UART_LPT at $8BAC
 ;DEFINE REDIREXITx
 
 .ORG $8000
@@ -139,7 +139,7 @@ B_TBL_8000_CMD_LST: ;Token LB < 80 command is function, else is proceedure
 LET_B: EQU ($ + 2) ; First keyword starting with 'B'. LET_B = Address of 'R' in BREAK
 CN1:   EQU $B5 \ CNIB($B5,CN1)   \ .TEXT "BREAK"   \ .WORD $F0B3, $CD89         ; $CD89 - Basic command P
 LET_C: EQU ($ + 2) ; First keyword starting with 'C'. LET_C = Address of 'L' in BREAK
-CN2:  EQU $C5 \ CNIB(CN1,CN2)   \ .TEXT "CLOAD"    \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
+CN2:   EQU $C5 \ CNIB(CN1,CN2)   \ .TEXT "CLOAD"   \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
 #ENDIF
 
 #IFDEF ENBPD
@@ -323,7 +323,7 @@ RXCOM:
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
     LDA     #(CE158_UART_REGR)              ; UART status register
-    BII	    (SETDEV_REG),$40                ; Test Bit6 
+    BII	    (SETDEV_REG),$40                ; Test Bit6 which is set if set by BRANCH_9F8E (HB) to 2400bps
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_81FD                     ; If TSRE not set branch fwd (last byte not done)
     SHL                                     ; A = A << 1. UART Status register
@@ -340,7 +340,7 @@ BRANCH_8208: ; Branched to from 8205
     BII	    A,$70                           ; Keep bit 6-4, Bits 4-2 from original (CE158_UART_REGR)
     BZS     BRANCH_8226                     ; Bits 6-4 -> ES FE PE, if all bits clear branch (no error?)
     LDA     #(CE158_UART_DATAR)             ; Read UART Data Register to clear it
-    BII	    (SETDEV_REG),$20                ; Test Bit5
+    BII	    (SETDEV_REG),$20                ; Test Bit5 which is set if set by BRANCH_9F8E (HB) to 2400bps
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
     LDI	    A,$15                           ; sets: Bit4 WLS2, Bit2 SBS, Bit0 PI
@@ -1581,9 +1581,8 @@ BPD_8888:
 ; Output:
 ; RegMod:
 COM_STR: ; 8893
-    ANI	    (STK_PTR_GSB_FOR),$00           ; Clear Stack pointer for GOSUB and FOR
-                                            ; Perhaps used as mode switch?
-    BCH     BRANCH_889D                     ; Unconditional branch fwd
+    ANI	    (STK_PTR_GSB_FOR),$00           ; $00 = COM$, $FF= DEV$
+    BCH     BRANCH_889D                     ; Branch into DEV_STR hander
 
 
 
@@ -1595,45 +1594,45 @@ COM_STR: ; 8893
 ; Output:
 ; RegMod: Y, U, A
 DEV_STR:
-    ORI	    (STK_PTR_GSB_FOR),$FF           ; Set Stack pointer for GOSUB and FOR to $FF
-                                            ; Perhaps used as mode switch?
+    ORI	    (STK_PTR_GSB_FOR),$FF           ; $00 = COM$, $FF= DEV$
 
 BRANCH_889D: ; Branched from COM$
     LDI	    YL,LB(ARW+$06)                  ; Set up pointer?
-    LDI	    YH,HB(ARW)                      ; Y = 7A2E -> in AR-W
+    LDI	    YH,HB(ARW+$06)                  ; Y = 7A2E -> in AR-W
     LDI	    UL,$15                          ; Loop counter, 15-0 16 bytes copied
-    LDI	    A,$2C                           ; Value to be poked in 2C = ','
+    LDI	    A,$2C                           ; Value to be poked in $2C ','
 
-BRANCH_88A5: ; Branched from 88A6
+BRANCH_88A5: ; Branched from 88A6           ; COM$ - Value to string 
     SDE	    Y                               ; (Y) = A. Then DEC Y. Y=7A2E~7A18, fill with 2C ','
     LOP	    UL,BRANCH_88A5                  ; DEC UL, if borrow flag not set loop back
 
-    LDA	    (STK_PTR_GSB_FOR)               ; (STK_PTR_GSB_FOR) = $00 or $FF. Y = 7A18
+                                            ; *** look for BPD$ flag
+    LDA	    (STK_PTR_GSB_FOR)               ; (STK_PTR_GSB_FOR) = $00 COM$ or $FF DEV$. Y = 7A18
     BZR     BRANCH_88BE                     ; If A != 0 (DEV$) branch fwd
 
     SJP	    SETCOM2ASCII                    ; COM$. Converts Baud Rate setting in SETCOM to ASCII?
-
     INC	    Y                               ; Y = 7A19. Leaving a ',' between
     SJP	    WORDLEN2ASCII                   ; Updates (Y) with ASCII value for Word Length, Y = 7A1A
     INC	    Y                               ; Y = 7A1B. Leaving a ',' between
     SJP	    PARITY2ASCII                    ; Updates (Y) with ASCII charecter for Parity, Y = 7A1C
     INC	    Y                               ; Y = 7A1D. Leaving a ',' between
     SJP	    STOPBIT2ASCII                   ; Updates (Y) with ASCII charecter for #Stop Bits Y = 7A1E
-    BCH     BRANCH_88E3                     ; Branch fwd unconditional
+    BCH     BRANCH_88E3                     ; Branch fwd to display section
 
-BRANCH_88BE: ; Branched from 88AB                               ; DEV$
+
+BRANCH_88BE: ; Branched from 88AB           ; DEV$ - value to string
     LDA	    (SETDEV_REG)                    ; Which devices are redirected to RS232
                                             ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
-    STA	    UL                              ; UL = A
+    STA	    UL                              ; UL = A = SETDEV_REG
     LDA	    (OPN)                           ; OPN device code, Basic table to search first
-    CPI	    A,$C0                           ; Check if Bits 7-6 set, what does this indicate?
-    BZS     BRANCH_88CB                     ; If A != C0 branch fwd
-    LDI	    UL,$00                          ;
+    CPI	    A,$C0                           ; Is OPN set to CE-158?
+    BZS     BRANCH_88CB                     ; If A == C0 branch fwd
+    LDI	    UL,$00                          ; If OPN != CE-158 zero what was read from SETDEV_REG
 
-BRANCH_88CB: ; Branched from 88C7
-    LDA	    UL                              ; A = UL = (SETDEV_REG) or $00
-    LDI	    XL,LB(TBL_SETDEV_TEXT)          ; X = 83D8. TBL_SETDEV_TEXT, SETDEV Command text table
-    LDI	    XH,HB(TBL_SETDEV_TEXT)          ; Y = 7A1E
+BRANCH_88CB: ; Branched from 88C7           ; *** Change start,  # loops, OR in $80 to A for BPD$
+    LDA	    UL                              ; A = UL = (SETDEV_REG) or $00 is OPN != $0C (OPN)
+    LDI	    XL,LB(TBL_SETDEV_TEXT)          ; X = 83D8. SETDEV Command text table
+    LDI	    XH,HB(TBL_SETDEV_TEXT)          ; Y = 7A1E 
     LDI	    UL,$04                          ; Loop counter, 4-0 all 5 possible SETDEV settings
 
 BRANCH_88D2: ; Branched from 88DC           ; TBL_SETDEV_TEXT .BYTE 4B 49 01 = K I 01 (Bit 0 in SETDEV)
@@ -1642,18 +1641,20 @@ BRANCH_88D2: ; Branched from 88DC           ; TBL_SETDEV_TEXT .BYTE 4B 49 01 = K
     INC	    Y                               ; Y = Y + 1 = 7A21, leaving a ','
     SHR                                     ; A = A >> 1. A = (SETDEV_REG) or $00
     BCS     BRANCH_88DB                     ; If Bit 0 (KI?) was set branch fwd
-    DEC	    Y                               ; Y = 7A1F
+    DEC	    Y                               ; Y = 7A1F 
     DEC	    Y                               ; Y - 7A1E
     DEC	    Y                               ; Y = 7A1D 
 
 BRANCH_88DB: ; Branched from 88D6
     INC	    X                               ; X = 83DB, next text entry (DO)
     LOP	    UL,BRANCH_88D2                  ; UL = UL - 1, loop back 'e' if Borrow Flag not set.
+
     CPI	    YL,$19                          ; Y=7A19?
     BCR     BRANCH_88E3                     ; If YL < 19 branch fwd
     DEC	    Y                               ;
 
-BRANCH_88E3: ; Branched from 88BC, 88E0
+
+BRANCH_88E3: ; Branched from 88BC, 88E0     ; This is the display section
     LDA	    YL                              ;
     SEC                                     ; Set Carry
     LDI	    XL,LB($7A18)                    ;
@@ -2379,7 +2380,7 @@ BRANCH_8BC8: ; Branched to from 8BC4
 ; Output:
 ; RegMod: 
 SUB_8BCE:
-    LDA	    (ERR_TOP_H)                   ; Used for unknown flags
+    LDA	    (ERR_TOP_H)                     ; Used for unknown flags
     SJP	    TERMTXT_2INBUF                  ; Copies text string from TEXT_84EF to Input Buffer (7BB0)
                                             ; A = String index. Terminal program menu text?
     SJP	    SUB_86F0                        ; Calculates a new address to set P to (Program Counter), and goes there.
@@ -3060,8 +3061,8 @@ BRANCH_8EE1: ; Branched to from 8EED
 
 
 BRANCH_8EE4: ; Branched to from 8EDF
-    ANI	    (ERR_TOP_H),$FE               ; Clear Bit 0 (unknown flags)
-    LDA	    (ERR_TOP_H)                   ;
+    ANI	    (ERR_TOP_H),$FE                 ; Clear Bit 0 (unknown flags)
+    LDA	    (ERR_TOP_H)                     ;
     CPI	    A,$20                           ;
     BZS     BRANCH_8EE1                     ; If A = 20 branch back
 
@@ -4286,7 +4287,7 @@ UNKNOWN_95C5: ; Not used???
 ; Output: 
 ; RegMod: A, X, Y, UL
 SUB_95C6:
-    BII	    (DISP_BUFF+$4E),$01               ; LCD (Busy) Annunciator
+    BII	    (DISP_BUFF+$4E),$01             ; LCD (Busy) Annunciator
     BZS     BRANCH_960F                     ; Bit 0 not set
     LDI	    A,$01                           ; 
     EOR	    (DISPARAM)                      ; Toggle Bit 0. Display parameter. Bit 7 = 1 is BREAK.
@@ -4930,7 +4931,8 @@ SEPARATOR_98D1:
 #IFDEF ENBPD
 ; Extensinon of SETDEV to handle BPD 
 ; 3rd byte of TBL_SETDEV_TEXT is in A. Values with Bit 7 set are for BPD
-; Can use CE158_REG_79DD as a flags regsiter for BPD settings
+; CE158_REG_79DD flags for BPD settings
+; B0= 0 U1, B0=1 U2, B4-3=1 BPD mode. We don't keep bit 7
 SETDEV_EXT1: ; 98D1
     BII     A,$80                           ;
     BZR     SETDEV_EXT_DONE                 ; If Bit 7 set value is for BPD
@@ -4938,11 +4940,11 @@ SETDEV_EXT1: ; 98D1
     RTN                                     ; (8 bytes)
 
 SETDEV_EXT_DONE:  
-    ANI     (CE158_REG_79DD),~$19           ; clears bits 4-3 of BPD flag ***XXX need a lable for CE158_REG_79DD
+    ANI     (CE158_REG_79DD),~$19           ; clears bits 4-3 of BPD flag
     ANI     A,$19                           ; keeps bits 4-3 of A, to pass mode mask at LB $903F
     ORA     (CE158_REG_79DD)                ;  and bit 0 for UART 1 or 2 selection
     STA     (CE158_REG_79DD)                ; 
-    JMP     SETDEV_EXT2
+    JMP     SETDEV_EXT2                     ;
 
     ;.BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00,  $FF,$00,$FF,$00,$FF,$00,$FF,$00 
     ;.BYTE   $FF,$00;,$FF,$00,$FF,$00,$FF 
@@ -6386,7 +6388,7 @@ UNKNOWN_9FEE:
 ; RegMod:
 SUB_9FEF:
     ANI	    #(CE150_MSK_REG),$FD            ; Clear Bit 1, Pen descending?
-    BII	    (PRNT_DISABLE),$FF             ; Set flags based on regsiter
+    BII	    (PRNT_DISABLE),$FF              ; Set flags based on regsiter
     BZR     BRANCH_9FFF                     ; If any bit was set (Pen ascending, Low battery, Paper feed btn)
     ORI	    #(CE150_MSK_REG),$02            ; Set Bit 1.
 
