@@ -1,8 +1,9 @@
  ; PC-1500 library file
-;RAM_ST            = $4000 ; Start of RAM w/o RAM expansion
-;RESMEM_ST         = $4008 ; Reserve memroy area area w/o RAM expansion (4008-40C4)
-;PRGMEM_ST         = $40C5 ; Start of program memory w/o RAM expansion
-SHADOW_RAM        = $7000 ; Shadow of RAM from (4000-45FF?)
+RAM_ST            = $4000 ; Start of RAM w/o RAM expansion
+RESMEM_ST         = $4008 ; Reserve memroy area area w/o RAM expansion (4008-40C4)
+PRGMEM_ST         = $40C5 ; Start of program memory w/o RAM expansion
+RAM_END           = $47FF ; End of RAM for stock, CE-151, CE-159
+SHADOW_RAM        = $7000 ; Shadow RAM. 7600-77FF mirrored at 7000-71FF, 7200-73FF, 7400-75FF
 SHADOW_RAM_SIZE   = $0600 ; 
 DISP_BUFF         = $7600 ; Display Buffer (7600-774F)
 DISP_BUFF_SIZE    = $0150 ; 
@@ -150,6 +151,7 @@ EDCTRL_TBL_SIZE   = $05   ;
 FVAL_TBLE         = $C3A8 ; Operator table for formula eval of subs (C3A8-C3FF)  (DE) (D6DF)
 FVAL_TBLE_SIZE    = $05   ; 
 BCMD_LET          = $C458 ; Basic command LET
+TRCROUTINE        = $C4AF ; Trace Routine
 BCMD_STOP         = $C4B6 ; Basic command STOP
 BCMD_END          = $C50D ; Basic Command END
 BCMD_GOTO         = $C515 ; Basic Command GOTO
@@ -187,17 +189,25 @@ BTN_SHCL          = $CA55 ; SHIFT CL (Clear All)
 WARM_START        = $CA58 ; Editor Warm Start
 BUTTON_CL         = $CA64 ; CL Button (Clear LCD )
 BTN_RCL           = $CB61 ; RCL Button
+RSV_CHNG          = $CB69 ; Change RESERVE level
 BTN_SHMODE        = $CB9C ; SHIFT MODE Button (RESERVE mode)
 BTN_MODE          = $CBA0 ; MODE Button
 BTN_INS           = $CBC7 ; INS Button
 BTN_DEL           = $CBCF ; DEL Button
 BTN_RIGHT         = $CBE4 ; CURSOR RIGHT Button
+PRG_ENTER         = $CC1D ; "@", Programmatic ENTER
 BTN_LRFT          = $CC22 ; CURSOR LEFT Button
 BTN_UP            = $CC38 ; CURSOR UP Button
 BTN_DOWN          = $CC48 ; CURSOR DOWN Button
 BTN_ENTER         = $CCC1 ; ENTER Button
 UNLOCK            = $CD6A ; UNLOCK
 BTN_OFF           = $CD71 ; OFF Button
+ERR1              = $CD89 ; Display ERROR 1, return to editor.
+ERRN              = $CD8B ; Display ERROR N, from UH or do 'ON-ERROR' routine.
+INS2INBUF         = $CDE6 ; INSERT - Insert one character into the Input Buffer.
+CHAR2INBUF        = $CE10 ; Enter characters into the Input Buffer.
+DELFRMINBUF       = $CE38 ; DELETE - Delete one character from the Input Buffer.
+DEFEVAL           = $CE4A ; Evaluate DEF key
 RESKEY_SRCH       = $CEC4 ; Searches for reserve key code in Reserve memory
 TXFR_RSV_KEY      = $CED0 ; Transfers reserve key assignment to Reserve memory.
 PRGLINE_TDI       = $CF27 ; Transfer, delete, insert program line from Input Buffer
@@ -218,10 +228,14 @@ BCMD_INKY         = $D9AA ; Basic command INKEY$
 BCMD_CHR          = $D9B1 ; Basic command CHR$
 BCMD_STR          = $D9CF ; Basic command STR$
 BCMD_LEN          = $D9D7 ; Basic command LEN / ASC
+ARUINT2ARX        = $D9E7 ; Transfers U-Reg as an integer to AR-X in the format '82 UH UL '.
 BCMD_RLM_STR      = $D9F3 ; Basic commands RIGHT$ / LEFT$ / MID$
 BCMD_STATUS       = $DA44 ; Basic command STATUS
 BCMD_MEM          = $DA5D ; Basic command MEM
+MULT16B           = $DA71 ; 16-Bit Multiplication: X-Reg=Y-Reg*U-Reg.
+TWOSCOMP          = $DAA8 ; Forms two's complement of U-Reg.
 EVAL_USING        = $DAB2 ; Evaluation of USING paramters from Y-Reg
+ISARXBCD          = $DB87 ; Check AR-X for BCD format
 LOAD_NEXT         = $DCD4 ; Load next Token / character
 XREG2STRBUF       = $DFA1 ; Inserts string pointed to by X-Reg into string buffer. Jump if overflow.
 ARX2STRBUF        = $DFC4 ; Loads AR-X with a pointer to the string buffer.
@@ -230,11 +244,34 @@ MEM_IN_UREG       = $DFEE ; Calculates the available memory space (MEM) in U-Reg
 PRGST2XREG        = $DFF3 ; X-Reg = Program Start Address. U-Reg = STATUS 1-2
 AUTO_OFF          = $E33F ; Auto-Power-Off routine
 KEY2ASCII         = $E42C ; Return ASCII code of key pressed in Accumulator. If no key: C=1.
+BCMD_INPUTNUM     = $E4E7 ; Basic command INPUT#
 BCMD_PRINT        = $E4EB ; Basic command PRINT
+BCMD_BEEP_STD     = $E669 ; Basic command BEEP - Standard beep.
+BCMD_BEEP         = $E66F ; Basic command BEEP - Duration in X-Reg, Pitch in UL.
+BCMD_PAUSE        = $E6A5 ; Basic command PAUSE
+BCMD_GPRINT       = $E7AC ; Basic command GPRINT
+BCMD_GCURSOR      = $E83E ; Basic command GCURSOR
+BCMD_CURSOR       = $E846 ; Basic command CURSOR
+BCMD_CLS          = $E865 ; Basic command CLS
+BCMD_WAIT         = $E86A ; Basic command WAIT
 TIMEDELAY         = $E88C ; Time delay 15.625 ms * number in U-Reg. BREAK is possible.
 PRGMDISP          = $E8CA ; Display program.
+STATUSCHK         = $E9EB ; Checks display and input status.
 USING_FRMT        = $EA78 ; USING formatting. If error C = 1.
+ARX2ASCII         = $EB40 ; Converts AR-X to ASCII according to USING parameters.
+TRUNCDEC          = $EC2F ; Truncation of the decimal places
+BCMD_DEC9         = $EC3C ; Checks if value in AR-X can be represented in 9 decimal places. If not, C=1.
+X_STROUT          = $EC5C ; Transfers string in X-Reg to output buffer. If error C=1.
+ARX2BCD           = $EC6C ; If AR-X numerical convert to BCD. C=0. If CSI contine w/Distance Address D1.
+ARXBCD2ASCII      = $EC74 ; Converts AR-X from BCD to ASCII and transfers to output buffer.
+XP_STROUT         = $EC82 ; Transmits string X-Reg points to into output buffer. C=1 if buffer full
+CLRNOCURSOR       = $EC9C ; Clears LCD if cursor not allowed and sets the matrix column pointer to 00.
 INIT_CURS         = $ECAE ; Initializes cursor parameters.
+INIT_MTRX         = $ECB2 ; Initializes matrix column pointer (0).
+ARX2OUTBUF        = $ECB7 ; Transfers value in AR-X to output buffer.
+ARX2OUTBUF_F      = $ECD6 ; Tranfer AR-X foramtted to Ouput Buffer
+ARXASCII2OUTBUF   = $ECE3 ; Convert AR-X to ASCII and sent to Output Buffer
+USING_PARAM       = $ECEB ; Determine and transer USING paramaters
 OUTBUF2LCD        = $ECFA ; Output 26 characters in Output Buffer to LCD
 TEXTUREG_A        = $ED00 ; Output of text on LCD. U-Reg=start address; A=length.
 TEXTUREG_XL       = $ED3B ; Outputs text from U-Reg. XL = number of characters
@@ -243,16 +280,31 @@ CHARA2COL         = $ED57 ; Output character in A to next matrix column.
 CHARA2COLX        = $ED5B ; Output character in A to matrix column X-Reg points to.
 A2HEX             = $ED7D ; Convert character in A to HEX nibble
 ASCII2HEX         = $ED95 ; Convert two ASCII characters from X-Reg into HEX
+MTRXNRANGE        = $EDAB ; Checks if matrix pointer still in permissible range 0-155. No, C=1
+MTRXINC           = $EDB1 ; Increase matrix pointer if in permissible range 0-155. No, C=1
+LCDCACHE          = $EDC1 ; Cache LCD display of 7810-7BFF
+BCMD_BFF          = $EDD8 ; Retrieve LCD display of 7610-7BFF
 HEX2COL           = $EDEF ; Output HEX value from A to next matrix column
 GPRNT_A_2LCD      = $EDF6 ; Output of A as a GRPRINT (bit pattern) on LCD 
 MATRIX_PTR2XREG   = $EE1F ; Calculates matrix column address from matrix pointer, to X-Reg.
 MATRIX_A2XREG     = $EE22 ; Calculated matrix column address from A, to X-Reg
+CHAR2ADDR         = $EE48 ; Retrive address in Character Set Table for characters in A
+LCDCLR            = $EE71 ; Clears the LCD display.
+LCDCLRRNG         = $EE78 ; Clears the range from (UH00-UH40).
 SAVELCD2BUF       = $EE80 ; Save LCD to buffer
 BUF2LCD           = $EE99 ; Transfer buffer to LCD
+LCDCHRLEFT        = $EEB0 ; Determines number of empty characters left on LCD, to A.
+BCMD_POINT        = $EECB ; Basic command POINT
+CURSOR_OFF        = $EF00 ; Turns off blinking cursor.
+USING2STK         = $EF05 ; Saves USING parameters on processor stack (7895-7897)
 ARX2STRNG         = $EF1B ; Convert AR-X to string
+STK2USING         = $EF35 ; Get USING parameters from processor stack.
 TXT2LCD           = $EF44 ; Output text on LCD display.
 TXT2LCD_ARY       = $EF5B ; Output text on LCD from AR-Y to 7AXL
 PREPLCDOUT        = $EF67 ; Prepare the LCD output
+OUTBUFCLR         = $EF81 ; Clear output buffer.
+SUBTR             = $EFB6 ; AR-X = AR-X - AR-Y (Subtraction).
+ADDIT             = $EFBA ; AR-X = AR-X + AR-Y (Addition).
 PC1500_DIV_RESET  = $F004 ; PC1500_DIVIDER_RESET (CE1)
 PC1500_UREG_OUTP  = $F005 ; PC1500_U_REG_OUTPUT (CE1)
 PC1500_SER_XFR    = $F006 ; PC1500_SERIAL_XFR (CE1)
