@@ -12,9 +12,16 @@
 #INCLUDE    "lib/CE-150.lib"
 #INCLUDE    "lib/PC-1500_Macros.lib"
 
-;#DEFINE ENBPD                               ; Include BPD/BPD$ commands
-;#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE
-;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+#INCLUDE    CE-158_ROM_HIGH.exp              ; Export table from high bank
+
+#DEFINE ENBPD                               ; Include BPD/BPD$ commands
+#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE
+#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+
+;------------------------------------------------------------------------------------------------------------
+; Symbols to export to CE-158_ROM_LOW.exp to be imported into high bank
+.EXPORT LB_RTN_FRM_HB, LB_COM_STR_V, LB_CONSOL_V, LB_DEV_STR_V, LB_FEED_V, LB_LPRINT_V, LB_LLIST_V
+.EXPORT LB_CONSOLE_2V, LB_FEED_2V, LB_LPRINT_2V, LB_LLIST_2V
 
 .ORG $8000
 
@@ -128,32 +135,32 @@ B_TBL_8000_Z_KW:
 B_TBL_8000_CMD_LST:     ;Token LB < 80 command is function, else is proceedure
 ;Ctrl nibble    Ctrl nib calc            Name              Token  Vector
 LET_B:  EQU ($ + 2) ; First keyword starting with 'B'. LET_B = Address of 'R' in BREAK
-CN1:    EQU $B5 \ CNIB($B5,CN1)   \ .TEXT "BREAK"   \ .WORD $F0B3, $CD89         ; $CD89 - Basic command P
+CN1:    EQU $B5 \ CNIB($B5,CN1)     \ .TEXT "BREAK"    \ .WORD $F0B3, ERR1          ; $CD89 - Basic command P
 
 LET_C:  EQU ($ + 2) ; First keyword starting with 'C'. LET_C = Address of 'L' in BREAK
-CN2:    EQU $C5 \ CNIB(CN1,CN2)   \ .TEXT "CLOAD"    \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
-CN3:    EQU $C5 \ CNIB(CN2,CN3)   \ .TEXT "CSAVE"    \ .WORD $F095, CSAVE_V       ; $82DD - Drops through to MAIN_ENTRY
-CN4:    EQU $C4 \ CNIB(CN3,CN4)   \ .TEXT "COM$"     \ .WORD $E858, COM_STR_V     ; $82D3 - Drops through to MAIN_ENTRY
-CN5:    EQU $D7 \ CNIB(CN4,CN5)   \ .TEXT "CONSOLE"  \ .WORD $F0B1, CONSOLE_V     ; $82DE - Drops through to MAIN_ENTRY
+CN2:    EQU $C5 \ CNIB(CN1,CN2)     \ .TEXT "CLOAD"    \ .WORD $F089, MAIN_ENTRY    ; $82EC - MAIN_ENTRY
+CN3:    EQU $C5 \ CNIB(CN2,CN3)     \ .TEXT "CSAVE"    \ .WORD $F095, CSAVE_V       ; $82DD - Drops through to MAIN_ENTRY
+CN4:    EQU $C4 \ CNIB(CN3,CN4)     \ .TEXT "COM$"     \ .WORD $E858, LB_COM_STR_V  ; $82D3 - Drops through to MAIN_ENTRY
+CN5:    EQU $D7 \ CNIB(CN4,CN5)     \ .TEXT "CONSOLE"  \ .WORD $F0B1, LB_CONSOL_V   ; $82DE - Drops through to MAIN_ENTRY
 
 LET_D:  EQU ($ + 2) ; First keyword starting with 'D'. LET_D = Address of 'E' in DEV$
-CN6:    EQU $C4 \ CNIB(CN5,CN6)   \ .TEXT "DEV$"     \ .WORD $E857, DEV_STR_V     ; $82D4 - Drops through to MAIN_ENTRY
-CN7:    EQU $D3 \ CNIB(CN6,CN7)   \ .TEXT "DTE"      \ .WORD $E884, DTE_V         ; $82D1 - Drops through to MAIN_ENTRY
+CN6:    EQU $C4 \ CNIB(CN5,CN6)     \ .TEXT "DEV$"     \ .WORD $E857, LB_DEV_STR_V  ; $82D4 - Drops through to MAIN_ENTRY
+CN7:    EQU $D3 \ CNIB(CN6,CN7)     \ .TEXT "DTE"      \ .WORD $E884, DTE_V         ; $82D1 - Drops through to MAIN_ENTRY
 
 LET_E:  EQU ($ + 2) ; First keyword starting with 'E'. LET_E = Address of 'R' in ERN
-CN8:    EQU $C3 \ CNIB(CN7,CN8)   \ .TEXT "ERN"      \ .WORD $F052, ERN_V         ; $82DF - Drops through to MAIN_ENTRY
-CN9:    EQU $D3 \ CNIB(CN8,CN9)   \ .TEXT "ERL"      \ .WORD $F053, ERL_V         ; $82E0 - Drops through to MAIN_ENTRY
+CN8:    EQU $C3 \ CNIB(CN7,CN8)     \ .TEXT "ERN"      \ .WORD $F052, ERN_V         ; $82DF - Drops through to MAIN_ENTRY
+CN9:    EQU $D3 \ CNIB(CN8,CN9)     \ .TEXT "ERL"      \ .WORD $F053, ERL_V         ; $82E0 - Drops through to MAIN_ENTRY
 
 LET_F:  EQU ($ + 2) ; First keyword starting with 'F'. LET_F = Address of 'E' in FEED
-CN10:   EQU $D4 \ CNIB(CN9,CN10)    \ .TEXT "FEED"     \ .WORD $F0B0, FEED_V        ; $82E1 - Drops through to MAIN_ENTRY
+CN10:   EQU $D4 \ CNIB(CN9,CN10)    \ .TEXT "FEED"     \ .WORD $F0B0, LB_FEED_V     ; $82E1 - Drops through to MAIN_ENTRY
 
 LET_I:  EQU ($ + 2) ; First keyword starting with 'I'. LET_I = Address of 'N' in INPUT
 CN11:   EQU $C5 \ CNIB(CN10,CN11)   \ .TEXT "INPUT"    \ .WORD $F091, INPUT_V       ; $82E2 - Drops through to MAIN_ENTRY
 CN12:   EQU $D6 \ CNIB(CN11,CN12)   \ .TEXT "INSTAT"   \ .WORD $E859, INSTAT_V      ; $82E3 - Drops through to MAIN_ENTRY
 
 LET_L:  EQU ($ + 2) ; First keyword starting with 'L'. LET_L = Address of 'P' in LPRINT
-CN13:   EQU $C6 \ CNIB(CN12,CN13)   \ .TEXT "LPRINT"   \ .WORD $F0B9, LPRINT_V      ; $82E4 - Drops through to MAIN_ENTRY
-CN14:   EQU $D5 \ CNIB(CN13,CN14)   \ .TEXT "LLIST"    \ .WORD $F0B8, LLIST_V       ; $82E5 - Drops through to MAIN_ENTRY
+CN13:   EQU $C6 \ CNIB(CN12,CN13)   \ .TEXT "LPRINT"   \ .WORD $F0B9, LB_LPRINT_V   ; $82E4 - Drops through to MAIN_ENTRY
+CN14:   EQU $D5 \ CNIB(CN13,CN14)   \ .TEXT "LLIST"    \ .WORD $F0B8, LB_LLIST_V    ; $82E5 - Drops through to MAIN_ENTRY
 
 LET_M:  EQU ($ + 2) ; First keyword starting with 'M'. LET_M = Address of 'E' in MERGE
 CN15:   EQU $95 \ CNIB(CN14,CN15)   \ .TEXT "MERGE"    \ .WORD $F08F, MERGE_V       ; $82C0 - Sets XL=F0, branches to MAIN_ENTRY
@@ -179,8 +186,8 @@ CN24:   EQU $C8 \ CNIB(CN23,CN24)   \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V
 CN25:   EQU $D3 \ CNIB(CN24,CN25)   \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
 
 #IFDEF ENBPD
-LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in SETUR
-CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"      \ .WORD $E856, BPD_STR       ; 9DFE
+LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in UR$
+CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"      \ .WORD $E856, LB_BPD_STR       ; 9DFE
 
 LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
 CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
@@ -189,7 +196,7 @@ CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V    
 #IFNDEF ENBPD
 LET_U:  EQU $00
 LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
-CN26:   EQU $D4 \ CNIB(CN25,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
+CN26:   EQU $D4 \ CNIB(CN25,CN26)   \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
 #ENDIF
 
 CN27:  EQU $D0 \ .BYTE CN27
@@ -515,10 +522,10 @@ DTE_V:
 TERMINAL_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-COM_STR_V:
+LB_COM_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-DEV_STR_V:
+LB_DEV_STR_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 SETDEV_V:
@@ -530,23 +537,23 @@ SETCOM_V:
 TRANSMIT_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-CONSOLE_2V:
+LB_CONSOLE_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-FEED_2V:
+LB_FEED_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LPRINT_2V:
+LB_LPRINT_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LLIST_2V:
+LB_LLIST_2V:
     REC                                     ; Reset Carry Flag, does nothing drop through
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 CSAVE_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-CONSOLE_V:
+LB_CONSOL_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 ERN_V:
@@ -555,7 +562,7 @@ ERN_V:
 ERL_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-FEED_V:
+LB_FEED_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 INPUT_V:
@@ -564,10 +571,10 @@ INPUT_V:
 INSTAT_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LPRINT_V:
+LB_LPRINT_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
-LLIST_V:
+LB_LLIST_V:
     REC                                     ; Reset Carry Flag, does nothing drop through
 
 OUTSTAT_V:
@@ -604,9 +611,9 @@ MAIN_ENTRY: ;82EC
     SIN     U                               ; $E1 $BA $82 $F0 ->
     LDI	    A,$BA                           ; SPU, JMP $82F0
     SIN     U                               ; This code segment sets PU to 
-    LDI	    A,HB($82F0)                     ; bank in upper half of
+    LDI	    A,HB(HB_JMP_FRM_LB)             ; bank in upper half of
     SIN     U                               ; the CE-158 ROM
-    LDI	    A,LB($82F0)                     ; 
+    LDI	    A,LB(HB_JMP_FRM_LB)             ; 
     STA     (U)                             ; Jumps to $7A28, runs code segment
 
 BRANCH_8302:
@@ -627,7 +634,7 @@ BRANCH_8302:
 ; "LPRINT"    F0B9    (9056)  Low   "PRINT#"    NNNN    (93D0)  Low
 ; "LLIST"     F0B8    (901D)  Low   "PRINT#2"   NNNN    (93D4)  Low
  
-BACK_FROM_HI_BANK: ; 8305                   ; High bank jumps back here for the above commands
+LB_RTN_FRM_HB: ; 8305                   ; High bank jumps back here for the above commands
     SIE                                     ; X = new address passed from high bank
     STX     P                               ; Jump to address by poking program counter ***JMP
 
@@ -641,8 +648,8 @@ BACK_FROM_HI_BANK: ; 8305                   ; High bank jumps back here for the 
 ERL_F:
     VEJ     (F4)                            ; Loads U-Reg with 16-bit value from address of ($78B4)
                 AWRD(ERR_LINE_H)            ; 
-    LDI     XL,LB($DA6C)                    ; X = DA6C? Inside BASIC command MEM
-    LDI     XH,HB($DA6C)                    ; 
+    LDI     XL,LBO(BCMD_MEM,$0F)            ; X = DA6C? Inside BASIC command MEM
+    LDI     XH,HBO(BCMD_MEM,$0F)            ; 
     BCH 	BRANCH_8363                     ; Borrows exit of SPACE_STR__ZONE
 
 
@@ -743,10 +750,10 @@ RINKY_STR:
     LDI	    A,$00                           ; 
 
 BRANCH_835E: ; branched to from 835A
-    LDI     XL,LB($D9AD)                    ;
+    LDI     XL,LBO(BCMD_INKY,$03)           ;
 
 BRANCH_8360: ; branched to from 8332
-    LDI     XH,HB($D9AD)                    ; X = D9AD, inside INKEY$
+    LDI     XH,HBO(BCMD_INKY,$03)           ; X = D9AD, inside INKEY$
     STA     UL                              ;
 
 BRANCH_8363: ;branched to from 8310
@@ -1106,18 +1113,18 @@ B_TBL_8800_CMD_LST:
 ;                                        Token LB < 80 command is function, else is proceedure
 ;Ctrl nibble    Ctrl nib calc            Name               Token  Vector
 LET_C2: EQU ($ + 2) ; First keyword starting with 'C'. LET_C2 = Address of 'O' in CONSOLE
-CN28:   EQU $D7 \ CNIB($D7,CN28)    \ .TEXT "CONSOLE" \ .WORD $F0B1, CONSOLE_2V ; 82D8
+CN28:   EQU $D7 \ CNIB($D7,CN28)    \ .TEXT "CONSOLE" \ .WORD $F0B1, LB_CONSOLE_2V ; 82D8
 
 LET_F2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'F'. LET_F2= Address of 'E' in FEED
-CN29:   EQU $D4 \ CNIB(CN28,CN29)   \ .TEXT "FEED"    \ .WORD $F0B0, FEED_2V    ; 82D9
+CN29:   EQU $D4 \ CNIB(CN28,CN29)   \ .TEXT "FEED"    \ .WORD $F0B0, LB_FEED_2V    ; 82D9
 
 LET_L2: EQU ($ + 2) ; First keyword starting with 'L'. LET_L2= Address of 'P' in LPRINT
-CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"  \ .WORD $F0B9, LPRINT_2V  ; 82DA
-CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"   \ .WORD $F0B8, LLIST_2V   ; 82DB 
+CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"  \ .WORD $F0B9, LB_LPRINT_2V  ; 82DA
+CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"   \ .WORD $F0B8, LB_LLIST_2V   ; 82DB 
 
 #IFDEF ENBPD
 LET_S2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'D'. LET_D2
-CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"   \ .WORD $E886, SETDEV_V   ; $82D5 - Drops through to MAIN_ENTRY (.WORD $E887, BPD_8888)
+CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"   \ .WORD $E987, LB_SETUR   ; $82D5
 
 LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
 CN32:   EQU $D3 \ CNIB(CN31_2,CN32) \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; 880D
@@ -1131,8 +1138,6 @@ CN32:   EQU $D3 \ CNIB(CN31,CN32)   \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_
 
 CN33:   EQU $D0 \ .BYTE CN33 
 
-
-
 B_TBL_8800_CMD_LST_END:
 .BYTE $D0
 
@@ -1140,34 +1145,53 @@ B_TBL_8800_CMD_LST_END:
 
 #IFDEF ENBPD
 ;------------------------------------------------------------------------------------------------------------
+; SETUR - Stub to call SETUR code in high bank
+; X-REG address of function, Y-REG Token
+; We are using the unused space in TBL_8888 for BPD code
+;   Code to copy into RAM
+;   SPU                                     ; Swtich to low bank
+;   JMP     BPD_STR_H                       ; Address of function in low bank
+LB_SETUR: ;8892
+    LDI     A,$E1                           ; (2) SPU
+    STA     (ARW)                           ; (3) Temp storage in RAM
+    LDI     A,$BA                           ; (2) JMP
+    STA     (ARW + $01)                     ; (3) Temp storage in RAM
+    LDI     A,HB(HB_SETDEV)                 ; (2) HB of BPD_STR_H
+    STA     (ARW + $02)                     ; (3) Temp storage in RAM
+    LDI     A,LB(HB_SETDEV)                 ; (2) LB of BPD_STR_H
+    STA     (ARW + $03)                     ; (3) Temp storage in RAM
+    JMP     ARW                             ; (3) [23] Switch to code in high bank
+
+
+
+;------------------------------------------------------------------------------------------------------------
 ; BPD$ - Stub to call BPD$ code in high bank
 ; X-REG address of function, Y-REG Token
 ; We are using the unused space in TBL_8888 for BPD code
 ;   Code to copy into RAM
 ;   SPU                                     ; Swtich to low bank
 ;   JMP     BPD_STR_H                       ; Address of function in low bank
-BPD_STR_H: EQU  $9A7F
-BPD_STR: ;8892
+LB_BPD_STR: ;8A89
     LDI     A,$E1                           ; (2) SPU
     STA     (ARW)                           ; (3) Temp storage in RAM
     LDI     A,$BA                           ; (2) JMP
-    STA     (ARW+$01)                       ; (3) Temp storage in RAM
-    LDI     A,HB(BPD_STR_H)                 ; (2) HB of BPD_STR_H
-    STA     (ARW+$02)                       ; (3) Temp storage in RAM
-    LDI     A,LB(BPD_STR_H)                 ; (2) LB of BPD_STR_H
-    STA     (ARW+$03)                       ; (3) Temp storage in RAM
+    STA     (ARW + $01)                     ; (3) Temp storage in RAM
+    LDI     A,HB(HB_BPD_STR)                ; (2) HB of BPD_STR_H
+    STA     (ARW + $02)                     ; (3) Temp storage in RAM
+    LDI     A,LB(HB_BPD_STR)                ; (2) LB of BPD_STR_H
+    STA     (ARW + $03)                     ; (3) Temp storage in RAM
     JMP     ARW                             ; (3) [23] Switch to code in high bank
 
 
 
 ;------------------------------------------------------------------------------------------------------------
-; BPD_CMD - CLOAD, CSAVE, MEREGE are intercepted and here we njects PRINT#"L)filename" or PRINT#"S)filename" 
+; BPD_CMD - CLOAD, CSAVE, MEREGE are intercepted and here we inject PRINT#"L)filename" or PRINT#"S)filename" 
 ;           to signal Backpack of upcoming file use. Then it proceeded with the CLOAD/CSAVE/MERGE
 ; We are using the unused space in TBL_8888 for BPD code
 ; On entering Y points to first " and A=00=CSAVE, A=01=CLOAD or MERGE 
 BPD_CMD:
 INJCMD:     EQU (IN_BUF + $40)              ; $7BF0 Start address of injected command
-INJFLGA:    EQU (IN_BUF + $4F)              ; $7BFF Address of flag used to signal injected command
+INJFLAG:    EQU (IN_BUF + $4F)              ; $7BFF Address of flag used to signal injected command
 
     PSH Y                                   ; On entering Y points to first " after command
     PSH A                                   ; A=00=CSAVE, A=01=CLOAD or MERGE
@@ -1219,21 +1243,25 @@ CLOOP:
 
 CLOOP1:
     TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
-    CPI YL,LB(INJCMD + $10)                 ; $00
+    CPI YL,LBO(INJCMD,$10)                  ; $00
     BZR CLOOP1                              ; If XL < $00 keep copying
 
     POP A                                   ; $00=CSAVE (char=S), $01=CLOAD or MERGE (char=L)
     BZR PRFIN                               ; If A = 1 skip ahead
-    LDI A,'S'                               ; If A = 0 POKE in the S cahracter, for SAVE
-    STA (INJCMD + 4)                        ;
+    LDI A,'S'                               ; If A = 0 POKE in the S character, for SAVE
+    STA (INJCMD + $04)                      ;
 
 PRFIN:
-    LDI YH,HB(INJCMD + $06)                 ; Set up pointer to next byte past )
-    LDI YL,LB(INJCMD + $06)                 ; 
+    LDI YH,HBO(INJCMD,$06)                  ; Set up pointer to next byte past )
+    LDI YL,LBO(INJCMD,$06)                  ; 
 
     POP X                                   ; X=Y from original CLOAD/CSAVE/MERGE call
     PSH X                                   ; Points to first ", save it again for CLOAD/CSAVE/MERGE use later
     INC X                                   ; Now X points to first character of file name
+    LDA (X)                                 ;
+    CPI A,$22                               ; If ASCII or ML load we will be at first " 
+    BZR CLOOP2                              ;  we want to be at first letter of filename so,
+    INC X                                   ;  INC one more time to get to file name
 
 CLOOP2:
     LDA (X)                                 ; A = (X) get char from file name
@@ -1243,12 +1271,13 @@ CLOOP2:
     BZR CLOOP2                              ; If not keep copying    
 
 
-    LDI YH,HB(INJCMD + $03)                 ; Set up pointer to next byte past )
-    LDI YL,LB(INJCMD + $03)                 ; 
+    LDI YH,HBO(INJCMD,$03)                  ; Set up pointer to next byte past )
+    LDI YL,LBO(INJCMD,$03)                  ; 
 
     SJP PRINT_NUM_HANDLER                   ; Call Print#""
 
-    ANI (IN_BUF+$4F),$00                    ; Clear marker byte so CLOAD/CSAVE/MERGE will exit as normal
+
+    ANI (INJFLAG),$00                       ; Clear marker byte so CLOAD/CSAVE/MERGE will exit as normal
     POP Y                                   ; Get back original Y used for CLOAD/CSAVE/MERGE
     RET                                     ; Return to _REDIRECT which sets A properly and jumps back to CLOAD/CSAVE/MERGE
 
@@ -1258,17 +1287,13 @@ ORIGPC:     EQU $                           ; Save current PC
 
 ; UART CFG code POKE into ARW-ARS in Step #1. Calls routines in High Bank (9 bytes)
 BPD_ARW:
-
-CFG_UART_BAUD:   EQU $8B3D                  ; In High Bank
-CFG_UART_LPT:    EQU $8B72                  ; In High Bank
     SPU                                     ; ($E1) High bank: SPV SPU 
     
-    SJP CFG_UART_BAUD                       ; ($BE,$8B,$3D) CALL CFG_UART_BAUD (&8B3D)
-    SJP CFG_UART_LPT                        ; ($BE,$8B,$72) CALL CFG_UART_LPT (&8B72)
+    SJP     HB_CFG_URT_BD                   ; ($BE,$8B,$3D) CALL CFG_UART_BAUD (&8B3D)
+    SJP     HB_CFG_URT_LPT                  ; ($BE,$8B,$72) CALL CFG_UART_LPT (&8B72)
     
     RPU                                     ; ($E3) Low bank: SPV RPU
     RTN                                     ; ($9A) Back to RAM routine
-
 
 .ORG (ORIGPC + ($-INJCMD))                  ; Set PC back to original range
 
@@ -1317,6 +1342,7 @@ CLI_EXIT:                                   ; Returns to here and back to CLOAD
 #ENDIF
 
 
+
 ;------------------------------------------------------------------------------------------------------------
 ; TABLE_8888
 ; Seems like nonsense that is not used, so we use it for BPD
@@ -1337,12 +1363,12 @@ TABLE_8888:
     .BYTE $16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A,$27
     .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
     .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
-    .BYTE $21
+    .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
+    .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF
 #ENDIF
     
-
-    .BYTE     $EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
-    .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01,$5B
+   
+    .BYTE                                                         $01,$5B
     .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
     .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       ; 8998
     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
@@ -1545,9 +1571,9 @@ BRANCH_9025: ; branched to from 8FFF (INPUT X=9002)
     VEJ     (C6)                            ; DEC Y-Reg by 2 for tokens or 1 for chars in U-Reg
     LDA	    XL                              ; XL is low byte of Command address
     PSH	    A                               ; Original LB of X-REG
-    LDI	    UL,LB(ARZ + $01)                ; Loop counter
-    LDI	    UH,HB(ARZ)                      ; U = 7A09 (ARZ + $01)
-    LDI	    XL,LB(TABLE_9061 + $09)         ; XH = HB of command, XL=6A 
+    LDI	    UL,LBO(ARZ,$01)                 ; Loop counter
+    LDI	    UH,HBO(ARZ,$01)                 ; U = 7A09 (ARZ + $01)
+    LDI	    XL,LBO(TABLE_9061,$09)          ; XH = HB of command, XL=6A 
                                                                 
 BRANCH_902F: ; branched to from 9031        ; POKES in code from TABLE_906B
                                             ; LLIST 906A=5E FD E0 C9 1B 68 28 FD 3C CD
@@ -1590,7 +1616,7 @@ BRANCH_904E: ; branched to from 9043
 
 ;------------------------------------------------------------------------------------------------------------
 ; LPRINT - Jumped to from 8307 via High Bank
-; Arguments: XREG = Address, YREG = Token,
+; Arguments: XREG = Address = 9056, YREG = Token,
 ; Outputs:
 ; RegMod:
 LPRINT: ;9056
@@ -1821,8 +1847,8 @@ BRANCH_9187:
     LDI     YH,HB(ARV)                      ; Y = $7A20 = ARV
     VMJ     ($10)                           ; Convert U-Reg according to data bytes, $40 = Save to (Y-Reg) in ASCII
                 ABYT($40)                   ; n1
-    LDI     XL,LB(ARU + $07)                ; ARU + 7
-    LDI     XH,HB(ARU)                      ; X = $7A1F ARU 7A18
+    LDI     XL,LBO(ARU,$07)                 ; ARU + 7
+    LDI     XH,HBO(ARU,$07)                 ; X = $7A1F ARU 7A18
     LDA     YL                              ;
     SEC                                     ;
     SBI     A,$21                           ;
@@ -2491,7 +2517,8 @@ BRANCH_94A0: ; branched to from 9518, 9544
 
 ;--------------------------------------------------------------------------------------------------
 ; 94A3 ~ 94DF Byte array
-UNUSED_94A3:
+; Used by BRANCH_955C: ; branched to from 9521, 9525, 9529, 9540
+TBL_94A3:
     .BYTE $00,$0B,$00,$00,$88,$00,$00,$00,  $00,$13,$00,$00,$10,$00,$00,$00 
     .BYTE $00,$D3,$19,$00,$88,$00,$00,$00,  $01,$A3,$19,$00,$10,$00,$FF,$00                     
     .BYTE $FF,$00,$FF,$00,$FF,$00,$FF,$00,  $FF,$00,$FF,$00,$FF,$00,$FF,$00
@@ -2576,8 +2603,8 @@ BRANCH_9542: ; branched to from 951A
     SHR                                     ;
     SHR                                     ;
     LDI	    A,$00                           ;
-    LDI	    XL,LB(ARU+$07)                  ;
-    LDI	    XH,HB(ARU)                      ; X = 7A1F = ARU
+    LDI	    XL,LBO(ARU,$07)                 ;
+    LDI	    XH,HBO(ARU,$07)                 ; X = 7A1F = ARU
     LDI	    UL,$0F                          ;
 
 BRANCH_9552: ; branched to from 9553
@@ -2592,8 +2619,8 @@ BRANCH_9559: ; branched to from 9555
 
 BRANCH_955C: ; branched to from 9521, 9525, 9529, 9540
     STA	    (CASS_FLAG)                     ;
-    LDI	    XH,HB($94A7)                    ;
-    LDI	    XL,LB($94A7)                    ; X = 94A7
+    LDI	    XH,HBO(TBL_94A3,$04)            ; TBL_94A3 94A7
+    LDI	    XL,LBO(TBL_94A3,$04)            ; X = 94A7
     ADR	    X                               ; X = X + A + Carry
     SHR                                     ;
     LDI	    A,$05                           ;
@@ -2604,8 +2631,8 @@ BRANCH_955C: ; branched to from 9521, 9525, 9529, 9540
 
 BRANCH_956F: ; branched to from 9568
     VEJ     (DA)                            ; Cache/remember variable address from U-Reg and length from AR-X (7A07)
-    LDI	    UH,HB(ARX)                      ;
-    LDI	    UL,LB(ARX+$04)                  ; U = ARX + $04 = $7A04
+    LDI	    UH,HBO(ARX,$04)                 ;
+    LDI	    UL,LBO(ARX,$04)                 ; U = ARX + $04 = $7A04
 
 BRANCH_9574: ; branched to from 9576
     LDE     X                               ; A = (X) then X = X - 1
@@ -2628,8 +2655,8 @@ BRANCH_958A: ; branched to from 9603
     BCS     BRANCH_95FB                     ;
     BII	    (OUT_BUF + $41),$20             ;
     BZR     BRANCH_95A2                     ;
-    LDI	    UH,HB(ARX)                      ;
-    LDI	    UL,LB(ARX+$04)                  ; U = $7A04 = (ARX + 4)
+    LDI	    UH,HBO(ARX,$04)                 ;
+    LDI	    UL,LBO(ARX,$04)                 ; U = $7A04 = (ARX + 4)
 
 BRANCH_959B: ; branched to from 95A0
     DEC	    X                               ;
@@ -2775,7 +2802,7 @@ SEPARATOR_9651:
 #IFDEF ENMLCALL
 PRNT_NUM8:                                  ; Hack to allow a ML routine to call PRINT#-8
     DEC	    Y                               ; Part of original exit code
-    LDA     (IN_BUF+$4F)                    ; We sat last byte of IN_BUF to $A5
+    LDA     (IN_BUF + $4F)                  ; We sat last byte of IN_BUF to $A5
     CPI     A,$A5                           ; to designate that a ML routine called PRINT#-8
     BZS     PRNT_NUM8_ML                    ; If = then PRINT#-8 wsa called by a ML routine
     VEJ     (E2)                            ; Was BASIC call so jump to start of Basic Interpreter
@@ -3251,8 +3278,8 @@ BRANCH_98C1: ; branched to from 98BB
     LDI	    XL,LB(TBL_9887)                 ;
     LDI	    XH,HB(TBL_9887)                 ; X = Pointer to JMP in TBL_9887 X, used in 9924
     PSH	    Y                               ; Y is pointer to location in program line
-    LDI	    YL,LB(OUT_BUF + $46)            ;
-    LDI	    YH,HB(OUT_BUF + $46)            ; Y = $7BA6
+    LDI	    YL,LBO(OUT_BUF,$46)             ;
+    LDI	    YH,HBO(OUT_BUF,$46)             ; Y = $7BA6
     ANI     A,$40                           ; PRINT# A=&00
     BZS     BRANCH_98F8                     ;
     LDA	    (OUT_BUF + $3E)                 ; in OUT_BUF
@@ -4511,8 +4538,8 @@ SUB_9DF1:
     VMJ	    ($36)                           ; Stores CSI of a text/text var in AR-X (C=1). If no string in Y-Reg, C=0.
     BCS     BRANCH_9E1D                     ; PRINT# C=1
     PSH	    X                               ;
-    LDI	    YL,LB(OUT_BUF+$02)              ;
-    LDI	    YH,HB(OUT_BUF)                  ; Y = 7B62, (OUT_BUF + 2)
+    LDI	    YL,LBO(OUT_BUF,$02)             ;
+    LDI	    YH,HBO(OUT_BUF,$02)             ; Y = 7B62, (OUT_BUF + 2)
     LDI	    UL,$15                          ;
 
 BRANCH_9DFD: ; called from 9E38, 9E3E
@@ -4540,8 +4567,8 @@ BRANCH_9DFF: ; called from 9E00
 
 BRANCH_9E1D: ; branched to from 9DF3 PRINT#     
     PSH	    Y                               ; Pointer to position in BASIC line
-    LDI	    YL,LB(OUT_BUF+$05)              ; Y = (OUT_BUF + 5)
-    LDI	    YH,HB(OUT_BUF)                  ; First character of argument
+    LDI	    YL,LBO(OUT_BUF,$05)             ; Y = (OUT_BUF + 5)
+    LDI	    YH,HBO(OUT_BUF,$05)             ; First character of argument
     VEJ     (DC)                            ; Loads CSI from AR-X: Address by X-Reg length by UL & A 
     CPI	    A,$10                           ; PRINT# A=05
     BCR     BRANCH_9E2A                     ; PRINT# C=0
@@ -4636,9 +4663,9 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 #IFDEF BUSY
 BUSY_BLINK: ; 9E74
     PSH     A                               ; (2) Save original A
-    LDA     ($79DF)                         ; (3) Grab current counter value
+    LDA     (CE158_REG_79DF)                ; (3) Grab current counter value $79DF
     INC     A                               ; (1) INC counter
-    STA     ($79DF)                         ; (3) Update counter
+    STA     (CE158_REG_79DF)                ; (3) Update counter $79DF
 
     EOR     (SETCOM_REG)                    ; (3) XOR  with BAUD (bits 7-5)
     ANI     A,$E0                           ; (2) keep only bits 7-5
@@ -4648,7 +4675,7 @@ BUSY_BLINK: ; 9E74
     LDI     A,$01                           ; (2) B0 is BUSY annunciator
     EOR     (DISP_BUFF + $4E)               ; (3) Toggle B0
     STA     (DISP_BUFF + $4E)               ; (3) Write it back
-    ANI     ($79DF),$00                     ; (4) zero counter
+    ANI     (CE158_REG_79DF),$00            ; (4) zero counter $79DF
 
 BLINK_SKIP:
     POP     A                               ; (2) Get original A back

@@ -1,0 +1,5 @@
+HB_BPD_STR       .EQU  $97af
+HB_CFG_URT_BD    .EQU  $8b3d
+HB_CFG_URT_LPT   .EQU  $8b72
+HB_JMP_FRM_LB    .EQU  $82f0
+HB_SETDEV        .EQU  $8968

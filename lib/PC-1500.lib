@@ -216,6 +216,11 @@ INBUF_INIT        = $D030 ; Clear Input Buffer, Y-Reg points to start of Input B
 INBUF_CLR         = $D034 ; Clears Input buffer with $0D
 SYSMSG            = $D046 ; Send System Messages.
 XREG2YREG         = $D049 ; Transfers UL bytes from X-Reg to Y-Reg
+VARONBSTK         = $D04C ; Find variable on Basic Stack, if not found C = 0.
+POPBSTK           = $D065 ; Pop address from Basic Stack.
+PSHBSTK           = $D071 ; Push U-Reg to Basic Stack
+DELSVARS          = $D080 ; Deletes all standard variables
+DELDVARS          = $D091 ; Deletes dimensioned variables
 DEL_DIM_VARS      = $D09C ; Deletes dimensioned variables if program and variable memory overlap C=1
 BCD_Y2ARX         = $D14F ; Pass BCD number pointed to by Y-Reg to AR-X
 LINESEARCH        = $D2EA ; Searches for line number according to U-Reg from start of program.
@@ -318,3 +323,4 @@ PC1500_PRT_B_DIR  = $F00D ; PC1500_PRT_B_DIR (CE1)
 PC1500_PRT_A      = $F00E ; PC1500_PRT_A (CE1)
 PC1500_PRT_B      = $F00F ; PC1500_PRT_B (CE1)
 TOKENIZE_INBUF    = $F957 ; Tokenizer. Convert input buffer to program line.
+CHARSET           = $FCA0 ; Character set table

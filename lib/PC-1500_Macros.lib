@@ -32,6 +32,8 @@ TOK_USING:  EQU $F085                       ; USING command token
 #define CNIB(n81,n82)   .BYTE ((n81 & $F0) | (n82 & $0F))   ; calculates control nibble
 #define HB(n16)         (n16 >> 8)          ; Return HB of 16bit value
 #define LB(n16)         (n16 & $FF)         ; Return HB of 16bit value
+#define HBO(n16,n8)     ((n16 + n8) >> 8)   ; Return HB of 16bit value
+#define LBO(n16,n8)     ((n16 + n8) & $FF)  ; Return HB of 16bit value
 
 ; CE-158 related
 #define HIGH_BANK       SPU \ SPV           ; Switch to High Bank

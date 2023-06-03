@@ -27,6 +27,7 @@ PRNT_TEMPP        = $79F8 ; CE-150, Temp storage of Pen location during paper fe
 PRNT_PWRINT       = $79F9 ; CE-150, Flag indicating power up/interrupt in progress
 PRNT_VEC          = $A000 ; CE-150 Character vectors (A000-A28A)
 PRNT_VEC_SIZE     = $028B ; 
+MGP1_150          = $A28B ; Start of MGP 1 program block
 COLDES            = $A519 ; CE-150 Color Designation
 MOTOFF            = $A769 ; CE-150 Printer motor OFF
 PRINT_150         = $A781 ; CE-150 Print ASCII character (no LF)
