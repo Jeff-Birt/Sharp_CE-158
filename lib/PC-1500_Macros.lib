@@ -1,11 +1,9 @@
- ; PC-1500 Macros
+; PC-1500 Macros
 ;------------------------------------------------------------------------------------------------------------
 ; Assembly macros used to encode arguments for lh5801 'macros' that take arguments inline after CALL
 
 #define EQU .EQU
-
 .MSFIRST
-.ORG $8000
 
 COMMA:      EQU $2C                         ; ',' used for macros
 CR:         EQU $0D                         ; '/CR' used for macros

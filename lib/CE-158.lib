@@ -1,4 +1,4 @@
- ; CE-158 library file
+; CE-158 library file
 OUTSTAT_REG       = $7850 ; CE-158 OUTSTAT value
 RS232C            = $7851 ; CE-158 Console 1 (RS232C)
 CONSOLE2          = $7852 ; CE-158 Console 1 (//)

@@ -7,7 +7,7 @@ REM call TASM with build args and source file name
 
 IF "%~1" == "-l" (
     @echo Building low bank
-    %TASM%\tasm323\Tasm323.exe -g3 -x7 -5801 CE-158_ROM_LOW.lh5801.asm 
+    %TASM%\tasm323\Tasm323.exe -x7 -g3 -5801 CE-158_ROM_LOW.lh5801.asm 
     del CE-158_ROM_LOW.bin
     ren CE-158_ROM_LOW.obj CE-158_ROM_LOW.bin
 ) ELSE IF "%~1" == "-h" (

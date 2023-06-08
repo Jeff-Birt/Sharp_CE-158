@@ -9,14 +9,16 @@
 
 #INCLUDE    "lib/PC-1500.lib"
 #INCLUDE    "lib/CE-158.lib"
+#INCLUDE    "lib/CE-158N.lib"
 #INCLUDE    "lib/CE-150.lib"
 #INCLUDE    "lib/PC-1500_Macros.lib"
 
 #INCLUDE    CE-158_ROM_HIGH.exp              ; Export table from high bank
 
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
-#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE
-#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE (needed for ENBPD)
+;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+#DEFINE CE158V2
 
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_LOW.exp to be imported into high bank
@@ -223,27 +225,37 @@ SEPARATOR_8161:
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
 CHAR2LPT: ; 8169
-    PSH	    A                               ; A is the ASCII charecter from input buffer?
+    #IFNDEF CE158V2
+; ************ Modified >
+    PSH     A                               ; A is the ASCII charecter from input buffer?
     LDI	    A,$7F                           ; 
     STA     #(CE158_PRT_B_DIR)              ; Bit 7 Read (BUSY), (ME1)
     LDA     #(CE158_PRT_A)                  ; Read CE-158 Port A,  (ME1)
     AND     #(CE158_PRT_A)                  ; Filter out input changes? (ME1)
-    SHL                                     ; A = A << 1. Shifted though carry. 0 into MSB
+    SHL  
+#ENDIF
+
+#IFDEF CE158V2
+    PSH     A                               ; A is the ASCII charecter from input buffer?
+    LDA     #(CE158_UART_MSR0)              ; Read CE-158 Port MSR0,  (ME1)
+    AND     #(CE158_UART_MSR0)              ; Filter out input changes? (ME1)
+; <************
+#ENDIF
+
     SHL                                     ; Original    7 6 5 4 3 2 1 0
     SHL                                     ; << 3        4 3 2 1 0 0 0 0 
     POP	    A                               ; Get our ASCII character from input buffer back
     BCS     BRANCH_81B8                     ; If #(PRT_A_IO) Bit 5, (Low Battery) skip to exit
-    BII     #(CE158_PRT_B),$80              ; (ME1)
+
+#IFDEF CE158V2
+; ************ Modified >
+    BII     #(CE158_LPT_STATUS_READ),$80    ; (ME1)
     BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
-    ANI     #(CE158_PRT_C),$9F              ; Clear Bits 6,5 LPT_STROBE,LPT_DATA1 (ME1) 
-    EAI	    $FF                             ; A = A ^ FF. Invert due to inverters in LPT output
-    SHR                                     ; A = A >> 1. Shifted through Carry, 0 into MSB
-    BCR     BRANCH_8196                     ; If Bit 0 set (inverted/shifted out), branch fwd
-    ORI     #(CE158_PRT_C),$20              ; Set Bit 5, LPT_DATA1 (ME1)
-                                            ; DATA1 on PORTC, DATA 2-8 on PORTB
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
 
 BRANCH_8196: ; Branched to from 818F
-    STA     #(CE158_PRT_B)                  ; #(PRT_B_IO) = A (ME1). A = (A ^ FF) >> 1
+
+    STA     #(CE158_LPT_DATA_WRITE)         ; #(CE158_LPT_DATA_WRITE) = A (ME1).
                                             ; Shift in 818C aligns Bits 2-8 to PORTB.
     LDI	    A,$80                           ; Set up time delay
 
@@ -251,7 +263,38 @@ BRANCH_819C: ; Branched to from 81D9
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     BRANCH_819C                     ; If Carry set repeat, carry clear after hitting 0
     RIE                                     ; Disable interrupts 
-    ORI     #(CE158_PRT_C),$40              ; Set LPT_STROBE (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1) 
+    LDI	    A,$80                           ; Set up time delay
+
+BRANCH_81A8: ; Branched to from 81A9
+    DEC	    A                               ; Carry set by first DEC, count 80->0
+    BCS     BRANCH_81A8                     ; If Carry set repeat, Carry clear after hitting 0
+
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    SIE                                     ; Enable Interrupts
+    LDI	    A,$80                           ; Set up time delay
+; <************
+#ENDIF
+
+#IFNDEF CE158V2
+; ************ Modified >
+    BII     #(CE158_PRT_B),$80              ; (ME1)
+    BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
+    ANI     #(CE158_PRT_C),$9F              ; Clear Bits 6,5 LPT_STROBE,LPT_DATA1 (ME1) 
+    EAI	    $FF                             ; A = A ^ FF. Invert due to inverters in LPT output
+    SHR                                     ; A = A >> 1. Shifted through Carry, 0 into MSB
+    BCR     BRANCH_8196                     ; If Bit 0 set (inverted/shifted out), branch fwd
+    ORI     #(CE158_PRT_C),$20              ; Set Bit 5, LPT_DATA1 (ME1)
+
+BRANCH_8196: ; Branched to from 818F
+    STA     #(CE158_PRT_B)                  ; #(PRT_B_IO) = A (ME1). A = (A ^ FF) >> 1
+    LDI	    A,$80                           ; Set up time delay
+
+BRANCH_819C: ; Branched to from 81D9
+    DEC	    A                               ; Carry set by first DEC, count 80->0
+    BCS     BRANCH_819C                     ; If Carry set repeat, carry clear after hitting 0
+    RIE                                     ; Disable interrupts 
+    ORI     #(CE158_PRT_C),$40              ; Set LPT_STROBE (ME1)
     LDI	    A,$80                           ; Set up time delay
 
 BRANCH_81A8: ; Branched to from 81A9
@@ -260,6 +303,8 @@ BRANCH_81A8: ; Branched to from 81A9
     ANI     #(CE158_PRT_C),$BF              ; CE-158 - Clear LPT_STROBE (ME1)
     SIE                                     ; Enable Interrupts
     LDI	    A,$80                           ; Set up time delay
+; <************
+#ENDIF 
 
 BRANCH_81B4: ; Branched to from 81B5
     DEC	    A                               ; Carry set by first DEC, count 80->0
@@ -271,7 +316,8 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
     SEC                                     ; Carry used to indicate return state? 
     RTN                                     ; Set Carry Flag. SEC = Failure
 
-
+.FILL ($81BC - $)
+.ORG $81BC 
 ; -----------------------------------------------------------------------------------------------------------
 ; CHAR2COM - Sends charecter in A to RS232 Port
 ; Same as High Bank
@@ -283,18 +329,35 @@ CHAR2COM: ; 81BC
     SEC                                     ; Set Carry Flag
     PSH     U                               ; Save U.
     STA	    UL                              ; A is character to send
+
+#IFNDEF CE158V2 
+; ************ Modified >
     LDA	    #(CE158_PRT_A)                  ; #(CE158_PRT_A) is LPT/RS232 I/F Ctrl (ME1)
     AND	    #(CE158_PRT_A)                  ; Filter out changes (ME1)
     ANI	    A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
-    BZR     BRANCH_81E3                     ; Branch fwd if any bit 5-2 is set
+    BZR     BRANCH_81E3                     ; Branch fwd if any bit 5-2 is set MODIFIED BRANCH ADDRESS
+#ENDIF
+
+#IFDEF CE158V2
+    LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
+ ;  AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
+ 	EAI     $30                             ; Invert the CTS/DSR bits-TI part does this automatically.
+    ANI     A,$70                           ; NEW     4->CTS, 5->DSR, 6->Low Battery
+
+    BZR     BRANCH_81E3A                    ; Branch fwd if any bit 5-2 is set MODIFIED BRANCH ADDRESS
+ ; <************
+ #ENDIF
+
     LDA	    (SETDEV_REG)                    ; (SETDEV_REG) = What device directed to RS232
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     ANI	    A,$C0                           ; Keep Bits 7-6 are set at power on
     SHL                                     ; A = A < 1. Bit 7 into Carry, 0 carried into LSB
     BCS     BRANCH_81D6                     ; Branch fwd if Bit 7 was set.
-    LDI	    A,$04                           ; A = 4. Set bit 2
+    LDI	    A,$04                           ; A = 6. Set bit 2
 
 BRANCH_81D6: ; Branched to from 81D2
+#IFNDEF CE158V2 
+ ; ************ Modified >
     AND	    #(CE158_UART_REGR)              ; A = A & UART_STATUS. A=Bit6 of SETDEV_REG<<1 or $04
                                             ; clear all but Bit7 (THRE) or Bit2 (PE)
     SEC                                     ; Set carry flag = failure
@@ -302,8 +365,25 @@ BRANCH_81D6: ; Branched to from 81D2
     LDA	    UL                              ; Our original A is in UL. Charecter to send.
     STA	    #(CE158_UART_DATAW)             ; Writes A to UART (ME1)
     REC                                     ; Reset Carry Flag = Success
+#ENDIF
 
-BRANCH_81E3: ; Branched to from 81CA, 81DB
+#IFDEF CE158V2
+  	ROR
+    AND	    #(CE158_UART_LSR0)              ; A = A & UART_STATUS. A=Bit6 of SETDEV_REG or $04
+    SEC                                     ; Set carry flag = failure
+    BZS     BRANCH_81E3                     ; Branch fwd if Bit7 (THRE) or Bit2 (PE) not set
+    LDA	    UL                              ; Our original A is in UL. Charecter to send.
+
+    STA	    #(CE158_UART_THR0)              ; Writes A to UART (ME1)
+    REC                                     ; Reset Carry Flag = Success
+    BCH     BRANCH_81E3
+
+BRANCH_81E3A:
+	SJP   DSRCTSFIX                         ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
+; <************
+#ENDIF
+
+BRANCH_81E3: ; Branched to from 81CA, 81DB 
     POP	    U                               ; Get original U back, affectes Z only
     RTN                                     ; A contains #(CE158_PRT_A) Bits 5-2 on failure
 
@@ -317,60 +397,109 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
 RXCOM: ; 81E6
-    LDA	    #(CE158_PRT_A)                  ; #(CE158_PRT_A) is LPT/RS232 control
-    AND     #(CE158_PRT_A)                  ; Filter out changes
+    #IFNDEF CE158V2
+; ************ Modified >
+    LDA	    #(CE158_PRT_A)                  ; #(CE158_PRT_A) is LPT/RS232 I/F Ctrl (ME1)
+    AND	    #(CE158_PRT_A)                  ; Filter out changes (ME1)
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
     LDA     #(CE158_UART_REGR)              ; UART status register
-    BII	    (SETDEV_REG),$40                ; Test Bit6 which is set if set by BRANCH_9F8E (HB) to 2400bps
+#ENDIF
+
+#IFDEF CE158V2
+; ************ Modified > 
+    LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
+    AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
+
+ 	EAI     $30                             ;Invert the CTS/DSR bits-TI part does this automatically.
+    ANI     A,$70                           ; NEW     4->CTS, 5->DSR, 6->Low Battery
+    BZR     BRANCH_8230                     ; Branch fwd if any bits 4,5,6 were set, failure exit
+    LDA     #(CE158_UART_LSR0)              ; UART status register
+    ANI     A,$CF 
+; <************
+#ENDIF
+
+    BII	    (SETDEV_REG),$40                ; Test Bit6                                             
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_81FD                     ; If THRE not set branch fwd (last byte not done)
     SHL                                     ; A = A << 1. UART Status register
 
 BRANCH_81FD: ; Branched to from 81FA
-    BII	    A,$02                           ; Test Bit1 of A (Bit0 of CE_158_UART_REG_R) OE Overrun Error
-    BZS     BRANCH_822C                     ; It set we had an Rx overrun, branch to failure exit
-    BII	    (SETDEV_REG),$80                ; Test Bit7
+    BII	    A,$02                           ; Test Bit1 of A (Bit0 of CE158_UART_REGR) OE Overrun Error
+    BZS     BRANCH_822C                     ; If set we had an Rx overrun, branch to failure exit
+
+    BII	    (SETDEV_REG),$80                ; Test Bit7                               
                                             ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_8208                     ; Branch fwd if Bit7 not set 
-    SHL                                     ; A = CE_158_UART_REG_R << 2
+    SHL                                     ; A = CE158_UART_REGR << 2
 
 BRANCH_8208: ; Branched to from 8205
-    BII	    A,$70                           ; Keep bit 6-4, Bits 4-2 from original (CE_158_UART_REG_R)
-    BZS     BRANCH_8226                     ; Bits 6-4 -> ES FE PE, if all bits clear branch (no error?)
+    BII	    A,$70                           ; Keep bit 6-4, Bits 4-2 from original (CE158_UART_REGR)
+    BZS     BRANCH_8226                     ; Bits 6-4 -> FE PE, if all bits clear branch (no error?)
 
+#IFNDEF CE158V2
+; ************ Modified > 
     LDA     #(CE158_UART_DATAR)             ; Read UART Data Register to clear it
-    BII	    (SETDEV_REG),$20                ; Test Bit5 which is set if set by BRANCH_9F8E (HB) to 2400bps
-                                            ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
-    BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
+    BII	    (SETDEV_REG),$20                ; Test Bit5  ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
+    BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure 
     LDI	    A,$15                           ; sets: Bit4 WLS2, Bit2 SBS, Bit0 PI
     STA     #(CE158_UART_REGW)              ; Writing UART control reg
     LDI	    A,$05                           ; sets: Bit2 SBS, Bit0 PI
     STA     #(CE158_UART_REGW)              ; To pulse Bit 4?
+#ENDIF
+
+#IFDEF CE158V2
+    LDA     #(CE158_UART_RBR0)              ; Read UART Data Register to clear it
+    BII	    (SETDEV_REG),$20                ; Test Bit5  ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
+    BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
+; <************ 
+#ENDIF   
 
 BRANCH_8222: ; Branched to from 8214
     LDI	    A,$40                           ; Failure type
     SEC                                     ; Set Carry Flag
     RTN                                     ; SEC = Failure
 
-BRANCH_8226: ; Branched to from 820A
+BRANCH_8226: ; Branched to from 820A        ; Success
+#IFNDEF CE158V2
+; ************ Modified > 
     LDA     #(CE158_UART_DATAR)             ; Read data byte
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
 
-BRANCH_822C: ; Branched to bfrom 8185, 81FF
+BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     LDI	    A,$00                           ; Failure type
     SEC                                     ; SEC = Failure
     RTN                                     ; Carry flag indicates return state
 
 BRANCH_8230: ; Branched to from 81F0
-    PSH	    A                               ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
-    LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register
+    PSH   A
+    LDA     #(CE158_UART_DATAR)            ; A = Data read from UART (ME1), clear Rx register  
+#ENDIF
+
+#IFDEF CE158V2
+    LDA     #(CE158_UART_RBR0)              ; Read data byte
+    REC                                     ; REC = Success
+    RTN                                     ; Carry flag indicates return state
+
+BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
+    LDI	    A,$00                           ; Failure type
+    SEC                                     ; SEC = Failure
+    RTN                                     ; Carry flag indicates return state
+
+BRANCH_8230: ; Branched to from 81F0
+	SJP   DSRCTSFIX                         ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
+	PSH   A
+    LDA     #(CE158_UART_RBR0)              ; Read data byte
+; <************ 
+#ENDIF
+
     SEC                                     ; SEC = Failure
 
 BRANCH_8237: ; Branched to from 824A to borrow return
     POP	    A                               ; 
-    RTN                                     ;
+    RTN                                    ; A contains #(CE158_PRT_A) Bits 5-2 on failure
+
 
 
 
@@ -472,13 +601,18 @@ BRANCH_82B3: ; Branched to from 8243, 8297
     RTN                                     ;
 
 
+
 ; -----------------------------------------------------------------------------------------------------------
 ; Unused
+#IFNDEF CE158V2
 UNUSED_82B7:
     .BYTE   $8E
+#ENDIF
 
 
 
+.FILL ($82B8 - $)
+.ORG $82B8
 ;------------------------------------------------------------------------------------------------------------
 ; COM_TBL_INIT - Called from BASIC table init vector 800A
 ; Called from BASIC Table 8000 INIT, changes XL which is used to calc index into vector table
@@ -700,7 +834,14 @@ BRANCH_8329: ;branched to from 8320
 ; Outputs:
 ; RegMod:
 INSTAT:
+#IFDEF CE158V2
+; ************ Modified >
+    SJP     INSTAT_FIX
+#ENDIF
+#IFNDEF CE158V2
     LDA     #(CE158_PRT_A)                  ; 
+; <************
+#ENDIF
     ANI     A,$1F                           ; Clear bits 5-7, Low Battery / 2 of Baud Rate Select Bits
 
 BRANCH_8330: ;branched to from 8315
@@ -708,7 +849,8 @@ BRANCH_8330: ;branched to from 8315
     BCH 	BRANCH_8360                     ; Branch forward unconditional
 
 
-
+.FILL ($8334 - $),$FF
+.ORG $8334
 ;------------------------------------------------------------------------------------------------------------
 ; OUTSTAT - Jumped to from 8307 via High Bank
 ; Sets state of RS232 hansshaking signals (0-31)
@@ -716,7 +858,6 @@ BRANCH_8330: ;branched to from 8315
 ; Arguments:
 ; Outputs:
 ; RegMod:
-OUTSTAT:
     VEJ     (DE)                            ; Calc formula Y-reg points to, result to AR-X, Branch fwd to 8356 on error
                 ABRF(BRANCH_8356)           ; Forward branch to label
     VEJ     (D0)                            ; Convert AR-X to INT send to U, range of 4, branch fwd to 8356 on error
@@ -727,17 +868,27 @@ OUTSTAT:
     ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
     ORA     (ARX + $06)                     ; 
     STA 	(OUTSTAT_REG)                   ; Sets DTR and RTS from calc in 8334?
+
+#IFNDEF CE158V2
+; ************ Modified >
     LDA     #(CE158_PRT_A)                  ; 
     ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
-    ORA 	(ARX + $06)                     ; 
+    ORA 	(ARX + $06)
     STA     #(CE158_PRT_A)                  ; Also set DTR/RTS bits on CE-158
+#ENDIF
+#IFDEF CE158V2
+    SJP     OUTSTAT_FIX
+; <************
+#ENDIF
+
     VEJ     (E2)                            ; Start of Basic Interpreter
 
 BRANCH_8356: ; branched to from 8334, 8336
     VEJ     (E0)                            ; Indicates if UH is not "00" error message
 
 
-
+.FILL ($8357 - $),$FF
+.ORG $8357
 ;------------------------------------------------------------------------------------------------------------
 ; RINKEY_STR - Branched to from 8307 via High Bank
 ; Returns last byte RXd on COM, UART version of INKEY$
@@ -1151,7 +1302,7 @@ B_TBL_8800_CMD_LST_END:
 ;   Code to copy into RAM
 ;   SPU                                     ; Swtich to low bank
 ;   JMP     BPD_STR_H                       ; Address of function in low bank
-LB_SETUR: ;8892
+LB_SETUR: ;8888
     LDI     A,$E1                           ; (2) SPU
     STA     (ARW)                           ; (3) Temp storage in RAM
     LDI     A,$BA                           ; (2) JMP
@@ -1302,7 +1453,8 @@ PRNUM_DAT: ; used by Step #2
     .BYTE $F0,$97,$23,$22,$4C,$29,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"TST"
 
 
-    
+
+;------------------------------------------------------------------------------------------------------------    
 ; We intercept the CSAVE, MERGE and CLOAD entries to here
 ; If in BPD mode run BPD set up code first, then jump back to normal command handler
 CSAVE_INTERCEPT: ;  Intercept CSAVE, CLOAD, MERGE
@@ -1342,140 +1494,198 @@ CLI_EXIT:                                   ; Returns to here and back to CLOAD
 #ENDIF
 
 
+; Here for testing only as this was in Ian's code and will shift code below to correct address
+#IFDEF CE158V2
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD
+#ENDIF
+
+;------------------------------------------------------------------------------------------------------------
+; ************ Modified >
+; Using space to create INSTAT Fix
+; The control lines are split across two registers
+;   ORIGINAL 2->CTS, 3->CD, 4->DSR, 5->Low Battery
+;   NEW                     4->CTS, 5->DSR, 6->Low Battery
+#IFDEF CE158V2
+INSTAT_FIX:
+    LDA    #(CE158_UART_MSR0)               ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
+
+;Fix CTS/DSR/LBI so they match the existing code base
+    SHR
+    ANI    A,$10                            ; Keep the DSR bit
+    BHR    DSR_CLR_INSTAT                   ; Check Bit 4. If not set skip otherwise set a CTS
+	ORI    A,$04
+
+DSR_CLR_INSTAT:
+    ORA     #(CE158_UART_MCR0)              ; Get RTS and DTR bits relies on other bit in MCR being cleared by reset
+    EAI     $17                             ; Invert the bits
+    RTN	
+
+;INVERT THE DSR/RTS LINES
+OUTSTAT_FIX:
+    LDA     #(CE158_UART_MCR0)              ; 
+    ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
+    ORA 	(ARX + $06)
+    EAI     $03                             ; Invert the bits. The TI chip inverts these bits.
+    STA     #(CE158_UART_MCR0)              ;
+    RTN 
+
+
+
+;------------------------------------------------------------------------------------------------------------
+; Sets bits correctly for CTS/DSR/LBI
+;   ORIGINAL 2->CTS, 3->CD, 4->DSR, 5->Low Battery
+;   NEW                     4->CTS, 5->DSR, 6->Low Battery
+; Fix CTS/DSR/LBI so they match the existing code base
+DSRCTSFIX:
+    SHR
+    ANI    A,$30                            ; Keep the LBI and DSR bits
+    BHR    DSR_CLR_RXCOM                    ; Check Bit 4. If not set skip otherwise set a CTS
+	ORI    A,$04
+
+DSR_CLR_RXCOM:
+	RTN
+#ENDIF
+
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; TABLE_8888
 ; Seems like nonsense that is not used, so we use it for BPD
 TABLE_8888:
 
-#IFNDEF ENBPD
-    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
-    .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
-    .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04,$FF
-    .BYTE $20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00,$FB 
-    .BYTE $12,$EE,$00,$FF,$00,$FF,$28,$FB,$00,$AA,$00,$FF,$00,$FF,$00,$77 
-    .BYTE $A8,$9F,$00,$FF,$00,$FF,$40,$D9,$14,$FF,$00,$FF,$00,$FF,$60,$FF
-    .BYTE $00,$EF,$00,$FF,$00,$FF,$08,$BF,$E0,$FF,$00,$FF,$00,$FF,$20,$FF
-    .BYTE $04,$FF,$00,$FF,$00,$FF,$0C,$EF,$41,$EF,$00,$FF,$00,$FF,$42,$F7
-    .BYTE $4D,$FF,$00,$FF,$00,$FF,$24,$B7,$04,$FE,$00,$FF,$00,$FF,$00,$FF
-    .BYTE $A3,$7E,$00,$FF,$00,$FF,$80,$EE,$04,$D6,$00,$FF,$00,$FF,$98,$DF
-    .BYTE $81,$FB,$00,$FF,$00,$FF,$04,$43,$10,$7C,$00,$FF,$00,$FF,$0A,$FF
-    .BYTE $16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A,$27
-    .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
-    .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
-    .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
-    .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF
-#ENDIF
+; #IFNDEF ENBPD
+;     .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
+;     .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
+;     .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04,$FF
+;     .BYTE $20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00,$FB 
+;     .BYTE $12,$EE,$00,$FF,$00,$FF,$28,$FB,$00,$AA,$00,$FF,$00,$FF,$00,$77 
+;     .BYTE $A8,$9F,$00,$FF,$00,$FF,$40,$D9,$14,$FF,$00,$FF,$00,$FF,$60,$FF
+;     .BYTE $00,$EF,$00,$FF,$00,$FF,$08,$BF,$E0,$FF,$00,$FF,$00,$FF,$20,$FF
+;     .BYTE $04,$FF,$00,$FF,$00,$FF,$0C,$EF,$41,$EF,$00,$FF,$00,$FF,$42,$F7
+;     .BYTE $4D,$FF,$00,$FF,$00,$FF,$24,$B7,$04,$FE,$00,$FF,$00,$FF,$00,$FF
+;     .BYTE $A3,$7E,$00,$FF,$00,$FF,$80,$EE,$04,$D6,$00,$FF,$00,$FF,$98,$DF
+;     .BYTE $81,$FB,$00,$FF,$00,$FF,$04,$43,$10,$7C,$00,$FF,$00,$FF,$0A,$FF
+;     .BYTE $16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A,$27
+;     .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
+;     .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
+;     .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
+;     .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF
+; #ENDIF
     
-   
-    .BYTE                                                         $01,$5B
-    .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
-    .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       ; 8998
-    .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
-    .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
-    .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
-    .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
-    .BYTE $CF,$12,$E6,$00,$FF,$00,$FF,$40,$77,$00,$FF,$00,$FF,$00,$FF,$29 
-    .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09
-    .BYTE $7E,$9C,$7A,$00,$FF,$00,$FF,$83,$BE,$92,$FF,$00,$FF,$00,$FF,$0A 
-    .BYTE $DF,$05,$F7,$00,$FF,$00,$FF,$A1,$B9,$46,$F9,$00,$FF,$00,$FF,$07 
-    .BYTE $DD,$11,$FF,$00,$FF,$00,$FF,$4B,$F7,$C1,$FF,$00,$FF,$00,$FF,$04 
-    .BYTE $25,$02,$FF,$00,$FF,$00,$FF,$A0,$FF,$41,$F7,$00,$FF,$00,$FF,$84 
-    .BYTE $FA,$4A,$9C,$00,$FF,$00,$FF,$48,$BF,$10,$AF,$00,$FF,$00,$FF,$06 
-    .BYTE $FF,$00,$EB,$00,$FF,$00,$FF,$02,$FE,$A1,$DB,$00,$FF,$00,$FF,$2A 
-    .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$F7,$80,$1F,$00,$FF,$00,$FF,$20 
-    .BYTE $FF,$18,$76,$00,$FF,$00,$FF,$05,$CD,$00,$9E,$00,$FF,$00,$FF,$01 
-    .BYTE $E9,$D0,$FF,$00,$FF,$00,$FF,$80,$FF,$28,$9D,$00,$FF,$00,$FF,$04 
-    .BYTE $EE,$C0,$DF,$00,$FF,$00,$FF,$2D,$F7,$5C,$1D,$00,$FF,$00,$FF,$01 
-    .BYTE $DA,$70,$E3,$00,$FF,$00,$FF,$42,$EF,$80,$AF,$00,$FF,$00,$FF,$00 
-    .BYTE $8B,$00,$FF,$00,$FF,$00,$FF,$00,$FD,$A9,$F7,$00,$FF,$00,$FF,$02 
-    .BYTE $BE,$8D,$BF,$00,$FF,$00,$FF,$09,$FF,$43,$FF,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$84,$FF,$00,$FF,$00,$FF,$40,$E6,$10,$D7,$00,$FF,$00,$FF,$70 
-    .BYTE $BD,$60,$4F,$00,$FF,$00,$FF,$0A,$33,$07,$FF,$00,$FF,$00,$FF,$09 
-    .BYTE $FA,$82,$FD,$00,$FF,$00,$FF,$00,$1F,$80,$FF,$00,$FF,$00,$FF,$12 
-    .BYTE $FD,$39,$B5,$00,$FF,$00,$FF,$00,$17,$BB,$FC,$00,$FF,$00,$FF,$09 
-    .BYTE $F7,$00,$CE,$00,$FF,$00,$FF,$EA,$69,$1C,$66,$00,$FF,$00,$FF,$00 
-    .BYTE $9E,$83,$CB,$00,$FF,$00,$FF,$A0,$F7,$01,$1F,$00,$FF,$00,$FF,$29 
-    .BYTE $FD,$84,$BF,$00,$FF,$00,$FF,$80,$F3,$84,$FA,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$84,$7B,$00,$FF,$00,$FF,$0C,$ED,$E0,$F7,$00,$FF,$00,$FF,$A2 
-    .BYTE $AF,$AC,$EB,$00,$FF,$00,$FF,$81,$F4,$8A,$4E,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$00,$FA,$00,$FF,$00,$FF,$03,$CE,$A0,$FF,$00,$FF,$00,$FF,$14 
-    .BYTE $FD,$C2,$7D,$00,$FF,$00,$FF,$04,$FD,$00,$FF,$00,$FF,$00,$FF,$C0 
-    .BYTE $FE,$04,$E4,$00,$FF,$00,$FF,$B8,$BF,$14,$EF,$00,$FF,$00,$FF,$40 
-    .BYTE $FF,$81,$FF,$00,$FF,$00,$FF,$08,$FE,$22,$BF,$00,$FF,$00,$FF,$04 
-    .BYTE $79,$A1,$F7,$00,$FF,$00,$FF,$00,$ED,$55,$F1,$00,$FF,$00,$FF,$C8 
-    .BYTE $BF,$88,$CD,$00,$FF,$00,$FF,$00,$FF,$04,$7F,$00,$FF,$00,$FF,$10 
-    .BYTE $FF,$04,$BB,$00,$FF,$00,$FF,$21,$87,$00,$FF,$00,$FF,$00,$FF,$00 
-    .BYTE $EF,$00,$FB,$00,$FF,$00,$FF,$80,$F7,$28,$EB,$00,$FF,$00,$FF,$20 
-    .BYTE $3F,$18,$B3,$00,$FF,$00,$FF,$48,$67,$08,$FF,$00,$FF,$00,$FF,$0E 
-    .BYTE $D9,$8B,$7D,$00,$FF,$00,$FF,$08,$F7,$44,$FE,$00,$FF,$00,$FF,$18 
-    .BYTE $8C,$8C,$F5,$00,$FF,$00,$FF,$90,$DD,$80,$F1,$00,$FF,$00,$FF,$41 
-    .BYTE $FF,$20,$F7,$00,$FF,$00,$FF,$00,$EB,$C2,$CF,$00,$FF,$00,$FF,$00 
-    .BYTE $B7,$03,$CF,$00,$FF,$00,$FF,$48,$FD,$80,$FF,$00,$FF,$00,$FF,$20 
-    .BYTE $FD,$68,$E7,$00,$FF,$00,$FF,$03,$77,$46,$D7,$00,$FF,$00,$FF,$07 
-    .BYTE $ED,$30,$F8,$00,$FF,$00,$FF,$18,$EE,$04,$3F,$00,$FF,$00,$FF,$24 
-    .BYTE $E6,$01,$F5,$00,$FF,$00,$FF,$20,$7D,$01,$FD,$00,$FF,$00,$FF,$00 
-    .BYTE $E3,$00,$F7,$00,$FF,$00,$FF,$10,$FF,$41,$5F,$00,$FF,$00,$FF,$09 
-    .BYTE $9B,$1E,$66,$00,$FF,$00,$FF,$02,$C7,$02,$13,$00,$FF,$00,$FF,$02 
-    .BYTE $FE,$80,$67,$00,$FF,$00,$FF,$11,$1B,$C0,$FC,$00,$FF,$00,$FF,$08 
-    .BYTE $BE,$20,$E6,$00,$FF,$00,$FF,$00,$FF,$21,$F7,$00,$FF,$00,$FF,$28 
-    .BYTE $FF,$14,$BB,$00,$FF,$00,$FF,$40,$FF,$13,$ED,$00,$FF,$00,$FF,$80 
-    .BYTE $C6,$60,$FF,$00,$FF,$00,$FF,$01,$FE,$16,$FF,$00,$FF,$00,$FF,$00 
-    .BYTE $7F,$40,$F8,$00,$FF,$00,$FF,$01,$BA,$00,$DF,$00,$FF,$00,$FF,$04 
-    .BYTE $FE,$C9,$6B,$00,$FF,$00,$FF,$A0,$EF,$09,$9E,$00,$FF,$00,$FF,$C0 
-    .BYTE $FF,$0A,$FF,$00,$FF,$00,$FF,$08,$5B,$02,$3F,$00,$FF,$00,$FF,$8C 
-    .BYTE $FD,$20,$75,$00,$FF,$00,$FF,$0E,$F7,$50,$FF,$00,$FF,$00,$FF,$74 
-    .BYTE $F5,$10,$66,$00,$FF,$00,$FF,$80,$B6,$48,$DF,$00,$FF,$00,$FF,$30 
-    .BYTE $FD,$48,$BF,$00,$FF,$00,$FF,$14,$FA,$02,$86,$00,$FF,$00,$FF,$05 
-    .BYTE $7B,$00,$5F,$00,$FF,$00,$FF,$A4,$FF,$20,$FB,$00,$FF,$00,$FF,$61 
-    .BYTE $FF,$95,$76,$00,$FF,$00,$FF,$00,$3F,$06,$FA,$00,$FF,$00,$FF,$04 
-    .BYTE $BF,$00,$F7,$00,$FF,$00,$FF,$40,$FF,$92,$F7,$00,$FF,$00,$FF,$04 
-    .BYTE $EF,$80,$FD,$00,$FF,$00,$FF,$02,$FD,$05,$FE,$00,$FF,$00,$FF,$08 
-    .BYTE $FF,$80,$76,$00,$FF,$00,$FF,$05,$F7,$30,$2F,$00,$FF,$00,$FF,$08 
-    .BYTE $FF,$01,$EE,$00,$FF,$00,$FF,$52,$FF,$02,$C7,$00,$FF,$00,$FF,$91 
-    .BYTE $E7,$00,$FD,$00,$FF,$00,$FF,$44,$77,$40,$FF,$00,$FF,$00,$FF,$00 
-    .BYTE $FD,$B8,$FF,$00,$FF,$00,$FF,$00,$DF,$5A,$FF,$00,$FF,$00,$FF,$84 
-    .BYTE $FA,$43,$EF,$00,$FF,$00,$FF,$94,$96,$00,$FE,$00,$FF,$00,$FF,$50 
-    .BYTE $FB,$04,$FF,$00,$FF,$00,$FF,$26,$BF,$C9,$FC,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$80,$BF,$00,$FF,$00,$FF,$80,$FF,$A0,$BB,$00,$FF,$00,$FF,$0C 
-    .BYTE $B9,$04,$FB,$00,$FF,$00,$FF,$05,$B9,$44,$EF,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$00,$BE,$41,$BB,$00,$FF,$00,$FF,$10 
-    .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$14,$EF,$AA,$7F,$00,$FF,$00,$FF,$C0 
-    .BYTE $66,$0C,$F2,$00,$FF,$00,$FF,$40,$FF,$28,$3D,$00,$FF,$00,$FF,$40 
-    .BYTE $FD,$48,$FF,$00,$FF,$00,$FF,$47,$F7,$08,$FF,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$2A,$FE,$00,$FF,$00,$FF,$41,$A7,$15,$7E,$00,$FF,$00,$FF,$62 
-    .BYTE $BF,$C0,$FD,$00,$FF,$00,$FF,$00,$FD,$26,$5F,$00,$FF,$00,$FF,$00 
-    .BYTE $FE,$80,$FC,$00,$FF,$00,$FF,$28,$BF,$08,$FF,$00,$FF,$00,$FF,$46 
-    .BYTE $1E,$20,$CB,$00,$FF,$00,$FF,$22,$EF,$20,$B5,$00,$FF,$00,$FF,$03 
-    .BYTE $E3,$08,$1E,$00,$FF,$00,$FF,$0A,$FB,$07,$FE,$00,$FF,$00,$FF,$25 
-    .BYTE $F7,$07,$DF,$00,$FF,$00,$FF,$04,$6F,$02,$FE,$00,$FF,$00,$FF,$18 
-    .BYTE $FF,$CC,$BF,$00,$FF,$00,$FF,$23,$7D,$18,$FF,$00,$FF,$00,$FF,$18 
-    .BYTE $9E,$02,$3F,$00,$FF,$00,$FF,$C0,$FD,$50,$7A,$00,$FF,$00,$FF,$00 
-    .BYTE $BD,$18,$FF,$00,$FF,$00,$FF,$08,$FD,$04,$FE,$00,$FF,$00,$FF,$20 
-    .BYTE $DF,$44,$FE,$00,$FF,$00,$FF,$02,$FF,$02,$FD,$00,$FF,$00,$FF,$00 
-    .BYTE $FF,$00,$DD,$00,$FF,$00,$FF,$9C,$BF,$4C,$5F,$00,$FF,$00,$FF,$00 
-    .BYTE $EF,$18,$FB,$00,$FF,$00,$FF,$A0,$53,$A0,$DF,$00,$FF,$00,$FF,$34 
-    .BYTE $77,$80,$F3,$00,$FF,$00,$FF,$04,$EF,$13,$FD,$00,$FF,$00,$FF,$05 
-    .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$7E,$87,$00,$00,$FF,$00,$DD,$4B 
-    .BYTE $00,$00,$00,$00,$BF,$00,$7F,$81,$00,$11,$80,$00,$FF,$00,$EF,$00 
-    .BYTE $40,$21,$04,$00,$FF,$00,$FF,$0E,$00,$21,$00,$00,$FF,$00,$FF,$09 
-    .BYTE $00,$80,$00,$00,$F7,$00,$DF,$18,$00,$41,$00,$00,$FF,$00,$F7,$25 
-    .BYTE $00,$31,$00,$00,$BB,$00,$DF,$82,$00,$A8,$00,$00,$FF,$00,$FF,$01 
-    .BYTE $00,$10,$00,$00,$BF,$00,$FF,$40,$00,$24,$10,$00,$FF,$00,$6F,$84 
-    .BYTE $00,$80,$00,$00,$7F,$00,$EF,$C4,$00,$18,$00,$00,$FF,$00,$FB,$28 
-    .BYTE $00,$40,$00,$00,$FF,$00,$B7,$24,$00,$10,$00,$00,$D7,$00,$FF,$B0
-    .BYTE $00,$26,$00,$00,$EF,$00,$3F,$00,$00,$10,$00,$00,$FF,$00,$FF,$10 
-    .BYTE $00,$18,$00,$00,$FF,$00,$A3,$04,$00,$06,$08,$00,$FF,$00,$FF,$80 
-    .BYTE $00,$80,$00,$00,$E5,$00,$7B,$20,$00,$82,$00,$00,$7F,$00,$7F,$00 
-    .BYTE $00,$04,$00,$00,$FF,$00,$FF,$80,$00,$C0,$00,$00,$A7,$00,$FF,$30 
-    .BYTE $00,$2A,$02,$00,$FF,$00,$7F,$90,$00,$00,$02,$00,$B7,$00,$FF,$42 
-    .BYTE $04,$26,$00,$00,$F7,$00,$FF,$24,$00,$28,$04,$00,$7F,$00,$FF,$10 
-    .BYTE $00,$03,$00,$00,$FF,$00,$FD,$00,$00,$18,$00,$00,$FE,$00,$9B,$03 
-    .BYTE $00,$00,$00,$00,$67,$00,$EF,$44,$00,$0B,$00,$00,$FF,$00,$DF,$C0 
-    .BYTE $00,$00,$00,$00,$3F,$00,$F9,$C5
+; #IFNDEF CE158V2  
+;     .BYTE                                                         $01,$5B
+;     .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
+;     .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       ; 8998
+;     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB
+; #ENDIF
+    
+;     .BYTE                                     $08,$FF,$00,$FF,$00,$FF,$25 
+;     .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
+;     .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
+;     .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
+;     .BYTE $CF,$12,$E6,$00,$FF,$00,$FF,$40,$77,$00,$FF,$00,$FF,$00,$FF,$29 
+;     .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09
+;     .BYTE $7E,$9C,$7A,$00,$FF,$00,$FF,$83,$BE,$92,$FF,$00,$FF,$00,$FF,$0A 
+;     .BYTE $DF,$05,$F7,$00,$FF,$00,$FF,$A1,$B9,$46,$F9,$00,$FF,$00,$FF,$07 
+;     .BYTE $DD,$11,$FF,$00,$FF,$00,$FF,$4B,$F7,$C1,$FF,$00,$FF,$00,$FF,$04 
+;     .BYTE $25,$02,$FF,$00,$FF,$00,$FF,$A0,$FF,$41,$F7,$00,$FF,$00,$FF,$84 
+;     .BYTE $FA,$4A,$9C,$00,$FF,$00,$FF,$48,$BF,$10,$AF,$00,$FF,$00,$FF,$06 
+;     .BYTE $FF,$00,$EB,$00,$FF,$00,$FF,$02,$FE,$A1,$DB,$00,$FF,$00,$FF,$2A 
+;     .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$F7,$80,$1F,$00,$FF,$00,$FF,$20 
+;     .BYTE $FF,$18,$76,$00,$FF,$00,$FF,$05,$CD,$00,$9E,$00,$FF,$00,$FF,$01 
+;     .BYTE $E9,$D0,$FF,$00,$FF,$00,$FF,$80,$FF,$28,$9D,$00,$FF,$00,$FF,$04 
+;     .BYTE $EE,$C0,$DF,$00,$FF,$00,$FF,$2D,$F7,$5C,$1D,$00,$FF,$00,$FF,$01 
+;     .BYTE $DA,$70,$E3,$00,$FF,$00,$FF,$42,$EF,$80,$AF,$00,$FF,$00,$FF,$00 
+;     .BYTE $8B,$00,$FF,$00,$FF,$00,$FF,$00,$FD,$A9,$F7,$00,$FF,$00,$FF,$02 
+;     .BYTE $BE,$8D,$BF,$00,$FF,$00,$FF,$09,$FF,$43,$FF,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$84,$FF,$00,$FF,$00,$FF,$40,$E6,$10,$D7,$00,$FF,$00,$FF,$70 
+;     .BYTE $BD,$60,$4F,$00,$FF,$00,$FF,$0A,$33,$07,$FF,$00,$FF,$00,$FF,$09 
+;     .BYTE $FA,$82,$FD,$00,$FF,$00,$FF,$00,$1F,$80,$FF,$00,$FF,$00,$FF,$12 
+;     .BYTE $FD,$39,$B5,$00,$FF,$00,$FF,$00,$17,$BB,$FC,$00,$FF,$00,$FF,$09 
+;     .BYTE $F7,$00,$CE,$00,$FF,$00,$FF,$EA,$69,$1C,$66,$00,$FF,$00,$FF,$00 
+;     .BYTE $9E,$83,$CB,$00,$FF,$00,$FF,$A0,$F7,$01,$1F,$00,$FF,$00,$FF,$29 
+;     .BYTE $FD,$84,$BF,$00,$FF,$00,$FF,$80,$F3,$84,$FA,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$84,$7B,$00,$FF,$00,$FF,$0C,$ED,$E0,$F7,$00,$FF,$00,$FF,$A2 
+;     .BYTE $AF,$AC,$EB,$00,$FF,$00,$FF,$81,$F4,$8A,$4E,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$00,$FA,$00,$FF,$00,$FF,$03,$CE,$A0,$FF,$00,$FF,$00,$FF,$14 
+;     .BYTE $FD,$C2,$7D,$00,$FF,$00,$FF,$04,$FD,$00,$FF,$00,$FF,$00,$FF,$C0 
+;     .BYTE $FE,$04,$E4,$00,$FF,$00,$FF,$B8,$BF,$14,$EF,$00,$FF,$00,$FF,$40 
+;     .BYTE $FF,$81,$FF,$00,$FF,$00,$FF,$08,$FE,$22,$BF,$00,$FF,$00,$FF,$04 
+;     .BYTE $79,$A1,$F7,$00,$FF,$00,$FF,$00,$ED,$55,$F1,$00,$FF,$00,$FF,$C8 
+;     .BYTE $BF,$88,$CD,$00,$FF,$00,$FF,$00,$FF,$04,$7F,$00,$FF,$00,$FF,$10 
+;     .BYTE $FF,$04,$BB,$00,$FF,$00,$FF,$21,$87,$00,$FF,$00,$FF,$00,$FF,$00 
+;     .BYTE $EF,$00,$FB,$00,$FF,$00,$FF,$80,$F7,$28,$EB,$00,$FF,$00,$FF,$20 
+;     .BYTE $3F,$18,$B3,$00,$FF,$00,$FF,$48,$67,$08,$FF,$00,$FF,$00,$FF,$0E 
+;     .BYTE $D9,$8B,$7D,$00,$FF,$00,$FF,$08,$F7,$44,$FE,$00,$FF,$00,$FF,$18 
+;     .BYTE $8C,$8C,$F5,$00,$FF,$00,$FF,$90,$DD,$80,$F1,$00,$FF,$00,$FF,$41 
+;     .BYTE $FF,$20,$F7,$00,$FF,$00,$FF,$00,$EB,$C2,$CF,$00,$FF,$00,$FF,$00 
+;     .BYTE $B7,$03,$CF,$00,$FF,$00,$FF,$48,$FD,$80,$FF,$00,$FF,$00,$FF,$20 
+;     .BYTE $FD,$68,$E7,$00,$FF,$00,$FF,$03,$77,$46,$D7,$00,$FF,$00,$FF,$07 
+;     .BYTE $ED,$30,$F8,$00,$FF,$00,$FF,$18,$EE,$04,$3F,$00,$FF,$00,$FF,$24 
+;     .BYTE $E6,$01,$F5,$00,$FF,$00,$FF,$20,$7D,$01,$FD,$00,$FF,$00,$FF,$00 
+;     .BYTE $E3,$00,$F7,$00,$FF,$00,$FF,$10,$FF,$41,$5F,$00,$FF,$00,$FF,$09 
+;     .BYTE $9B,$1E,$66,$00,$FF,$00,$FF,$02,$C7,$02,$13,$00,$FF,$00,$FF,$02 
+;     .BYTE $FE,$80,$67,$00,$FF,$00,$FF,$11,$1B,$C0,$FC,$00,$FF,$00,$FF,$08 
+;     .BYTE $BE,$20,$E6,$00,$FF,$00,$FF,$00,$FF,$21,$F7,$00,$FF,$00,$FF,$28 
+;     .BYTE $FF,$14,$BB,$00,$FF,$00,$FF,$40,$FF,$13,$ED,$00,$FF,$00,$FF,$80 
+;     .BYTE $C6,$60,$FF,$00,$FF,$00,$FF,$01,$FE,$16,$FF,$00,$FF,$00,$FF,$00 
+;     .BYTE $7F,$40,$F8,$00,$FF,$00,$FF,$01,$BA,$00,$DF,$00,$FF,$00,$FF,$04 
+;     .BYTE $FE,$C9,$6B,$00,$FF,$00,$FF,$A0,$EF,$09,$9E,$00,$FF,$00,$FF,$C0 
+;     .BYTE $FF,$0A,$FF,$00,$FF,$00,$FF,$08,$5B,$02,$3F,$00,$FF,$00,$FF,$8C 
+;     .BYTE $FD,$20,$75,$00,$FF,$00,$FF,$0E,$F7,$50,$FF,$00,$FF,$00,$FF,$74 
+;     .BYTE $F5,$10,$66,$00,$FF,$00,$FF,$80,$B6,$48,$DF,$00,$FF,$00,$FF,$30 
+;     .BYTE $FD,$48,$BF,$00,$FF,$00,$FF,$14,$FA,$02,$86,$00,$FF,$00,$FF,$05 
+;     .BYTE $7B,$00,$5F,$00,$FF,$00,$FF,$A4,$FF,$20,$FB,$00,$FF,$00,$FF,$61 
+;     .BYTE $FF,$95,$76,$00,$FF,$00,$FF,$00,$3F,$06,$FA,$00,$FF,$00,$FF,$04 
+;     .BYTE $BF,$00,$F7,$00,$FF,$00,$FF,$40,$FF,$92,$F7,$00,$FF,$00,$FF,$04 
+;     .BYTE $EF,$80,$FD,$00,$FF,$00,$FF,$02,$FD,$05,$FE,$00,$FF,$00,$FF,$08 
+;     .BYTE $FF,$80,$76,$00,$FF,$00,$FF,$05,$F7,$30,$2F,$00,$FF,$00,$FF,$08 
+;     .BYTE $FF,$01,$EE,$00,$FF,$00,$FF,$52,$FF,$02,$C7,$00,$FF,$00,$FF,$91 
+;     .BYTE $E7,$00,$FD,$00,$FF,$00,$FF,$44,$77,$40,$FF,$00,$FF,$00,$FF,$00 
+;     .BYTE $FD,$B8,$FF,$00,$FF,$00,$FF,$00,$DF,$5A,$FF,$00,$FF,$00,$FF,$84 
+;     .BYTE $FA,$43,$EF,$00,$FF,$00,$FF,$94,$96,$00,$FE,$00,$FF,$00,$FF,$50 
+;     .BYTE $FB,$04,$FF,$00,$FF,$00,$FF,$26,$BF,$C9,$FC,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$80,$BF,$00,$FF,$00,$FF,$80,$FF,$A0,$BB,$00,$FF,$00,$FF,$0C 
+;     .BYTE $B9,$04,$FB,$00,$FF,$00,$FF,$05,$B9,$44,$EF,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$00,$BE,$41,$BB,$00,$FF,$00,$FF,$10 
+;     .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$14,$EF,$AA,$7F,$00,$FF,$00,$FF,$C0 
+;     .BYTE $66,$0C,$F2,$00,$FF,$00,$FF,$40,$FF,$28,$3D,$00,$FF,$00,$FF,$40 
+;     .BYTE $FD,$48,$FF,$00,$FF,$00,$FF,$47,$F7,$08,$FF,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$2A,$FE,$00,$FF,$00,$FF,$41,$A7,$15,$7E,$00,$FF,$00,$FF,$62 
+;     .BYTE $BF,$C0,$FD,$00,$FF,$00,$FF,$00,$FD,$26,$5F,$00,$FF,$00,$FF,$00 
+;     .BYTE $FE,$80,$FC,$00,$FF,$00,$FF,$28,$BF,$08,$FF,$00,$FF,$00,$FF,$46 
+;     .BYTE $1E,$20,$CB,$00,$FF,$00,$FF,$22,$EF,$20,$B5,$00,$FF,$00,$FF,$03 
+;     .BYTE $E3,$08,$1E,$00,$FF,$00,$FF,$0A,$FB,$07,$FE,$00,$FF,$00,$FF,$25 
+;     .BYTE $F7,$07,$DF,$00,$FF,$00,$FF,$04,$6F,$02,$FE,$00,$FF,$00,$FF,$18 
+;     .BYTE $FF,$CC,$BF,$00,$FF,$00,$FF,$23,$7D,$18,$FF,$00,$FF,$00,$FF,$18 
+;     .BYTE $9E,$02,$3F,$00,$FF,$00,$FF,$C0,$FD,$50,$7A,$00,$FF,$00,$FF,$00 
+;     .BYTE $BD,$18,$FF,$00,$FF,$00,$FF,$08,$FD,$04,$FE,$00,$FF,$00,$FF,$20 
+;     .BYTE $DF,$44,$FE,$00,$FF,$00,$FF,$02,$FF,$02,$FD,$00,$FF,$00,$FF,$00 
+;     .BYTE $FF,$00,$DD,$00,$FF,$00,$FF,$9C,$BF,$4C,$5F,$00,$FF,$00,$FF,$00 
+;     .BYTE $EF,$18,$FB,$00,$FF,$00,$FF,$A0,$53,$A0,$DF,$00,$FF,$00,$FF,$34 
+;     .BYTE $77,$80,$F3,$00,$FF,$00,$FF,$04,$EF,$13,$FD,$00,$FF,$00,$FF,$05 
+;     .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$7E,$87,$00,$00,$FF,$00,$DD,$4B 
+;     .BYTE $00,$00,$00,$00,$BF,$00,$7F,$81,$00,$11,$80,$00,$FF,$00,$EF,$00 
+;     .BYTE $40,$21,$04,$00,$FF,$00,$FF,$0E,$00,$21,$00,$00,$FF,$00,$FF,$09 
+;     .BYTE $00,$80,$00,$00,$F7,$00,$DF,$18,$00,$41,$00,$00,$FF,$00,$F7,$25 
+;     .BYTE $00,$31,$00,$00,$BB,$00,$DF,$82,$00,$A8,$00,$00,$FF,$00,$FF,$01 
+;     .BYTE $00,$10,$00,$00,$BF,$00,$FF,$40,$00,$24,$10,$00,$FF,$00,$6F,$84 
+;     .BYTE $00,$80,$00,$00,$7F,$00,$EF,$C4,$00,$18,$00,$00,$FF,$00,$FB,$28 
+;     .BYTE $00,$40,$00,$00,$FF,$00,$B7,$24,$00,$10,$00,$00,$D7,$00,$FF,$B0
+;     .BYTE $00,$26,$00,$00,$EF,$00,$3F,$00,$00,$10,$00,$00,$FF,$00,$FF,$10 
+;     .BYTE $00,$18,$00,$00,$FF,$00,$A3,$04,$00,$06,$08,$00,$FF,$00,$FF,$80 
+;     .BYTE $00,$80,$00,$00,$E5,$00,$7B,$20,$00,$82,$00,$00,$7F,$00,$7F,$00 
+;     .BYTE $00,$04,$00,$00,$FF,$00,$FF,$80,$00,$C0,$00,$00,$A7,$00,$FF,$30 
+;     .BYTE $00,$2A,$02,$00,$FF,$00,$7F,$90,$00,$00,$02,$00,$B7,$00,$FF,$42 
+;     .BYTE $04,$26,$00,$00,$F7,$00,$FF,$24,$00,$28,$04,$00,$7F,$00,$FF,$10 
+;     .BYTE $00,$03,$00,$00,$FF,$00,$FD,$00,$00,$18,$00,$00,$FE,$00,$9B,$03 
+;     .BYTE $00,$00,$00,$00,$67,$00,$EF,$44,$00,$0B,$00,$00,$FF,$00,$DF,$C0 
+;     .BYTE $00,$00,$00,$00,$3F,$00,$F9,$C5
 
 
 
+.FILL ($8FFF - $),$FF
+.ORG $8FFF
 ;------------------------------------------------------------------------------------------------------------
 ; INPUT - Jumped to from 8307 via High Bank
 ; Arguments: X-REG address of function, Y-REG Token
@@ -2071,7 +2281,9 @@ BRANCH_92B3: ; branched to from 929D, 92A0, 92A9
 
 
 BRANCH_92BB: ; branched to from 9254
+#IFNDEF CE158V2
     SJP      CE158_PRT_B_DIR                ;
+#ENDIF
     VEJ	     (CC)                           ; Loads X-Reg with address at 78(pp) 78(pp+1) BASPRG_END_H
                 ABYT($67)                   ; n1
     INC	     X                              ;
@@ -2162,6 +2374,8 @@ BRANCH_9334: ; branched to from 932F
 ; Arguments:
 ; Output:
 ; RegMod:
+.FILL ($9337 - $)
+.ORG $9337
 SUB_9337:
     LDI	    XL,LB(STR_BUF)                  ;
     LDI	    XH,HB(STR_BUF)                  ; X = 7B10 = STR_BUF

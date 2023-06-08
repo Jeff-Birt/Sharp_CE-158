@@ -1,4 +1,4 @@
- ; CE-150 library file
+; CE-150 library file
 USER_CTRX_H       = $79E0 ; CE-150, USER COUNTER X (Counter for X coord. of pen) (H)
 USER_CTRX_L       = $79E1 ; CE-150, USER COUNTER X (Counter for X coord. of pen) (L)
 USER_CTRY_H       = $79E2 ; CE-150, USER COUNTER Y (Counter for Y coord. of pen) (H)
