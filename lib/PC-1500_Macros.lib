@@ -46,3 +46,11 @@ PO:                 EQU $04
 CI:                 EQU $08
 CO:                 EQU $10
 BP:                 EQU $18
+
+#define ADDRCHK(add,location)        #if ($ > add)    ; check address
+#DEFCONT                     \!over_run
+#DEFCONT                     \.ECHO location
+#DEFCONT                     \.ECHO " address over run by "
+#DEFCONT                     \.ECHO ($ - add)
+#DEFCONT                     \.ECHO " bytes\r\n"
+#DEFCONT                     \#endif

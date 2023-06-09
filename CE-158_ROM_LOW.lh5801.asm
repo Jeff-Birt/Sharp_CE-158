@@ -13,12 +13,18 @@
 #INCLUDE    "lib/CE-150.lib"
 #INCLUDE    "lib/PC-1500_Macros.lib"
 
-#INCLUDE    CE-158_ROM_HIGH.exp              ; Export table from high bank
+#INCLUDE    CE-158_ROM_HIGH.exp             ; Export table from high bank
 
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
-#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE (needed for ENBPD)
+;#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE (needed for ENBPD)
 ;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
 #DEFINE CE158V2
+
+#IFDEF ENBPD                                ; ENBPD requires ENMLCALL so let make sure it is defined too
+ #IFNDEF ENMLCALL                           ;
+  #DEFINE ENMLCALL                          ;
+ #ENDIF                                     ;
+#ENDIF                                      ;
 
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_LOW.exp to be imported into high bank
@@ -1449,8 +1455,8 @@ BPD_ARW:
 .ORG (ORIGPC + ($-INJCMD))                  ; Set PC back to original range
 
 PRNUM_DAT: ; used by Step #2
-    ;     PRINT   #    "   L   )
-    .BYTE $F0,$97,$23,$22,$4C,$29,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"TST"
+    ;     PRINT   #    "   L   $
+    .BYTE $F0,$97,$23,$22,$4C,$24,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"$)file"
 
 
 
@@ -1510,24 +1516,36 @@ INSTAT_FIX:
     LDA    #(CE158_UART_MSR0)               ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
 
 ;Fix CTS/DSR/LBI so they match the existing code base
-    SHR
-    ANI    A,$10                            ; Keep the DSR bit
-    BHR    DSR_CLR_INSTAT                   ; Check Bit 4. If not set skip otherwise set a CTS
-	ORI    A,$04
+    SJP DSRCTSFIX
+
+    ; SHR
+    ; ANI    A,$10                            ; Keep the DSR bit
+    ; BHR    DSR_CLR_INSTAT                   ; Check Bit 4. If not set skip otherwise set a CTS
+	; ORI    A,$04
 
 DSR_CLR_INSTAT:
     ORA     #(CE158_UART_MCR0)              ; Get RTS and DTR bits relies on other bit in MCR being cleared by reset
+    ANI     A,$17                           ; Bit 3 is Interrupt Enable bit, cleared out
     EAI     $17                             ; Invert the bits
     RTN	
 
+
 ;INVERT THE DSR/RTS LINES
 OUTSTAT_FIX:
-    LDA     #(CE158_UART_MCR0)              ; 
-    ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
+	LDI     A,0
     ORA 	(ARX + $06)
-    EAI     $03                             ; Invert the bits. The TI chip inverts these bits.
-    STA     #(CE158_UART_MCR0)              ;
+    EAI     $03                            ; Invert the bits. The TI chip inverts these bits.
+    ANI     #(CE158_UART_MCR0),$FC         ; Clear RTS/DTR bits
+    ORA     #(CE158_UART_MCR0)             ; Set the RTS/DTR bits
+    STA     #(CE158_UART_MCR0)             ;
     RTN 
+
+    ; LDA     #(CE158_UART_MCR0)              ; 
+    ; ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
+    ; ORA 	(ARX + $06)
+    ; EAI     $03                             ; Invert the bits. The TI chip inverts these bits.
+    ; STA     #(CE158_UART_MCR0)              ;
+    ; RTN 
 
 
 

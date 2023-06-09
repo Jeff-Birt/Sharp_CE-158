@@ -1,4 +1,4 @@
-; CE-158 library file
+ ; CE-158 library file
 OUTSTAT_REG       = $7850 ; CE-158 OUTSTAT value
 RS232C            = $7851 ; CE-158 Console 1 (RS232C)
 CONSOLE2          = $7852 ; CE-158 Console 1 (//)
@@ -35,3 +35,4 @@ CE158_UART_DATAW  = $D200 ; UART_DATA_W
 CE158_UART_REGW   = $D201 ; UART_REG_W
 CE158_UART_DATAR  = $D202 ; UART_DATA_R
 CE158_UART_REGR   = $D203 ; UART_REG_R
+CE158_IR_REG      = $DE00 ; Interrupt ID register, Bit 7 0 = INT, 1 = No INT.
