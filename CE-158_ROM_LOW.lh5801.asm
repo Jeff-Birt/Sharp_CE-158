@@ -18,7 +18,7 @@
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE (needed for ENBPD)
 ;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
-#DEFINE CE158V2
+;#DEFINE CE158V2
 
 #IFDEF ENBPD                                ; ENBPD requires ENMLCALL so let make sure it is defined too
  #IFNDEF ENMLCALL                           ;
@@ -545,7 +545,7 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 ; Arguments: A = character to send
 ; Outputs: A = Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
-TXLPT: ; 825b
+TXLPT: ; 825B
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
 
 BRANCH_825F: ; Branched to from 828A
@@ -639,7 +639,7 @@ COM_TBL_INIT:
 ; Arguments:
 ; Outputs:
 ; RegMod: UL, XL
-MERGE_V:
+MERGE_V: ;82C0
     INC	    UL                              ; Line number counter?
     LDI	    XL,$F0                          ; F0 a command code, used in MAIN_ENTRY
     BCH 	MAIN_ENTRY                      ; Branch fwd unconditional

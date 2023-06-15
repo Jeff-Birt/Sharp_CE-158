@@ -17,7 +17,8 @@
 
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE E7BUG                               ; Fixes bug in HB_CFG_URT_LPT at $8BAC
-#DEFINE CE158V2
+;#DEFINE CE158V2                             ; Build for new hardware CE-158X
+;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_HIGH.exp to be imported into low bank
@@ -927,10 +928,24 @@ INIT_VECTOR:
 ;------------------------------------------------------------------------------------------------------------
 ; FF 00 ... used to fill unused addresses
 #IFNDEF CE158V2
+ #IFNDEF CE158_48
 ; ************ Modified >
 SEPARATOR_8373:
     .BYTE  $FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF  ;
+ #ENDIF
 #ENDIF
+
+; #IFDEF CE158_48
+; CE158_48FIX:
+;     ;If A=A1 Then (4800) B6=1, B7=7, Else (2400) B6=0, B7=1
+;     BZS     SET2400                         ; (2) If Z=1 then 2400, else 4800
+;     ORI	    #(CE158_PRT_A),$40              ; (4) (ME1). Set Bit 6
+;     RTN                                     ; (1) 
+
+; SET2400:
+;     ORI	    #(CE158_PRT_A),$80              ; (4) (ME1) Set Bit 7
+;     RTN                                     ; (1) [12]
+; #ENDIF
 
 #IFDEF CE158V2
 ; Sets bits correctly for CTS/DSR/LBI
@@ -1027,18 +1042,33 @@ UNKNOWN_83BD: ; 83BD ORG, 83B1 BPD
 ; TBL_BAUD - Used to convert Baud rate settings in SETCOM to ASCII (I think)
 ; Used by 8ADC, 8C4B
 TBL_BAUD: ; 83C0 ORG, 83B4 BPD          ;C7                               ;CF
+#IFNDEF CE158_48
+            ;50      100     110     200      300     600     1200    2400
     .BYTE   $00,$32,$00,$64,$00,$6E,$00,$C8,  $01,$2C,$02,$58,$04,$B0,$09,$60 
-
+#ENDIF
+#IFDEF CE158_48
+            ;100   110    200    300    600    1200   2400   4800 
+    .WORD   $0064, $006E, $00C8, $012C, $0258, $04B0, $0960, $12C0
+#ENDIF
 
 
 ;-------------------------------------------------------------------------------------------------------------
-; TBL_WORDLEN
+; TBL_WORDLEN - Acutally BAUD
 ; Used by PARSE_WORDLEN: $8B4D
 TBL_WORDLEN: ; 83D0 ORG, 83C4 BPD
 #IFNDEF CE158V2
+ #IFNDEF CE158_48
 ; ************ Modified >
-    .BYTE   $70,$58,$56,$4C,$48,$44,$42,$41
+           ; 50  100  110  200  300  600  1200 2400
+    .BYTE   $70, $58, $56, $4C, $48, $44, $42, $41
+ #ENDIF
 #ENDIF
+
+#IFDEF CE158_48
+           ;100  110  200  300  600  1200 2400 4800
+    .BYTE   $58, $56, $4C, $48, $44, $42, $51, $49
+#ENDIF
+
 #IFDEF CE158V2
     ; BAUD   50      100     110     200    300     600     1200   2400
     .BYTE $24,$00,$12,$00,$10,$5D,$09,$00,$06,$00,$03,$00,$01,$80,$00,$C0
@@ -1125,6 +1155,33 @@ CONFIG_UARTS:
 ; <************
 #ENDIF
 
+#IFDEF ENBPD
+ #IFDEF CE158V2
+
+SETDEV_EXT2:
+    PSH     A                               ; We need orignal A later
+    BII     A,$01                           ; If Bit 0 set, we are using UART 1
+    BZS     EXT2_2                          ; Branch to UART 1 HB address set
+
+    LDI     A,$D2                           ; Store the HB address for U0
+    STA     (CE158_REG_79FE)                ;
+    BCH     EXT2_3                          ;
+
+EXT2_2:
+    LDI     A,$D4                           ; Store the HB address for U1
+    STA     (CE158_REG_79FE)                ;
+
+EXT2_3:
+    POP     A                               ; Get original A back
+    ANI     (SETDEV_REG),$E0                ; clears bits used for SETDEV MODE
+    ANI     A,$18                           ; keeps bits 4-3 of A (BPD CI CO settings),
+    ORA     (SETDEV_REG)                    ;  allows passing  mode mask at LB $903F
+    STA     (SETDEV_REG)                    ; 
+    RTN                                     ;
+
+ #ENDIF
+#ENDIF
+
 
 #IFDEF CE158V2
 .FILL ($8475 - $),$FF
@@ -1197,14 +1254,25 @@ TEXT_84EF:
 
 ;------------------------------------------------------------------------------------------------------------
 ; Unused space on original ROM
-; Tail end of SETDEV extension on modified ROM
+; SETDEV_EXT2 is Tail end of SETDEV extension on modified ROM for CE-158,
+; SETDEV_EXT2 elsewhere if CE158V2 build
 #IFNDEF ENBPD
+ #IFNDEF CE158V2
 SEPERATOR_8624: 
 .BYTE  $00,$FF,$00,$FF,$00,$FF,$00,$FF, $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00  ;
+ #ENDIF
+#ENDIF
+
+#IFDEF ENBPD
+ #IFDEF CE158V2
+SEPERATOR_8624: 
+.BYTE  $00,$FF,$00,$FF,$00,$FF,$00,$FF, $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00  ;
+ #ENDIF
 #ENDIF
 
 
 #IFDEF ENBPD
+ #IFNDEF CE158V2
 SETDEV_EXT2:
     ANI     (SETDEV_REG),$E0                ; clears bits used for SETDEV MODE
     ANI     A,$18                           ; keeps bits 4-3 of A (BPD CI CO settings),
@@ -1213,6 +1281,8 @@ SETDEV_EXT2:
     RTN                                     ;
 
     .BYTE  $00,$FF,$00,$FF                  ; remaining unused bytes
+ #ENDIF
+#ELSE 
 #ENDIF
 
 
@@ -1869,21 +1939,13 @@ BRANCH_88BE: ; Branched from 88AB           ; DEV$ - value to string
 #IFNDEF ENBPD
     LDA	    (SETDEV_REG)                    ; (3) Which devices are redirected to RS232
                                             ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
-#ENDIF
+    STA	    UL                              ; (2) UL = A = SETDEV_REG
+    LDA	    (OPN)                           ; (3) OPN device code, Basic table to search first
+    CPI	    A,$C0                           ; (2) Is OPN set to CE-158?
+    BZS     BRANCH_88CB                     ; (2) If A == C0 branch fwd
+    LDI	    UL,$00                          ; (2) [11] If OPN != CE-158 zero what was read from SETDEV_REG
 
-#IFDEF ENBPD
-    SJP    DEVSTR_EXT1                      ; (3) 
-#ENDIF
-
-
-    STA	    UL                              ; UL = A = SETDEV_REG
-    LDA	    (OPN)                           ; OPN device code, Basic table to search first
-    CPI	    A,$C0                           ; Is OPN set to CE-158?
-    BZS     BRANCH_88CB                     ; If A == C0 branch fwd
-    LDI	    UL,$00                          ; If OPN != CE-158 zero what was read from SETDEV_REG
-
-#IFNDEF ENBPD
-BRANCH_88CB: ; Branched from 88C7           ; *** Change start,  # loops, OR in $80 to A for BPD$
+BRANCH_88CB: ; Branched from 88C7           
     LDA	    UL                              ; (1) A = UL = (SETDEV_REG) or $00 is OPN != $0C (OPN)
     LDI	    XL,LB(TBL_SETDEV_TEXT)          ; (2) X = 83D8. SETDEV Command text table
     LDI	    XH,HB(TBL_SETDEV_TEXT)          ; (2) Y = 7A1E 
@@ -1891,13 +1953,17 @@ BRANCH_88CB: ; Branched from 88C7           ; *** Change start,  # loops, OR in 
 #ENDIF
 
 #IFDEF ENBPD
-BRANCH_88CB: ; Branched from 88C7           ; *** Change start,  # loops, OR in $80 to A for UR$
-    LDA	    UL                              ; (1) A = UL = (SETDEV_REG) or $00 is OPN != $0C (OPN)
+    SJP    DEVSTR_EXT1                      ; (3) 
+    BII     A,$80                           ; (2) If bit 7 set then UR$
+    BZR     BRANCH_88CB                     ; (2) Skip OPN test
+    BII     (OPN),$C0                       ; (3) Test OPN mode
+    BZR     BRANCH_88CB                     ; (2) If OPN set to CE-158 then skip ahead
+    LDI     A,$00                           ; (2) [11] else zero out settings read in, they are not in effect
+
+BRANCH_88CB: ; Branched from 88C7           ; Change start,  # loops, OR in $80 to A for UR$
     SJP     DEVSTR_EXT2                     ; (3) Change start point past SETDEV entries
     LDI	    XH,HB(TBL_SETDEV_TEXT)          ; (2) Y = 7A1E
-    NOP                                     ; (1) [7] 
 #ENDIF
-
 
 BRANCH_88D2: ; Branched from 88DC           ; TBL_SETDEV_TEXT .BYTE 4B 49 01 = K I 01 (Bit 0 in SETDEV)
     TIN                                     ; (Y) = (X) then INC both X,Y. X = 83D9, Y = 7A1F
@@ -2431,9 +2497,15 @@ BRANCH_8AA0: ; Branched to from 8A79
                                             ; Branch fwd, set BAUD rate, then return
 
 SET_DEFAULT_BAUD: ; Jumped to from to from 8910
+#IFNDEF CE158V2
     LDI	    A,$99                           ; 300,8,N,1 default setting
     BCH     BRANCH_8B3A                     ; Branch fwd, set BAUD rate, then return
-
+#ELSE
+    LDI     A,$81                           ; (2)
+    SJP     SETDEV_EXT1                     ; (3)
+    LDI	    A,$99                           ; (2) 300,8,N,1 default setting
+    JMP     BRANCH_8B3A                     ; (3) set BAUD rate, then return here
+#ENDIF
 
 ;.ORG $8AAD
 ;--------------------------------------------------------------------------------------------------
@@ -2487,6 +2559,7 @@ PARSE_BAUD: ; Branched to from 8921, Jumped to from 8709 vector calculation
     LDI	    XL,LB(TBL_BAUD)                 ; 
     LDI	    XH,HB(TBL_BAUD)                 ; X = 83C0, 'TBL_BAUD'
 
+                                            ;            50    100    110    200    300    600    1200   2400   
 BRANCH_8ADC: ; Branched to from 8AE7        ; TBL_BAUD: 00 32  00 64  00 6E  00 C8  01 2C  02 58  04 B0  09 60 
     LIN	    X                               ; A = (X) then INC X.   X=83C1
     CPA	    UH                              ; U is INT version of argument 
@@ -2614,12 +2687,17 @@ HB_CFG_URT_BD: ; 8B3D, brancnched from 8AA7 ; Sets Baud rate in CDP1854ACE UART 
 SKIP_SET: 
     STA     #(CE158_UART_DLL0)              ; store second byte of divisor
     ANI	    #(CE158_UART_LCR0),$7F          ; Reset DLAB
+
+    REC                                     ; Reset carry flag = success
+    RTN                                     ; Return
 ; <************
 #ENDIF
 
+
 #IFNDEF CE158V2
+ #IFNDEF CE158_48
 ; ************ Modified >
-    SHR                                     ; A = A >> 1. x x x x x 7 6 5
+    SHR                                     ; A = A >> 1. x x x x x 7 6 5 of SETCOM
     LDI	    XL,LB(TBL_WORDLEN)              ; 
     LDI	    XH,HB(TBL_WORDLEN)              ; X = 83D0, TBL_WORDLEN                         A = 0, 50 BUAD
     ADR	    X                               ; X = X + A. Offset into TBL_WORDLEN            X = 83D0 + 0
@@ -2628,6 +2706,7 @@ SKIP_SET:
     SEC                                     ; Set carry flag
     ROR                                     ; A = A >> 1. Carry into bit 7, bit 0 into Carry        A = CC, C = 1
     BCS     BRANCH_8B62                     ; Branch fwd if Bit 0 was a 1
+
     ANI	    #(CE158_PRT_A),$7F              ; Clear bit 7 (ME1)
     BCH     BRANCH_8B67                     ; If all Bits 6-0 in clear, branch fwd
 
@@ -2637,11 +2716,39 @@ BRANCH_8B62: ; branched to from 8B59
 BRANCH_8B67: ; branched to from 8B60
     STA     #(CE158_PRT_C)                  ; Set rest of Baud rate bits (ME1)
     ANI	    #(CE158_PRT_A),$BF              ; Clear Bit 6
-; <************    
-#ENDIF
 
     REC                                     ; Reset carry flag = success
     RTN                                     ; Return
+; <************    
+ #ENDIF
+#ENDIF
+
+
+#IFDEF CE158_48
+    SHR                                     ; A = A >> 1. x x x x x 7 6 5 of SETCOM
+    LDI	    XL,LB(TBL_WORDLEN)              ; 
+    LDI	    XH,HB(TBL_WORDLEN)              ; X = 83D0, TBL_WORDLEN                         A = 0, 50 BUAD
+    ADR	    X                               ; X = X + A. Offset into TBL_WORDLEN            X = 83D0 + 0
+    LDA	    (X)                             ; A = (X).                                              A = 99
+    ORI	    #(CE158_PRT_A_DIR),$C0          ; Bits 6,7 output, Baud rate select, PC0-4 also (ME1)
+    ANI	    #(CE158_PRT_A),~$C0             ; Clear bits 6,7 (ME1)
+    SEC                                     ; Set carry flag
+    ROR                                     ; A = A >> 1. Carry into bit 7, bit 0 into Carry        A = CC, C = 1
+    BCR     BRANCH_8B67                     ; If carry not set, skip special 2400/4800 logic (-2)
+
+;BRANCH_8B62: ; branched to from 8B59
+    ANI     A,$0F                           ; (2) Keep low nibble 2400=$A8->$08, 4800=$A4->$04
+    AEX                                     ; (1) 2400=$80, 4800=$40 (bit positions in PortA)
+    ORA	    #(CE158_PRT_A)                  ; (3) (ME1). Set Bit 6/7
+    LDI     A,$A0                           ; (2) Set A back to what it should have been
+
+BRANCH_8B67: ; branched to from 8B60
+    STA     #(CE158_PRT_C)                  ; Set rest of Baud rate bits (ME1) (-4)
+    NOP \ NOP \ NOP                         ; Fill unused space
+
+    REC                                     ; Reset carry flag = success
+    RTN                                     ; Return
+#ENDIF
 
 
 
