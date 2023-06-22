@@ -1,11 +1,13 @@
 ; CE-158_ROM_LOW.lh5801.asm
 ; Low Bank of Sharp CE-158 RS232/LPT interface
 ;
-; Modifications enabled by uncommenting #DEFINEs
-; E7BUG    - (HB) Fixes bug in CFG_UART_LPT at $8BAC
-; ENBPD    - (LB,HB) Enables new BPD/BPD$ commands.
-; ENMLCALL - (LB) Enables modifying PRINT,CLOAD,CSAVE,MERGE to allow direct calls by ML instead of only BASIC
-; BUSY     - (LB) Enables a blinking BUSY annunciator while loading and saving
+; Modifications enabled by uncommenting #DEFINEs. Not all defines used in both banks.
+; BUSY      - (LB) Enables a blinking BUSY annunciator while loading and saving
+; E7BUG     - (HB) Fixes bug in HB_CFG_URT_LPT at $8BAC
+; ENBPD     - (LB,HB) Include BPD/BPD$ commands
+; CE158V2   - Build for new hardware CE-158X
+; CE158_48  - Original hardware. Make top baud rate 4800bps, eliminate 50bps
+; HIGHSPEED - (HB) Enables faster baud rates of 4800,9600,19200 & 38400 (38400 uses SETCOM3840 due to signed ints)
 
 #INCLUDE    "lib/PC-1500.lib"
 #INCLUDE    "lib/CE-158.lib"
@@ -15,16 +17,37 @@
 
 #INCLUDE    CE-158_ROM_HIGH.exp             ; Export table from high bank
 
+#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
-;#DEFINE ENMLCALL                            ; Enable direct ML call of PRINT,CLOAD,CSAVE,MERGE (needed for ENBPD)
-;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 ;#DEFINE CE158V2
+;#DEFINE HIGHSPEED                           ;
 
-#IFDEF ENBPD                                ; ENBPD requires ENMLCALL so let make sure it is defined too
- #IFNDEF ENMLCALL                           ;
-  #DEFINE ENMLCALL                          ;
- #ENDIF                                     ;
-#ENDIF                                      ;
+;------------------------------------------------------------------------------------------------------------
+; Define default BAUD rate based on configuration
+#IFDEF CE158_48
+BPSDEF EQU $79                              ; 300bps default for 4800 enabled build
+#ELSE
+BPSDEF EQU $99                              ; 300bps default for stock build, and V2
+#ENDIF
+;------------------------------------------------------------------------------------------------------------
+
+;------------------------------------------------------------------------------------------------------------
+; Define BackPack Drive BAUD rate based on configuration
+#IFDEF CE158V2
+ #IFDEF HIGHSPEED
+BPSBP EQU $59                               ; 19200bps 
+ #ELSE
+BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
+ #ENDIF
+#ELSE
+ #IFDEF CE158_48
+BPSBP EQU $D9                               ; 2400bps for Backpack w/CE158_48
+ #ELSE
+BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
+ #ENDIF
+#ENDIF   
+;------------------------------------------------------------------------------------------------------------
 
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_LOW.exp to be imported into high bank
@@ -231,7 +254,7 @@ SEPARATOR_8161:
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
 CHAR2LPT: ; 8169
-    #IFNDEF CE158V2
+#IFNDEF CE158V2
 ; ************ Modified >
     PSH     A                               ; A is the ASCII charecter from input buffer?
     LDI	    A,$7F                           ; 
@@ -239,9 +262,7 @@ CHAR2LPT: ; 8169
     LDA     #(CE158_PRT_A)                  ; Read CE-158 Port A,  (ME1)
     AND     #(CE158_PRT_A)                  ; Filter out input changes? (ME1)
     SHL  
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     PSH     A                               ; A is the ASCII charecter from input buffer?
     LDA     #(CE158_UART_MSR0)              ; Read CE-158 Port MSR0,  (ME1)
     AND     #(CE158_UART_MSR0)              ; Filter out input changes? (ME1)
@@ -280,9 +301,7 @@ BRANCH_81A8: ; Branched to from 81A9
     SIE                                     ; Enable Interrupts
     LDI	    A,$80                           ; Set up time delay
 ; <************
-#ENDIF
-
-#IFNDEF CE158V2
+#ELSE
 ; ************ Modified >
     BII     #(CE158_PRT_B),$80              ; (ME1)
     BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
@@ -322,6 +341,8 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
     SEC                                     ; Carry used to indicate return state? 
     RTN                                     ; Set Carry Flag. SEC = Failure
 
+
+
 .FILL ($81BC - $)
 .ORG $81BC 
 ; -----------------------------------------------------------------------------------------------------------
@@ -342,9 +363,7 @@ CHAR2COM: ; 81BC
     AND	    #(CE158_PRT_A)                  ; Filter out changes (ME1)
     ANI	    A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_81E3                     ; Branch fwd if any bit 5-2 is set MODIFIED BRANCH ADDRESS
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
  ;  AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
  	EAI     $30                             ; Invert the CTS/DSR bits-TI part does this automatically.
@@ -371,9 +390,7 @@ BRANCH_81D6: ; Branched to from 81D2
     LDA	    UL                              ; Our original A is in UL. Charecter to send.
     STA	    #(CE158_UART_DATAW)             ; Writes A to UART (ME1)
     REC                                     ; Reset Carry Flag = Success
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
   	ROR
     AND	    #(CE158_UART_LSR0)              ; A = A & UART_STATUS. A=Bit6 of SETDEV_REG or $04
     SEC                                     ; Set carry flag = failure
@@ -410,9 +427,7 @@ RXCOM: ; 81E6
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
     LDA     #(CE158_UART_REGR)              ; UART status register
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
 ; ************ Modified > 
     LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
     AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
@@ -452,9 +467,7 @@ BRANCH_8208: ; Branched to from 8205
     STA     #(CE158_UART_REGW)              ; Writing UART control reg
     LDI	    A,$05                           ; sets: Bit2 SBS, Bit0 PI
     STA     #(CE158_UART_REGW)              ; To pulse Bit 4?
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDA     #(CE158_UART_RBR0)              ; Read UART Data Register to clear it
     BII	    (SETDEV_REG),$20                ; Test Bit5  ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
@@ -481,9 +494,9 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
 BRANCH_8230: ; Branched to from 81F0
     PSH   A
     LDA     #(CE158_UART_DATAR)            ; A = Data read from UART (ME1), clear Rx register  
-#ENDIF
 
-#IFDEF CE158V2
+#ELSE
+
     LDA     #(CE158_UART_RBR0)              ; Read data byte
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
@@ -504,8 +517,7 @@ BRANCH_8230: ; Branched to from 81F0
 
 BRANCH_8237: ; Branched to from 824A to borrow return
     POP	    A                               ; 
-    RTN                                    ; A contains #(CE158_PRT_A) Bits 5-2 on failure
-
+    RTN                                     ; A contains #(CE158_PRT_A) Bits 5-2 on failure
 
 
 
@@ -779,6 +791,7 @@ LB_RTN_FRM_HB: ; 8305                   ; High bank jumps back here for the abov
     STX     P                               ; Jump to address by poking program counter ***JMP
 
 
+
 ;------------------------------------------------------------------------------------------------------------
 ; ERL - Jumped to from 8307 via High Bank
 ; 0=No error, >0=Line at which error occured
@@ -842,9 +855,10 @@ BRANCH_8329: ;branched to from 8320
 INSTAT:
 #IFDEF CE158V2
 ; ************ Modified >
-    SJP     INSTAT_FIX
-#ENDIF
-#IFNDEF CE158V2
+    SJP     INSTAT_FIX                      ;
+
+#ELSE
+
     LDA     #(CE158_PRT_A)                  ; 
 ; <************
 #ENDIF
@@ -853,6 +867,7 @@ INSTAT:
 BRANCH_8330: ;branched to from 8315
     LDI     XL,$E4                          ;
     BCH 	BRANCH_8360                     ; Branch forward unconditional
+
 
 
 .FILL ($8334 - $),$FF
@@ -881,8 +896,9 @@ BRANCH_8330: ;branched to from 8315
     ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
     ORA 	(ARX + $06)
     STA     #(CE158_PRT_A)                  ; Also set DTR/RTS bits on CE-158
-#ENDIF
-#IFDEF CE158V2
+
+#ELSE
+
     SJP     OUTSTAT_FIX
 ; <************
 #ENDIF
@@ -891,6 +907,7 @@ BRANCH_8330: ;branched to from 8315
 
 BRANCH_8356: ; branched to from 8334, 8336
     VEJ     (E0)                            ; Indicates if UH is not "00" error message
+
 
 
 .FILL ($8357 - $),$FF
@@ -1354,7 +1371,7 @@ INJFLAG:    EQU (IN_BUF + $4F)              ; $7BFF Address of flag used to sign
     PSH A                                   ; A=00=CSAVE, A=01=CLOAD or MERGE
 
     ; Step #1 - configure UART - Set values for BPD use
-    LDI A,$F9                               ; SETCOM 2400,8,N,1
+    LDI A,BPSBP                             ; SETCOM to 2400/4800/19200 depending on config
     STA (SETCOM_REG)                        ; 
 
     LDA (SETDEV_REG)                        ;
@@ -1455,7 +1472,7 @@ BPD_ARW:
 .ORG (ORIGPC + ($-INJCMD))                  ; Set PC back to original range
 
 PRNUM_DAT: ; used by Step #2
-    ;     PRINT   #    "   L   $
+    ;     PRINT   #    "   L   $24=$ prives 5 second delay, $29=) provides 30 second delay
     .BYTE $F0,$97,$23,$22,$4C,$24,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"$)file"
 
 
@@ -1467,43 +1484,44 @@ CSAVE_INTERCEPT: ;  Intercept CSAVE, CLOAD, MERGE
     BII     (CE158_REG_79DD),$18            ; BPD mode flag
     BZS     CSI_EXIT                        ;
     LDI     A,$00                           ; A=$00=CSAVE was called (for BPD code)
-    SJP     BPD_CMD                        ; Configure for BPD use
+    SJP     BPD_CMD                         ; Configure for BPD use
 
 CSI_EXIT:                                   ; Returns to here and back to CSAVE
     LDI     A,$20                           ; $9081 - CSAVE entry
-    STA     (OUT_BUF + $41)                 ;
-    JMP     BRANCH_90C8                     ;
+    BCH     INTERCEPT_EXIT                  ; 
 
 
 MERGE_INTERCEPT:
     BII     (CE158_REG_79DD),$18            ; BPD mode flag
     BZS     MRI_EXIT                        ;
     LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
-    SJP     BPD_CMD                        ; Configure for BPD use
+    SJP     BPD_CMD                         ; Configure for BPD use
 
 MRI_EXIT:                                   ; Returns to here and back to MERGE
     LDI     A,$10                           ; $90BF - MERGE entry
-    STA     (OUT_BUF + $41)                 ;
-    JMP     BRANCH_90C8                     ;
+    BCH     INTERCEPT_EXIT                  ; 
 
 
 CLOAD_INTERCEPT:
     BII     (CE158_REG_79DD),$18            ; BPD mode flag
     BZS     CLI_EXIT                        ;
     LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
-    SJP     BPD_CMD                        ; Configure for BPD use
+    SJP     BPD_CMD                         ; Configure for BPD use
 
 CLI_EXIT:                                   ; Returns to here and back to CLOAD
     LDI     A,$00                           ; $90C3 - CLOAD entry
+    BCH     INTERCEPT_EXIT                  ; 
+
+
+INTERCEPT_EXIT:
+    AND     (RND_VAL),$00                   ; Zero main BUSY blink counter
+    AND     (RND_VAL + $01),$00             ; Zero /8 BUSY blink counter
     STA     (OUT_BUF + $41)                 ;
     JMP     BRANCH_90C8                     ;
+
 #ENDIF
 
 
-; Here for testing only as this was in Ian's code and will shift code below to correct address
-#IFDEF CE158V2
-    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD
-#ENDIF
 
 ;------------------------------------------------------------------------------------------------------------
 ; ************ Modified >
@@ -1515,8 +1533,8 @@ CLI_EXIT:                                   ; Returns to here and back to CLOAD
 INSTAT_FIX:
     LDA    #(CE158_UART_MSR0)               ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
 
-;Fix CTS/DSR/LBI so they match the existing code base
-    SJP DSRCTSFIX
+    
+    SJP DSRCTSFIX                           ; Fix CTS/DSR/LBI so they match the existing code base
 
     ; SHR
     ; ANI    A,$10                            ; Keep the DSR bit
@@ -1882,7 +1900,6 @@ TABLE9061:
 ;-----------------------------------------------------------------------------------------------------------
 ; TABLE_906B - Used by 903F
 TABLE_906B:
-        ;          PC-1500
         ; ?             CE-150   ?                           CE-158                    OPN EOL
     .BYTE $04 \ .WORD (LPRINT_150 + $08) \ .BYTE $58 \ .WORD JMP_93DE          \ .BYTE $C0,$00   ; Byte 0 is SETDEV mode mask
     .BYTE $04 \ .WORD  LPRINT_150        \ .BYTE $58 \ .WORD JMP_93DE          \ .BYTE $C0,$00   ; Byte 1 -> UH
@@ -1919,9 +1936,9 @@ CLOAD_ENTRY:
 
 BRANCH_90C5:
     STA     (OUT_BUF + $41)                 ;
-#ENDIF
 
-#IFDEF ENBPD
+#ELSE
+
 CSAVE_ENTRY:
     JMP     CSAVE_INTERCEPT                 ; $90BB - CSAVE entry intercept
     NOP                                     ; Take up extra bytes
@@ -2386,14 +2403,14 @@ BRANCH_9334: ; branched to from 932F
 
 
 
+.FILL ($9337 - $)
+.ORG $9337
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9337 - Called from 92E4, 92F2, 9314, 931D
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
-.FILL ($9337 - $)
-.ORG $9337
 SUB_9337:
     LDI	    XL,LB(STR_BUF)                  ;
     LDI	    XH,HB(STR_BUF)                  ; X = 7B10 = STR_BUF
@@ -2500,7 +2517,7 @@ BRANCH_93AA: ; branched to from 939C
                 ABRF(BRANCH_93AE)           ; Forward branch to label
 
 BRANCH_93AC: ; branched to from 9378
-    BCH 	BRANCH_9468                      ;
+    BCH 	BRANCH_9468                     ;
 
 BRANCH_93AE: ; branched to from 93AA
     VEJ     (C4)                            ; Check tokens/char in U-Reg if not ';' branch fwd n
@@ -2895,7 +2912,7 @@ BRANCH_959B: ; branched to from 95A0
     LDA	    (U)                             ;
     CPA	    (X)                             ;
     BZR     BRANCH_95C2                     ;
-    LOP     UL,BRANCH_959B                  ;    UL = UL - 1, loop back 'e' if Borrow Flag not set
+    LOP     UL,BRANCH_959B                  ; UL = UL - 1, loop back 'e' if Borrow Flag not set
 
 BRANCH_95A2: ; branched to from 9595
     VEJ     (CC)                            ; Loads X-Reg with address at 78(pp) 78(pp+1) CURVARADD_H
@@ -2973,12 +2990,12 @@ JMP_960C: ; jumped to from 928C, 9859
     SJP	    SUB_9BAA                        ; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
     ORI     #(PC1500_MSK_REG),$01           ; PC-1500 - Set interrupt mask for ON Key
 
-#IFNDEF ENMLCALL                            ; If we are not redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
+#IFNDEF ENBPD                               ; If we are not redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
     DEC	    Y                               ;
     VEJ     (E2)                            ; Start of Basic Interpreter
 #ENDIF
 
-#IFDEF ENMLCALL                             ; If we are redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
+#IFDEF ENBPD                                ; If we are redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
     BCH     PRNT_NUM8                       ; A hack to handle ML calling PRINT#-8
 #ENDIF
 
@@ -3027,11 +3044,11 @@ JMP_9641: ; Jumped to from 92B5
 ; Used for enabling direct ML call of PRINT,CLOAD,CSAVE,MERGE
 ; Set $7BFF, (IN_BUF+$4F) to $A5 before call as flag of direct ML call, i.e. not called by BASIC
 SEPARATOR_9651:
-#IFNDEF ENMLCALL
+#IFNDEF ENBPD
     .BYTE $FF,$00,$FF,$00,$FF,$00,$FF,$00, $FF,$00,$FF,$00,$FF,$00,$FF 
-#ENDIF
 
-#IFDEF ENMLCALL
+#ELSE
+
 PRNT_NUM8:                                  ; Hack to allow a ML routine to call PRINT#-8
     DEC	    Y                               ; Part of original exit code
     LDA     (IN_BUF + $4F)                  ; We sat last byte of IN_BUF to $A5
@@ -3920,7 +3937,7 @@ BRANCH_9A75: ; branched to from 9A68
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9A78 - Called from 9419
 ; 
 ; Arguments:
@@ -3967,7 +3984,7 @@ BRANCH_9A9D:
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9AA5 - Called from 92D4, 9739, 9CF1, 9D76
 ; 
 ; Arguments:
@@ -3996,7 +4013,7 @@ BRANCH_9AC0: ; branched to from
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9AC1 - Called from 9AAA 9AB2 SUB_9AA5
 ; 
 ; Arguments:
@@ -4010,7 +4027,7 @@ SUB_9AC1:
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9ACB - Called from 9AAC
 ; Copies some stuff in OUT_BUF
 ; Arguments:
@@ -4039,7 +4056,7 @@ BRANCH_9AE5: ; branched to from 9AD2, 9ADA
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9AE6 - 
 ; 
 ; Arguments:
@@ -4122,7 +4139,7 @@ BRANCH_9B2F: ; called from 9B1F, 9B24, 9B2A
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9B31 - 9890, 9896, 989C, 98A8, 98B4
 ; 
 ; Arguments:
@@ -4199,7 +4216,7 @@ BRANCH_9B74: ; branched to from 9B62
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9B76 - Called from 
 ; 
 ; Arguments:
@@ -4222,7 +4239,7 @@ BRANCH_9B87: ; called from 9B7D, 9B83
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; DELAY500MS - Time delay of 500ms, default. 
 ; DELAY_A_MS - Time delay of A * 15.625ms
 ; 
@@ -4243,7 +4260,7 @@ DELAY_A_MS: ; called from 9515, 95D6, 95EE
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9B99 - Seems to work like end of line detection for PRINT#
 ; 
 ; Arguments: A
@@ -4274,7 +4291,7 @@ BRANCH_9BA9: ; branched to from 9BA2
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9BAA - Called from 
 ; Checks some things in OUTPUT BUFFER, pokes values in CE-158 registers
 ; Arguments:
@@ -4320,7 +4337,7 @@ SUB_9BC1:
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_98DF - called from 93E5, 9371
 ; SUB_9BE1 - called from 9AA7, 9587, 9184
 ; Manipulates OUT_BUF
@@ -4380,7 +4397,7 @@ BRANCH_9C31: ; branched to from 9C4E, 9C53, 9C02, 9C17, 9C1D, 9C22, 9C2C
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9C32 - called from 9AC6
 ; Pulls some values out of OUT_BUF and saves to XH, XL, UH, UL, A
 ; Arguments:
@@ -4473,7 +4490,7 @@ BRANCH_9C89: ; branched to from 9C6A, called from 9CBA, 9CD9
 
 
 
-;--------- ---------------------------------------------------------------------------------------------------
+;------------------------------------------------------------------------------------------------------------
 ; SUB_9C94 - Called from
 ; 
 ; Arguments:
@@ -4894,30 +4911,48 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 ;
 #IFDEF BUSY
 BUSY_BLINK: ; 9E74
-    PSH     A                               ; (2) Save original A
-    LDA     (CE158_REG_79DF)                ; (3) Grab current counter value $79DF
-    INC     A                               ; (1) INC counter
-    STA     (CE158_REG_79DF)                ; (3) Update counter $79DF
+    PSH     A                               ; Save original A
+    PSH     X                               ; Save current value in X
 
-    EOR     (SETCOM_REG)                    ; (3) XOR  with BAUD (bits 7-5)
-    ANI     A,$E0                           ; (2) keep only bits 7-5
+    LDA     (RND_VAL)                       ; Main counter value in $7B00
+    INC     A                               ; INC main counter
+    STA     (RND_VAL)                       ; Update main counter
+    CPI     A,$01                           ; Did we reach 8?
+    BCR     BLINK_SKIP                      ; Skip over if != 8
 
-    BZR     BLINK_SKIP                      ; (2) Skip the blink if A != 0
+    AND     (RND_VAL),$00                   ; We did reach 8 so Zero main counter
+    LDA     (RND_VAL + $01)                 ; grab /8 counter value
+    INC     A                               ; INC /8 counter
+    STA     (RND_VAL + $01)                 ; store /8 counter value
 
-    LDI     A,$01                           ; (2) B0 is BUSY annunciator
-    EOR     (DISP_BUFF + $4E)               ; (3) Toggle B0
-    STA     (DISP_BUFF + $4E)               ; (3) Write it back
-    ANI     (CE158_REG_79DF),$00            ; (4) zero counter $79DF
+    LDI     A,$E0                           ;
+    AND     (SETCOM_REG)                    ; Keep only bits 7-5
+    AEX                                     ; Swap nibbles, now we have index into TBL_BUSY
+    SHR                                     ; 
+
+    LDI     XH, HB(TBL_BUSY)                ; Set X to TBL_BUSY start address
+    LDI     XL, LB(TBL_BUSY)                ;
+    ADR     X                               ; Add A to X, X now points to correct table entry
+
+    LDA     (RND_VAL + $01)                 ; /8 counter
+    CPA     (X)                             ; Compare /8 counter and /8 toggle setting for this BAUD
+    BCR     BLINK_SKIP                      ; Skip if /8 counter < /8 toggle setting for this BAUD
+
+    LDI     A,$01                           ; B0 is BUSY annunciator
+    EOR     (DISP_BUFF + $4E)               ; Toggle B0
+    STA     (DISP_BUFF + $4E)               ; Write it back
+    ANI     (RND_VAL + $01),$00             ; zero /8 counter
 
 BLINK_SKIP:
-    POP     A                               ; (2) Get original A back
-    SJP	    (OUT_BUF + $4A)                 ; (3) Now do the CLOAD
-    RTN                                     ; (1) [34]
+    POP     X                               ; Get original X back
+    POP     A                               ; Get original A back
+    SJP	    (OUT_BUF + $4A)                 ; Now do the CLOAD, CSAVE, etc.
+    RTN                                     ; 
 
+TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
+    ; .BYTE   $02,$02,$03,$05,$09,$12,$25,$4B    
+    .BYTE   $01,$01,$02,$02,$04,$09,$12,$25
 #ENDIF
-
-
-
 
 ;------------------------------------------------------------------------------------------------------------
 ; SEPARATOR_9E74 - Unused
@@ -4926,12 +4961,6 @@ SEPARATOR_9E74:
     .BYTE $00,$FF,$03,$D7,$26,$F7,$00,$FF,  $00,$FF,$00,$BF,$04,$EE,$00,$FF
     .BYTE $00,$FF,$82,$FF,$06,$FE,$00,$FF,  $00,$FF,$09,$FE,$00,$FF,$00,$FF
     .BYTE $00,$FF,$80,$FF,$05,$FE,$00,$FF,  $00,$FF,$00,$FF,$00,$3F,$00,$FF
-#ENDIF
-
-#IFDEF BUSY
-    .BYTE $00,$FF,$80,$FF,$05,$FE,$00,$FF,  $00,$FF,$00,$FF,$00,$3F;,$00,$FF
-#ENDIF
-
     .BYTE $00,$FF,$40,$FF,$04,$FF,$00,$FF,  $00,$FF,$00,$FF,$80,$FF,$00,$FF
     .BYTE $00,$FF,$00,$FF,$21,$DF,$00,$FF,  $00,$FF,$00,$FF,$80,$FF,$00,$FF
     .BYTE $00,$FF,$82,$FF,$50,$FD,$00,$FF,  $00,$FF,$00,$FF,$00,$E2,$00,$FF
@@ -4955,4 +4984,10 @@ SEPARATOR_9E74:
     .BYTE $00,$7F,$08,$00,$01,$00,$00,$FF,  $00,$FF,$04,$00,$84,$00,$00,$9A
     .BYTE $00,$AF,$00,$00,$80,$00,$00,$7F,  $00,$FF,$04,$00
 
-    .END
+#ELSE
+
+.FILL ($A000 - $)
+
+#ENDIF
+
+.END
