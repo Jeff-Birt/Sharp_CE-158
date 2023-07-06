@@ -19,9 +19,9 @@
 
 #DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
-;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
-;#DEFINE CE158V2
-;#DEFINE HIGHSPEED                           ;
+;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
+#DEFINE CE158V2                             ; New hardware CE-158X
+;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -55,6 +55,7 @@ BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
 .EXPORT LB_CONSOLE_2V, LB_FEED_2V, LB_LPRINT_2V, LB_LLIST_2V
 
 .ORG $8000
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; BASIC Command Table 8000
@@ -879,12 +880,13 @@ BRANCH_8330: ;branched to from 8315
 ; Arguments:
 ; Outputs:
 ; RegMod:
+OUTSTAT:
     VEJ     (DE)                            ; Calc formula Y-reg points to, result to AR-X, Branch fwd to 8356 on error
                 ABRF(BRANCH_8356)           ; Forward branch to label
     VEJ     (D0)                            ; Convert AR-X to INT send to U, range of 4, branch fwd to 8356 on error
                 ABYT($04)                   ; Low byte of address
                 ABRF(BRANCH_8356)           ; Forward branch to label
-    ANI	    (ARX + $06),$03                 ; keep bits 0-1 or argument
+    ANI	    (ARX + $06),$03                 ; keep bits 0-1 of argument
     LDA	    (OUTSTAT_REG)                   ;
     ANI     A,$FC                           ; clear bits 0-1, DTR, RTS
     ORA     (ARX + $06)                     ; 
@@ -1400,13 +1402,34 @@ CLOOP:
     LDA	(OUTSTAT_REG)                       ; Configure OUTSTAT
     ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
     STA (OUTSTAT_REG)                       ; Sets DTR and RTS from calc in 8334? OUTSTAT 7850
+
+#IFNDEF CE158V2
     LDA #(CE158_PRT_A)                      ; 
     ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
     STA #(CE158_PRT_A)                      ; Also set DTR/RTS bits on CE-158
+#ELSE
+    EAI     $03                             ; Invert the bits. The TI chip inverts these bits.
+    ANI     #(CE158_UART_MCR0),$FC          ; Clear RTS/DTR bits
+    ORA     #(CE158_UART_MCR0)              ; Set the RTS/DTR bits
+    STA     #(CE158_UART_MCR0)              ;
+#ENDIF
+
+    ; Step #2 - Send twenty $20 (space) to wake up BPD+
+;     LDI     A,$20                           ; ASCII SPACE character
+;     LDI     XL,$20                          ; Number of times to send
+; WLOOP:
+;     SJP     TXCOM                           ; Send one space character
+;     DEC     XL                              ; Decrement loop counter
+;     BZR     WLOOP                           ; Loop back until send twenty times
+    LDI     A,$20                           ; ASCII SPACE character
+    SJP     TXCOM                           ; Send one space character
+    LDI     A,$0D                           ; ASCII CR character
+    SJP     TXCOM                           ; Send one space character
+    LDI     A,$D0                           ; Delay 2*15.6ms for BPD+ to wake up
+    SJP     DELAY_A_MS                      ; about 3 seconds
 
 
-
-    ; Step #2 - Inject PRINT#"L)filename", this is done by poking code into RAM
+    ; Step #3 - Inject PRINT#"L)filename", this is done by poking code into RAM
     ; First copy PRINT#"L)  then POP A to derive mode char. A=0 char=S, A=1 char=L
     ; Then POKE in " and $0D
     ; POP Y / PSH to get pointer to filename and still preserve it for CLOAD/CSAVE/MERGE
@@ -4910,6 +4933,14 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 ; BUSY BLINK LOAD- Blinks the BUSY annunciator while loading
 ;
 #IFDEF BUSY
+
+; For HIGHSPEED we need a secondary /N counter
+#IFDEF HIGHSPEED 
+DIVN EQU $04
+#ELSE
+DIVN EQU $01
+#ENDIF
+
 BUSY_BLINK: ; 9E74
     PSH     A                               ; Save original A
     PSH     X                               ; Save current value in X
@@ -4917,13 +4948,13 @@ BUSY_BLINK: ; 9E74
     LDA     (RND_VAL)                       ; Main counter value in $7B00
     INC     A                               ; INC main counter
     STA     (RND_VAL)                       ; Update main counter
-    CPI     A,$01                           ; Did we reach 8?
-    BCR     BLINK_SKIP                      ; Skip over if != 8
+    CPI     A,DIVN                          ; Did we reach /N?
+    BCR     BLINK_SKIP                      ; Skip over if != DIVN
 
-    AND     (RND_VAL),$00                   ; We did reach 8 so Zero main counter
-    LDA     (RND_VAL + $01)                 ; grab /8 counter value
-    INC     A                               ; INC /8 counter
-    STA     (RND_VAL + $01)                 ; store /8 counter value
+    AND     (RND_VAL),$00                   ; We did reach DIVN so Zero main counter
+    LDA     (RND_VAL + $01)                 ; grab DIVN counter value
+    INC     A                               ; INC DIVN counter
+    STA     (RND_VAL + $01)                 ; store DIVN counter value
 
     LDI     A,$E0                           ;
     AND     (SETCOM_REG)                    ; Keep only bits 7-5
@@ -4950,8 +4981,24 @@ BLINK_SKIP:
     RTN                                     ; 
 
 TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
-    ; .BYTE   $02,$02,$03,$05,$09,$12,$25,$4B    
-    .BYTE   $01,$01,$02,$02,$04,$09,$12,$25
+#IFDEF CE158V2   
+ #IFDEF HIGHSPEED ; New 158X HW, 38400 BAUD
+    ;      4800, 9600,19200,38400,  300,  600, 1200, 2400
+    .BYTE   $12,  $25,  $4B,  $96,  $02,  $09,  $25,  $09 
+ #ELSE            ; New 158X HW, 2400 BAUD
+           ; 50,  100,  110,  200,  300,  600, 1200, 2400 
+    .BYTE   $01,  $01,  $02,  $02,  $04,  $09,  $12,  $25 
+ #ENDIF
+#ELSE
+ #IFDEF CE158_48 ; Original 158 HW, 4800 BAUD
+           ;100,  110,  200,  300,  600, 1200, 2400, 4800
+    .BYTE   $02,  $02,  $03,  $05,  $09,  $12,  $25,  $4B
+ #ELSE           ; Original 158 HW, 2400 BAUD
+           ; 50,  100,  110,  200,  300,  600, 1200, 2400
+    .BYTE   $01,  $01,  $02,  $02,  $04,  $09,  $12,  $25
+ #ENDIF
+#ENDIF
+
 #ENDIF
 
 ;------------------------------------------------------------------------------------------------------------

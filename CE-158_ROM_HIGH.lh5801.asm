@@ -21,8 +21,8 @@
 #DEFINE E7BUG                               ; Fixes bug in HB_CFG_URT_LPT at $8BAC
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
-;#DEFINE CE158V2                             ; Build for new hardware CE-158X
-;#DEFINE HIGHSPEED                           ;
+#DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
+;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -504,7 +504,7 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     RTN                                     ; Carry flag indicates return state
 
 BRANCH_8230: ; Branched to from 81F0
-    PSH   A
+    PSH     A
     LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register  
 #ENDIF
 
@@ -519,8 +519,8 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     RTN                                     ; Carry flag indicates return state
 
 BRANCH_8230: ; Branched to from 81F0
-	SJP   DSRCTSFIX                         ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
-	PSH   A
+	SJP     DSRCTSFIX                       ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
+	PSH     A                               ; 
     LDA     #(CE158_UART_RBR0)              ; Read data byte
 ; <************ 
 #ENDIF
