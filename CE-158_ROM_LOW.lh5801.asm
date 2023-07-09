@@ -21,7 +21,7 @@
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
 #DEFINE CE158V2                             ; New hardware CE-158X
-;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
+#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -51,8 +51,8 @@ BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
 
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_LOW.exp to be imported into high bank
-.EXPORT LB_RTN_FRM_HB, LB_COM_STR_V, LB_CONSOL_V, LB_DEV_STR_V, LB_FEED_V, LB_LPRINT_V, LB_LLIST_V
-.EXPORT LB_CONSOLE_2V, LB_FEED_2V, LB_LPRINT_2V, LB_LLIST_2V
+.EXPORT LB_CHAR2LPT, LB_TXLPT, LB_RTN_FRM_HB, LB_COM_STR_V, LB_CONSOL_V, LB_DEV_STR_V, LB_FEED_V
+.EXPORT LB_LPRINT_V, LB_LLIST_V,LB_CONSOLE_2V, LB_FEED_2V, LB_LPRINT_2V, LB_LLIST_2V
 
 .ORG $8000
 
@@ -254,7 +254,7 @@ SEPARATOR_8161:
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, A = 20 Low Battery
 ; RegMod: A
-CHAR2LPT: ; 8169
+LB_CHAR2LPT: ; 8169
 #IFNDEF CE158V2
 ; ************ Modified >
     PSH     A                               ; A is the ASCII charecter from input buffer?
@@ -558,7 +558,7 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 ; Arguments: A = character to send
 ; Outputs: A = Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
-TXLPT: ; 825B
+LB_TXLPT: ; 825B
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
 
 BRANCH_825F: ; Branched to from 828A
@@ -570,7 +570,7 @@ BRANCH_8265: ; Branched to from 8275, 8279
     BII	    #(PC1500_IF_REG),$02            ; PC-1500 - IF Register Bit1 PB7 (ON Key)
     BZR     BRANCH_82B1                     ; If Bit 1 was set branch fwd to an exit (reset)
     PSH	    A                               ; Save cahracter to TX
-    SJP     CHAR2LPT                        ; Sends charecter in A to LPT, Returns A as failure type
+    SJP     LB_CHAR2LPT                        ; Sends charecter in A to LPT, Returns A as failure type
     BZR     BRANCH_8280                     ; A = 20 Low Battery, A = 00 is could not send?, C=0=success
     POP	    A                               ; A now original character to send
     LOP     UL,BRANCH_8265                  ; UL = UL - 1, loop back e if Borrow Flag not set
@@ -3503,17 +3503,17 @@ TBL_9887:
     JMP	    SUB_9B1C                        ;
     JMP	    TXCOM                           ; Sends charecter in A to RS232 Port.
     JMP	    SUB_9B31                        ;
-    JMP	    TXLPT                           ;
+    JMP	    LB_TXLPT                        ;
     JMP	    SUB_9B31                        ;
-    JMP	    TXLPT                           ;
+    JMP	    LB_TXLPT                        ;
     JMP	    SUB_9B31                        ;
     JMP	    JMP_9C99                        ;
     JMP	    SUB_9B1C                        ;
     JMP	    JMP_9C60                        ;
     JMP	    SUB_9B31                        ;
-    JMP	    TXLPT                           ;
+    JMP	    LB_TXLPT                        ;
     JMP	    SUB_9B31                        ;
-    JMP	    TXLPT                           ;
+    JMP	    LB_TXLPT                        ;
     JMP	    SUB_9B31                        ;
 
 

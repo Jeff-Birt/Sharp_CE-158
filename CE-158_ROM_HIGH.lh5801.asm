@@ -1,5 +1,6 @@
 ; CE-158_ROM_HI.lh5801.asm
 ; High Bank of Sharp CE-158 RS232/LPT interface
+; To fold: Hightlight Ctrl+K Ctrl+,
 ;
 ; Modifications enabled by uncommenting #DEFINEs. Not all defines used in both banks.
 ; BUSY      - (LB) Enables a blinking BUSY annunciator while loading and saving
@@ -22,7 +23,8 @@
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 #DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
-;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
+#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
+#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT to Low Bank to save space
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -253,6 +255,7 @@ SEPARATOR_8161:
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, SEC = Failure, A = 20 Low Battery
 ; RegMod: A
+#IFNDEF REDIRECT
 CHAR2LPT: ; 8169
 #IFNDEF CE158V2
 ; ************ Modified >
@@ -344,8 +347,45 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
     LDI	    A,$20                           ; Does A = 20 mean low battery?
     SEC                                     ; Carry used to indicate return state? 
     RTN                                     ; Set Carry Flag. SEC = Failure
+#ENDIF
 
 
+; **We redirect this function to the low bank to free up room**
+#IFDEF REDIRECT
+CHAR2LPT: ; 8169
+    PSH     A                               ; (1) Need to save char which is in A
+    LDI     A,HB(LB_CHAR2LPT)               ; (2) HB of target
+    STA     (ARW + $02)                     ; (3)
+    LDI     A,LB(LB_CHAR2LPT)               ; (2) LB of target
+    STA     (ARW + $03)                     ; (3) 
+    POP     A                               ; (1) Get out character back
+    JMP     LB_REDIRECT                     ; (3) [13]
+    RTN                                     ; (1) 
+#ENDIF
+
+
+#IFDEF REDIRECT
+;------------------------------------------------------------------------------------------------------------
+;  Generic redirect to Low Bank - Target function address poked in ARW by caller
+; Bank switch routine poked in ARW, target called, returns to High Bank
+; !!!Called function cannot alter ARW!!!
+LB_REDIRECT:
+    PSH     A                               ; (1) Save A as we are modifying it
+    LDI     A,$E3                           ; (2) RPU 'E3'
+    STA     (ARW)                           ; (3)  ARW is scratch RAM
+    LDI     A,$BE                           ; (2) SJP 'BE'
+    STA     (ARW + $01)                     ; (3) 
+    ; LDI     A,HB(Target)                  ; (2) HB of target address
+    ; STA     (ARW + $02)                   ; (3) Saved by calling function
+    ; LDA     A,LB(Target)                  ; (2) LB of target address
+    ; STA     (ARW + $03)                   ; (3) Saved by calling function
+    LDI     A,$E1                           ; (2) SPU 'E1'
+    STA     (ARW + $04)                     ; (3)    
+    LDI     A,$9A                           ; (2) RTN '9A'. Returns to what called func in High Bank.
+    STA     (ARW + $05)                     ; (3)    
+    POP     A                               ; (1) Get out original A back
+    JMP     ARW                             ; (3) [33] {23}
+#ENDIF
 
 .FILL ($81BC - $)
 .ORG $81BC 
@@ -569,6 +609,7 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 ; Arguments: A = character to send
 ; Outputs: A = Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
+#IFNDEF REDIRECT
 TXLPT:
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
 
@@ -633,7 +674,25 @@ BRANCH_82B3: ; Branched to from 8243, 8297
 UKNOWN_82B7:
     .BYTE   $8E
 #ENDIF
+#ENDIF
 
+
+; **We redirect this function to the low bank to free up room**
+#IFDEF REDIRECT
+TXLPT: ;
+    LDI     A,HB(LB_TXLPT)                  ; (2) HB of target
+    STA     (ARW + $02)                     ; (3)
+    LDI     A,LB(LB_TXLPT)                  ; (2) LB of target
+    STA     (ARW + $03)                     ; (3) 
+    JMP     LB_REDIRECT                     ; (3) [13]
+    RTN                                     ; (1) 
+
+; needed for TXCOM exit
+BRANCH_82B3: ; Branched to from 8243, 8297
+    LDI	    UH,$00                          ; Return value? Failure.
+    SEC                                     ; Set Carry Flag
+    RTN                                     ;
+#ENDIF
 
 ADDRCHK($82B8,"COM_TBL_INIT")
 .FILL ($82B8 - $),$FF
@@ -3442,6 +3501,8 @@ BRANCH_8DF7:
     JMP	    BTN_SHCL                        ; SHIFT CL (Clear All)
 
 
+
+JMP_8E17:
 BRANCH_8E17: ; Branched to from BRANCH_TBL_8DD9
     REC                                     ; Reset Carry flag
 
