@@ -17,11 +17,12 @@
 
 #INCLUDE    CE-158_ROM_HIGH.exp             ; Export table from high bank
 
-#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
+;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
 #DEFINE CE158V2                             ; New hardware CE-158X
-#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
+;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
+;#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT from High Bank to save space
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -35,7 +36,8 @@ BPSDEF EQU $99                              ; 300bps default for stock build, an
 ;------------------------------------------------------------------------------------------------------------
 ; Define BackPack Drive BAUD rate based on configuration
 #IFDEF CE158V2
- #IFDEF HIGHSPEED
+ ;#IFDEF HIGHSPEED
+ #IFDEF ENBPD
 BPSBP EQU $59                               ; 19200bps 
  #ELSE
 BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
@@ -344,8 +346,16 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
 
 
 
-.FILL ($81BC - $)
+;#IFDEF REDIRECT
+#IFDEF ENBPD
+; ************ Modified >
+.FILL ($81AC - $)
+.ORG $81AC 
+ ; <************
+ #ELSE
+ .FILL ($81BC - $)
 .ORG $81BC 
+ #ENDIF
 ; -----------------------------------------------------------------------------------------------------------
 ; CHAR2COM - Sends charecter in A to RS232 Port
 ; Same as High Bank
@@ -357,6 +367,17 @@ CHAR2COM: ; 81BC
     SEC                                     ; Set Carry Flag
     PSH     U                               ; Save U.
     STA	    UL                              ; A is character to send
+
+;#IFDEF REDIRECT
+#IFDEF ENBPD
+;Intecept the CHAR2COM routine and redirect to UART1 if enabled
+;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
+	;LDA (CE158_REG_79FE)
+    BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
+	BZS     CONTTX
+	JMP     U1CHAR2COM
+CONTTX:
+#ENDIF
 
 #IFNDEF CE158V2 
 ; ************ Modified >
@@ -421,7 +442,19 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
 RXCOM: ; 81E6
-    #IFNDEF CE158V2
+
+;#IFDEF REDIRECT
+#IFDEF ENBPD
+;Intecept the RXCOM routine and redirect to UART1 if enabled
+;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
+	;LDA (CE158_REG_79FE)
+    BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
+	BZS     CONTRX
+	JMP     U1RXCOM
+CONTRX:
+#ENDIF
+
+#IFNDEF CE158V2
 ; ************ Modified >
     LDA	    #(CE158_PRT_A)                  ; #(CE158_PRT_A) is LPT/RS232 I/F Ctrl (ME1)
     AND	    #(CE158_PRT_A)                  ; Filter out changes (ME1)
@@ -1364,7 +1397,7 @@ LB_BPD_STR: ;8A89
 ; BPD_CMD - CLOAD, CSAVE, MEREGE are intercepted and here we inject PRINT#"L)filename" or PRINT#"S)filename" 
 ;           to signal Backpack of upcoming file use. Then it proceeded with the CLOAD/CSAVE/MERGE
 ; We are using the unused space in TBL_8888 for BPD code
-; On entering Y points to first " and A=00=CSAVE, A=01=CLOAD or MERGE 
+; On entering Y points to first " and A=00=CSAVE, A=01=CLOAD or MERGE
 BPD_CMD:
 INJCMD:     EQU (IN_BUF + $40)              ; $7BF0 Start address of injected command
 INJFLAG:    EQU (IN_BUF + $4F)              ; $7BFF Address of flag used to signal injected command
@@ -1464,7 +1497,7 @@ CLOOP2:
     LDA (X)                                 ; A = (X) get char from file name
     INC X                                   ; INC X
     SIN Y                                   ; Y=A, Y=Y+1
-    CPI A,$22                               ; Did we just copy trailing "
+    CPI A,$22                               ; Did we just copy trailing " 
     BZR CLOOP2                              ; If not keep copying    
 
 
@@ -1495,7 +1528,7 @@ BPD_ARW:
 .ORG (ORIGPC + ($-INJCMD))                  ; Set PC back to original range
 
 PRNUM_DAT: ; used by Step #2
-    ;     PRINT   #    "   L   $24=$ prives 5 second delay, $29=) provides 30 second delay
+    ;     PRINT   #    "   L   $24=$ provides 5 second delay, $29=) provides 30 second delay"
     .BYTE $F0,$97,$23,$22,$4C,$24,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"$)file"
 
 
@@ -1605,7 +1638,44 @@ DSR_CLR_RXCOM:
 	RTN
 #ENDIF
 
-
+;#IFDEF REDIRECT
+#IFDEF ENBPD
+;UART1 Support   
+;NEW ROUTINES TO SUPPORT UART1
+;    
+;CHAR2COM FOR UART 1
+;SEC is set on entry
+U1CHAR2COM:
+    LDI	    A,$40            ; TX Empty                 
+    AND	    #(CE158_UART_LSR1)
+    BZS     EXITTX           
+    LDA	    UL                              ; Our original A is in UL. Charecter to send.
+    STA	    #(CE158_UART_THR1)
+	REC	
+EXITTX:
+    POP	    U                               ; Get original U back, affects Z only
+	RTN
+	
+;RXCOM FOR UART 1
+U1RXCOM:
+    LDA     #(CE158_UART_LSR1)              ; UART status register
+	SEC
+	BII	    A,$01                           ; Test Bit1 of A (Bit0 of CE158_UART_LSR1) DR
+    BZS     NOCHAR                          ; If NOT set NO CHAR failure exit
+	BII	    A,$0E                           ; Test A for errors (Bit0 of CE158_UART_REGR)
+    BZS     READCHAR                        ; If set we had an error, take failure exit
+FAIL:
+    LDA     #(CE158_UART_RBR1)              ; Read UART Data Register to clear it
+    LDI	    A,$40                           ; Failure type
+	RTN
+READCHAR:
+    LDA     #(CE158_UART_RBR1)              ; Read data byte
+    REC                                     ; REC = Success
+    RTN                                     ; Carry flag indicates return state
+NOCHAR:
+    LDI	    A,$00                           ; Failure type
+	RTN                                        ;
+#ENDIF
 
 ;------------------------------------------------------------------------------------------------------------
 ; TABLE_8888
@@ -3016,9 +3086,7 @@ JMP_960C: ; jumped to from 928C, 9859
 #IFNDEF ENBPD                               ; If we are not redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
     DEC	    Y                               ;
     VEJ     (E2)                            ; Start of Basic Interpreter
-#ENDIF
-
-#IFDEF ENBPD                                ; If we are redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
+#ELSE                                       ; If we are redirecting exit for CLOAD/CSAVE/MERGE/PRINT#
     BCH     PRNT_NUM8                       ; A hack to handle ML calling PRINT#-8
 #ENDIF
 
@@ -4139,11 +4207,10 @@ BRANCH_9B10:
 ; All CLOAD operations go through here after the first three bytes.
 ; The CPI A,$0D seems to look for EOL marker, perhaps to know when to tokenize an ASCII load?
 SUB_9B1C:                                   
-#IFNDEF BUSY
+;#IFNDEF BUSY
+#IFNDEF ENBPD
     SJP	    (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
-#ENDIF
-
-#IFDEF BUSY
+#ELSE
     SJP	    (BUSY_BLINK)                    ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 #ENDIF
     
@@ -4174,11 +4241,10 @@ SUB_9B31:
     LIN	    X                               ; A = (X), X = X + 1
 
 SUB_9B32: ; called from 9A95
-#IFNDEF BUSY
+;#IFNDEF BUSY
+#IFNDEF ENBPD
     SJP     (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
-#ENDIF
-
-#IFDEF BUSY
+#ELSE
     SJP     (BUSY_BLINK)                    ; Jumps to BUSY annunciator blink routine
 #ENDIF
     
@@ -4932,10 +4998,11 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 ;------------------------------------------------------------------------------------------------------------
 ; BUSY BLINK LOAD- Blinks the BUSY annunciator while loading
 ;
-#IFDEF BUSY
-
+;#IFDEF BUSY
+#IFDEF ENBPD
 ; For HIGHSPEED we need a secondary /N counter
-#IFDEF HIGHSPEED 
+;#IFDEF HIGHSPEED
+#IFDEF ENBPD
 DIVN EQU $04
 #ELSE
 DIVN EQU $01
@@ -4982,7 +5049,8 @@ BLINK_SKIP:
 
 TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
 #IFDEF CE158V2   
- #IFDEF HIGHSPEED ; New 158X HW, 38400 BAUD
+ ;#IFDEF HIGHSPEED ; New 158X HW, 38400 BAUD
+ #IFDEF ENBPD
     ;      4800, 9600,19200,38400,  300,  600, 1200, 2400
     .BYTE   $12,  $25,  $4B,  $96,  $02,  $09,  $25,  $09 
  #ELSE            ; New 158X HW, 2400 BAUD
@@ -5004,7 +5072,8 @@ TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
 ;------------------------------------------------------------------------------------------------------------
 ; SEPARATOR_9E74 - Unused
 SEPARATOR_9E74:
-#IFNDEF BUSY
+;#IFNDEF BUSY
+#IFNDEF ENBPD
     .BYTE $00,$FF,$03,$D7,$26,$F7,$00,$FF,  $00,$FF,$00,$BF,$04,$EE,$00,$FF
     .BYTE $00,$FF,$82,$FF,$06,$FE,$00,$FF,  $00,$FF,$09,$FE,$00,$FF,$00,$FF
     .BYTE $00,$FF,$80,$FF,$05,$FE,$00,$FF,  $00,$FF,$00,$FF,$00,$3F,$00,$FF

@@ -40,12 +40,14 @@ TOK_USING:  EQU $F085                       ; USING command token
 #define SETDEV_M(n8)    LDI A,n8 \ STA (SETDEV_REG)     ; SETCOM to device passed
 #define SETOPN_M(n8)    LDI A,n8 \ STA (OPN)            ; Set OPN to n8 table
 
-KI:                 EQU $01 
-DO:                 EQU $02
-PO:                 EQU $04
-CI:                 EQU $08
-CO:                 EQU $10
-BP:                 EQU $18
+KI:                 EQU $01                     ;
+DO:                 EQU $02                     ;
+PO:                 EQU $04                     ;
+CI:                 EQU $08                     ;
+CO:                 EQU $10                     ;
+U1:                 EQU $20                     ; U1, use UART 1 (Bit5=0=UART0, Bit5=1=UART1)
+PI:                 EQU $40                     ; PI, LPT port to input
+BP:                 EQU $80                     ; BP, enable BDP mode with U0
 
 #define ADDRCHK(add,location)        #if ($ > add)    ; check address
 #DEFCONT                     \!over_run
