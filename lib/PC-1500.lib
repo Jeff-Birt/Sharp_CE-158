@@ -211,6 +211,7 @@ DEFEVAL           = $CE4A ; Evaluate DEF key
 RESKEY_SRCH       = $CEC4 ; Searches for reserve key code in Reserve memory
 TXFR_RSV_KEY      = $CED0 ; Transfers reserve key assignment to Reserve memory.
 PRGLINE_TDI       = $CF27 ; Transfer, delete, insert program line from Input Buffer
+INIT_SRCH_PTR     = $D00D ; Initializes Search Pointer
 INBUF_CLRRST      = $D021 ; Clear rest of the input buffer (0D).
 INBUF_INIT        = $D030 ; Clear Input Buffer, Y-Reg points to start of Input Buffer
 INBUF_CLR         = $D034 ; Clears Input buffer with $0D

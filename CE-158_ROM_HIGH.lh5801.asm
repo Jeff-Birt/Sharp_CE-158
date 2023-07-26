@@ -38,18 +38,21 @@ BPSDEF EQU $99                              ; 300bps default for stock build, an
 ;------------------------------------------------------------------------------------------------------------
 ; Define BackPack Drive BAUD rate based on configuration
 #IFDEF CE158V2
- ;#IFDEF HIGHSPEED
+
  #IFDEF ENBPD
 BPSBP EQU $59                               ; 19200bps 
  #ELSE
 BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
  #ENDIF
+
 #ELSE
+
  #IFDEF CE158_48
 BPSBP EQU $D9                               ; 2400bps for Backpack w/CE158_48
  #ELSE
 BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
  #ENDIF
+
 #ENDIF   
 ;------------------------------------------------------------------------------------------------------------
 
@@ -256,7 +259,7 @@ SEPARATOR_8161:
 ; Arguments: A: ASCII charecter >=20, i.e. printable
 ; Outputs: REC = Success, SEC = Failure, A = 20 Low Battery
 ; RegMod: A
-;#IFNDEF REDIRECT
+; **We redirect this function for ENBPD build to the low bank to free up room** see line 355
 #IFNDEF ENBPD
 CHAR2LPT: ; 8169
 
@@ -268,9 +271,7 @@ CHAR2LPT: ; 8169
     LDA     #(CE158_PRT_A)                  ; Read CE-158 Port A,  (ME1)
     AND     #(CE158_PRT_A)                  ; Filter out input changes? (ME1)
     SHL  
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     PSH     A                               ; A is the ASCII charecter from input buffer?
     LDA     #(CE158_UART_MSR0)              ; Read CE-158 Port MSR0,  (ME1)
     ;AND     #(CE158_UART_MSR0)              ; Filter out input changes? (ME1)
@@ -309,9 +310,7 @@ BRANCH_81A8: ; Branched to from 81A9
     SIE                                     ; Enable Interrupts
     LDI	    A,$80                           ; Set up time delay
 ; <************
-#ENDIF
-
-#IFNDEF CE158V2
+#ELSE
 ; ************ Modified >
     BII     #(CE158_PRT_B),$80              ; (ME1)
     BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
@@ -350,12 +349,9 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
     LDI	    A,$20                           ; Does A = 20 mean low battery?
     SEC                                     ; Carry used to indicate return state? 
     RTN                                     ; Set Carry Flag. SEC = Failure
-#ENDIF
 
-
-; **We redirect this function to the low bank to free up room**
-;#IFDEF REDIRECT
-#IFDEF ENBPD
+#ELSE
+; **We redirect this function for ENBPD build to the low bank to free up room**
 CHAR2LPT: ; 8169
     PSH     A                               ; (1) Need to save char which is in A
     LDI     A,HB(LB_CHAR2LPT)               ; (2) HB of target
@@ -368,7 +364,7 @@ CHAR2LPT: ; 8169
 #ENDIF
 
 
-;#IFDEF REDIRECT
+
 #IFDEF ENBPD
 ;------------------------------------------------------------------------------------------------------------
 ;  Generic redirect to Low Bank - Target function address poked in ARW by caller
@@ -380,10 +376,6 @@ LB_REDIRECT:
     STA     (ARW)                           ; (3)  ARW is scratch RAM
     LDI     A,$BE                           ; (2) SJP 'BE'
     STA     (ARW + $01)                     ; (3) 
-    ; LDI     A,HB(Target)                  ; (2) HB of target address
-    ; STA     (ARW + $02)                   ; (3) Saved by calling function
-    ; LDA     A,LB(Target)                  ; (2) LB of target address
-    ; STA     (ARW + $03)                   ; (3) Saved by calling function
     LDI     A,$E1                           ; (2) SPU 'E1'
     STA     (ARW + $04)                     ; (3)    
     LDI     A,$9A                           ; (2) RTN '9A'. Returns to what called func in High Bank.
@@ -392,7 +384,8 @@ LB_REDIRECT:
     JMP     ARW                             ; (3) [33] {23}
 #ENDIF
 
-;#IFDEF REDIRECT
+
+
 #IFDEF ENBPD
 ; ************ Modified >
 .FILL ($81AC - $)
@@ -401,7 +394,7 @@ LB_REDIRECT:
  #ELSE
  .FILL ($81BC - $)
 .ORG $81BC 
- #ENDIF
+#ENDIF
 ; -----------------------------------------------------------------------------------------------------------
 ; CHAR2COM - Sends character in A to RS232 Port
 ; Called from:  TXCOM:8247, STRNG_2COM:875B, NULL2COM:87EA, 
@@ -414,14 +407,10 @@ CHAR2COM: ; 81BC
     PSH     U                               ; Save U.
     STA	    UL                              ; A is character to send
     
-;#IFDEF REDIRECT
 #IFDEF ENBPD
-;Intecept the CHAR2COM routine and redirect to UART1 if enabled
-;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
-	;LDA (CE158_REG_79FE)
     BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
-	BZS     CONTTX
-	JMP     U1CHAR2COM
+	BZS     CONTTX                          ; Intecept the CHAR2COM routine 
+	JMP     U1CHAR2COM                      ;  and redirect to UART1 if enabled
 CONTTX:
 #ENDIF
 
@@ -431,9 +420,7 @@ CONTTX:
     AND	    #(CE158_PRT_A)                  ; Filter out changes (ME1)
     ANI	    A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_81E3                     ; Branch fwd if any bit 5-2 is set MODIFIED BRANCH ADDRESS
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
  ;  AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
  	EAI     $30                             ; Invert the CTS/DSR bits-TI part does this automatically.
@@ -460,9 +447,7 @@ BRANCH_81D6: ; Branched to from 81D2
     LDA	    UL                              ; Our original A is in UL. Charecter to send.
     STA	    #(CE158_UART_DATAW)             ; Writes A to UART (ME1)
     REC                                     ; Reset Carry Flag = Success
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
   	ROR
     AND	    #(CE158_UART_LSR0)              ; A = A & UART_STATUS. A=Bit6 of SETDEV_REG or $04
     SEC                                     ; Set carry flag = failure
@@ -492,14 +477,10 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
 RXCOM: 
-;#IFDEF REDIRECT
 #IFDEF ENBPD
-;Intecept the RXCOM routine and redirect to UART1 if enabled
-;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
-	;LDA (CE158_REG_79FE)
     BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
-	BZS     CONTRX
-	JMP     U1RXCOM
+	BZS     CONTRX                          ; Intecept the RXCOM routine 
+	JMP     U1RXCOM                         ;  and redirect to UART1 if enabled
 CONTRX:
 #ENDIF
 
@@ -510,9 +491,7 @@ CONTRX:
     ANI     A,$3C                           ; Keep Bits 2->CTS, 3->CD, 4->DSR, 5->Low Battery
     BZR     BRANCH_8230                     ; Branch fwd if any bits 5-2 were set, failure exit
     LDA     #(CE158_UART_REGR)              ; UART status register
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
 ; ************ Modified > 
     LDA	    #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
     AND	    #(CE158_UART_MSR0)              ; Filter out changes (ME1)
@@ -552,9 +531,7 @@ BRANCH_8208: ; Branched to from 8205
     STA     #(CE158_UART_REGW)              ; Writing UART control reg
     LDI	    A,$05                           ; sets: Bit2 SBS, Bit0 PI
     STA     #(CE158_UART_REGW)              ; To pulse Bit 4?
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDA     #(CE158_UART_RBR0)              ; Read UART Data Register to clear it
     BII	    (SETDEV_REG),$20                ; Test Bit5  ; B7=? B6=THRE B5? B4=CO B3=CI B2=PO B1=DO B0=KI
     BZS     BRANCH_8222                     ; Branch fwd if Bit5 not set, failure
@@ -581,9 +558,7 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
 BRANCH_8230: ; Branched to from 81F0
     PSH     A
     LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register  
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDA     #(CE158_UART_RBR0)              ; Read data byte
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
@@ -644,7 +619,7 @@ BRANCH_825A: ; Branched to from 8284 to borrow return
 ; Arguments: A = character to send
 ; Outputs: A = Error code, 20 = Low Battery, 00 = Could not send?, UH: 45 = success
 ; RegMod: UH
-;#IFNDEF REDIRECT
+;**We redirect this function to the low bank to free up room** see line 691
 #IFNDEF ENBPD
 TXLPT:
     ANI	    (OUTSTAT_REG),$0F               ; Keep only low nibble Bit0 DTR, Bit1 RTS
@@ -706,16 +681,13 @@ BRANCH_82B3: ; Branched to from 8243, 8297
     SEC                                     ; Set Carry Flag
     RTN                                     ;
 
-#IFNDEF CE158V2
+ #IFNDEF CE158V2
 UKNOWN_82B7:
     .BYTE   $8E
-#ENDIF
-#ENDIF
+ #ENDIF
 
-
+#ELSE
 ; **We redirect this function to the low bank to free up room**
-;#IFDEF REDIRECT
-#IFDEF ENBPD
 TXLPT: ;
     LDI     A,HB(LB_TXLPT)                  ; (2) HB of target
     STA     (ARW + $02)                     ; (3)
@@ -730,14 +702,14 @@ BRANCH_82B3: ; Branched to from 8243, 8297
     SEC                                     ; Set Carry Flag
     RTN                                     ;
 
- 
-;UART1 Support   
-;NEW ROUTINES TO SUPPORT UART1
+
+;------------------------------------------------------------------------------------------------------------
+;UART1 Support - NEW ROUTINES TO SUPPORT UART1
 ;    
-;CHAR2COM FOR UART 1
-;SEC is set on entry
+; CHAR2COM FOR UART 1
+; SEC is set on entry
 U1CHAR2COM:
-    LDI	    A,$40            ; TX Empty                 
+    LDI	    A,$40                           ; TX Empty                 
     AND	    #(CE158_UART_LSR1)
     BZS     EXITTX           
     LDA	    UL                              ; Our original A is in UL. Charecter to send.
@@ -747,6 +719,9 @@ EXITTX:
     POP	    U                               ; Get original U back, affects Z only
 	RTN
 	
+
+
+;------------------------------------------------------------------------------------------------------------
 ;RXCOM FOR UART 1
 U1RXCOM:
     LDA     #(CE158_UART_LSR1)              ; UART status register
@@ -767,6 +742,8 @@ NOCHAR:
     LDI	    A,$00                           ; Failure type
 	RTN                                        ;
 #ENDIF
+
+
 
 ADDRCHK($82B8,"COM_TBL_INIT")
 .FILL ($82B8 - $),$FF
@@ -1110,6 +1087,8 @@ SEPARATOR_8373:
 ;     RTN                                     ; (1) [12]
 ; #ENDIF
 
+
+
 ;------------------------------------------------------------------------------------------------------------
 ; DSRCTSFIX - 
 ; Sets bits correctly for CTS/DSR/LBI
@@ -1202,8 +1181,8 @@ UNKNOWN_83BD: ; 83BD ORG, 83B1 BPD
 ; TBL_BAUD - Used to convert Baud rate settings in SETCOM to ASCII (I think)
 ; Used by 8ADC, 8C4B
 TBL_BAUD: ; 83C0 ORG, 83B4 BPD          ;C7                               ;CF
-;#IFNDEF HIGHSPEED
 #IFNDEF ENBPD
+
  #IFNDEF CE158_48
 ; SETCOM_REG   19     39     59     79     99     B9     D9     F9
             ;  50    100    110    200    300    600   1200   2400
@@ -1213,10 +1192,13 @@ TBL_BAUD: ; 83C0 ORG, 83B4 BPD          ;C7                               ;CF
             ; 100    110    200    300    600   1200   2400   4800 
     .WORD   $0064, $006E, $00C8, $012C, $0258, $04B0, $0960, $12C0
  #ENDIF
+
 #ELSE
+
 ; SETCOM_REG   19     39     59     79     99     B9     D9     F9
             ;4800   9600  19200  38400    300    600   1200   2400  
     .WORD   $12C0, $2580, $4B00, $9600, $012C, $0258, $04B0, $0960
+
 #ENDIF
 
 
@@ -1237,7 +1219,6 @@ TBL_WORDLEN: ; 83D0 ORG, 83C4 BPD
 #ENDIF
 
 #IFDEF CE158V2
- ;#IFNDEF  HIGHSPEED
  #IFNDEF ENBPD
     ; BAUD   50      100     110     200    300     600     1200   2400
     .BYTE $24,$00,$12,$00,$10,$5D,$09,$00,$06,$00,$03,$00,$01,$80,$00,$C0
@@ -1265,11 +1246,6 @@ TBL_SETDEV_END:                             ; Defines beginning of last row of t
 #ENDIF
 
 #IFDEF ENBPD
-    ; 12 bytes from 83A4~83AF shifted to here, last 3 used in SETDEV_EXT1
-    ; .BYTE $55, $30, $81 ;$80                ; U0, use UART 1 (Bit0=0=UART1)
-    ; .BYTE $55, $31, $82 ;$81                ; U1, use UART 2 (Bit0=1=UART2) 
-    ; .BYTE $42, $50, $9C ;$98                ; BP, enable BDP mode. 
-    ;                                         ; B4-3 set to pass mode mask in LB &903F
     .BYTE $55, $31, U1                      ; U1, 20 = use UART 1 (Bit5=0=UART0, Bit5=1=UART1)
     .BYTE $50, $49, PI                      ; PI, 40 = LPT port to input
     .BYTE $42, $50, BP                      ; BP, 80 = enable BDP mode with U0
@@ -1339,28 +1315,9 @@ CONFIG_UARTS:
 ;------------------------------------------------------------------------------------------------------------
 ; SETDEV_EXT2 - Extension for SETDEV to support SETUR
 ; Elsewhere for non V2 build
-#IFDEF ENBPD
- #IFDEF CE158V2
+#IFDEF CE158V2
+ #IFDEF ENBPD
 SETDEV_EXT2:
-    ;PSH     A                               ; We need orignal A later
-    ;BII     A,$01                           ; If Bit 0 set, we are using UART 1
-;     BII     A,$40                           ; If Bit 7 set, we are using UART 1
-;     BZS     EXT2_2                          ; Branch to UART 1 HB address set
-
-;     LDI     A,0                             ; SET TO UART 0
-;     STA     (CE158_REG_79FE)                ;
-;     BCH     EXT2_3                          ;
-
-; EXT2_2:
-;     LDI     A,$FF                           ; SET TO UART 1
-;     STA     (CE158_REG_79FE)                ;
-
-; EXT2_3:
-     ;POP     A                               ; (1) Get original A back
-    ; ANI     (SETDEV_REG),$E0                ; (4) clears bits used for SETDEV MODE
-    ; ANI     A,$18                           ; (2) keeps bits 4-3 of A (BPD CI CO settings),
-    ; ORA     (SETDEV_REG)                    ; (3) allows passing  mode mask at LB $903F
-    ; STA     (SETDEV_REG)                    ; (3) 
     BII     A,$80                           ; (2) Is this BP?
     BZS     EXT2_4                          ; (2) If not skip to exit
     LDA     (SETDEV_REG)                    ; (3) 
@@ -1446,7 +1403,8 @@ TEXT_84EF:
 ;------------------------------------------------------------------------------------------------------------
 ; Unused space on original ROM
 ; SETDEV_EXT2 is Tail end of SETDEV extension on modified ROM for CE-158,
-; Elsewhere if CE158V2 build
+; Elsewhere if CE158V2 build 
+; CE158_48
 #IFDEF ENBPD
  #IFNDEF CE158V2
 SETDEV_EXT2:
@@ -1764,6 +1722,7 @@ IRQ_RESET:
     ORI     #(CE158_UART_IER0),$01          ; TI Set data ready IRQ ENABLE bit (DR) in IER0 Register
 ; <************
 #ENDIF
+
     ANI	    #(CE150_MSK_REG),$FD            ; CE-150 -  Clear Bit1, PB7 Interrupt mask. Paper Feed Button
     ORI	    #(CE150_MSK_REG),$01            ; CE-150 -  Set Bit0.   Interrupt mask for IRQ
     ORI	    #(PC1500_MSK_REG),$01           ; PC-1500 - Set Bit0.   Interrupt mask for IRQ
@@ -1777,6 +1736,7 @@ IRQ_RESET_ALT_E1:
     ORI     #(CE158_UART_MCR0),$03          ; Clear Bits 1-0 (ME1) Bit 0 = DTR, Bit 1 = RTS, TI PART INVERTS THE BITS
 ; <************
 #ENDIF
+
     RTN                                     ;
 
 
@@ -1906,7 +1866,6 @@ BRANCH_87F1:
 ; SEPARATOR_87F4 - FF 00 ... used to fill unused addresses
 ; CE158_48_EXT   - Handles 2400 and 4800 buad settings
 #IFNDEF CE158_48
- ;#IFNDEF REDIRECT
  #IFNDEF ENBPD
 SEPARATOR_87F4:
     .BYTE $00,$FF,$00,$FF,$00,$FB,$00,$FF, $00,$FF,$00,$DF   ; Unused
@@ -2333,7 +2292,7 @@ SEPARATOR_8967:
 ; RegMod: A, U, X, Y
 HB_SETDEV: ; 8968
     SJP	    TXT2STRBUF                      ; Copies string argument into string buffer
-;#IFNDEF REDIRECT
+
 #IFNDEF ENBPD
     AND	    (SETDEV_REG),$E0                ; (SETDEV_REG) = (SETDEV_REG) & E0, clears bits 4-0
                                             ; KI = 01, DO = 02, PO = 04, CI = 08, CO = 10
@@ -2575,9 +2534,7 @@ PORTS_UPDATE: ; 8A2A
 #IFNDEF CE158V2
 ; ************ Modified >
     ORI	    #(CE158_PRT_C),$80              ; Paper Feed key (ME1)
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
 ; <************
 #ENDIF
@@ -2630,9 +2587,7 @@ BRANCH_8A58: ; Branched to from 8A54        ; Bit6=1=CE-150, Bit6=0=/CE-150, Bit
     DEC	    U                               ; U = D00A, (CE158_MSK_REG)
     ANI	    #(U),$00                        ; Clear D00A
 ; <************
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
     LDI     A,$C3                           ; Load A with C3 to send to address
 #ENDIF
 
@@ -2667,12 +2622,10 @@ BRANCH_8A93:  ; Branched to from 8A99       ; Sets default state of #(D00F~D008)
     DEC	    UL                              ; Copies 8 bytes from X = 83B0-83B7 to U = D00F-D008   
     CPI	    UL,$07                          ;  Inits CE-158 lh5811 IO registers. Bytes: FF FF 7F 03 00 00 00 A0
     BCS     BRANCH_8A93                     ; If UL > 07 branch back, = 7 we are done
-#ENDIF
-
-#IFDEF CE158V2
+#ELSE
 ;Replacement init for TI part
     ORI	    #(CE158_UART_SCR0),$FF          ; CE-158 (Scratch register)
-    SJP CONFIG_UARTS                        ; Configure the UARTS
+    SJP     CONFIG_UARTS                    ; Configure the UARTS
 ; <************
 #ENDIF
 
@@ -2689,7 +2642,7 @@ BRANCH_8AA0: ; Branched to from 8A79
 ; SET_DEFAULT_BAUD - 
 SET_DEFAULT_BAUD: ; Jumped to from to from 8910
 #IFDEF CE158V2
- #IFDEF ENBPD
+ #IFDEF ENBPD ; ***not needed***
     ; LDI     A,$80                           ; (2) Set default for or SETUR to UR0
     ; SJP     SETDEV_EXT1                     ; (3) Only needed with CE158V2 & ENBPD
     ANI     (CE158_REG_79DD),$00            ; (4) Clear register used to extend SETDEV
@@ -2748,7 +2701,6 @@ PARSE_BAUD: ; Branched to from 8921, Jumped to from 8709 vector calculation
     SJP	    BCD_Y2ARX                       ; Pass BCD number pointed to by Y-Reg to AR-X
                 ABRF(BRANCH_8B2B)           ;
     VEJ     (D0)                            ; Convert AR-X to INT & load to U-Reg. 06 is range. If range exceeded: Branch fwd
-            ;#IFNDEF HIGHSPEED
             #IFNDEF ENBPD
                 ABYT($06)                   ; Limit values to < 32769
             #ELSE 
@@ -5657,7 +5609,6 @@ SEPARATOR_98D1:
 ; CE158_REG_79DD flags for BPD settings
 ; B0=0 U0, B0=1 U1, B4-3=1 BPD mode. We don't keep bit 7
 SETDEV_EXT1: ; 98D1
-    ; BII     A,$80                           ;
     BII     A,$1F                           ; (2) Bits 5-7 set means it is BPD mode
     BZS     SETDEV_EXT_DONE                 ; (2) If Bit 7 set value is for BPD
     ORA	    (SETDEV_REG)                    ; (3) Nope its SETDEV so OR value into A, STA done on return
@@ -5665,11 +5616,6 @@ SETDEV_EXT1: ; 98D1
 
 
 SETDEV_EXT_DONE:  
-    ; ANI     (CE158_REG_79DD),~$9F           ; clears bits 4-3 of BPD flag
-    ; ANI     A,$9F                           ; bit 8 BPD mode flag to differentiate values from SETDEV
-    ; ORA     (CE158_REG_79DD)                ; bits 4,3 used to pass mode mask at LB $903F
-    ; STA     (CE158_REG_79DD)                ; and bit 0 for UART 0 or 1 selection (0=UART0)
-
     ORA     (CE158_REG_79DD)                ; (3)
     STA     (CE158_REG_79DD)                ; and bit 0 for UART 0 or 1 selection (0=UART0)
     JMP     SETDEV_EXT2                     ; (3) (6 bytes)
@@ -6726,14 +6672,6 @@ SEPARATOR_9DFE:
 ;------------------------------------------------------------------------------------------------------------
 ; X-REG address of function, Y-REG Token
 DEVSTR_EXT1: ; 9DFE
-;     BII     (STK_PTR_GSB_FOR),$02           ; (4) A=$FF=DEV$, A=$01=UR$
-;     BZR     ISDEV_STR1                      ; (2) If Bit2=1 then A=$FF, is DEV$
-;     LDA	    (CE158_REG_79DD)                ; (3) Load A with UR value
-;     RTN
-
-; ISDEV_STR1:
-;     LDA	    (SETDEV_REG)                    ; (3) Load A with DEV value
-;     RTN                                     ; (1) [13]
     LDA     (SETDEV_REG)                    ; Grab SETDEV setting
     ANI     A,$1F                           ; Mask off bits 5-7
     ORA     (CE158_REG_79DD)                ; OR with SETUR bits 
@@ -7102,8 +7040,7 @@ BRANCH_9F8E: ; X = 83B8 U = D056 on entering
 #IFNDEF CE158V2
 ; ************ Modified >
     LDA	    #(CE158_PRT_A)                  ; CE-158 (ME1)
-#ENDIF
-#IFDEF CE158V2
+#ELSE
     LDA	    #(CE158_UART_SCR0)              ; CE-158 (Scratch register)
 ; <************
 #ENDIF

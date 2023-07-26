@@ -36,18 +36,21 @@ BPSDEF EQU $99                              ; 300bps default for stock build, an
 ;------------------------------------------------------------------------------------------------------------
 ; Define BackPack Drive BAUD rate based on configuration
 #IFDEF CE158V2
- ;#IFDEF HIGHSPEED
+
  #IFDEF ENBPD
 BPSBP EQU $59                               ; 19200bps 
  #ELSE
 BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
  #ENDIF
+
 #ELSE
+
  #IFDEF CE158_48
 BPSBP EQU $D9                               ; 2400bps for Backpack w/CE158_48
  #ELSE
 BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
  #ENDIF
+
 #ENDIF   
 ;------------------------------------------------------------------------------------------------------------
 
@@ -346,7 +349,6 @@ BRANCH_81B8: ; Branced from 817E            ; Return here if low battery
 
 
 
-;#IFDEF REDIRECT
 #IFDEF ENBPD
 ; ************ Modified >
 .FILL ($81AC - $)
@@ -368,14 +370,10 @@ CHAR2COM: ; 81BC
     PSH     U                               ; Save U.
     STA	    UL                              ; A is character to send
 
-;#IFDEF REDIRECT
 #IFDEF ENBPD
-;Intecept the CHAR2COM routine and redirect to UART1 if enabled
-;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
-	;LDA (CE158_REG_79FE)
     BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
-	BZS     CONTTX
-	JMP     U1CHAR2COM
+	BZS     CONTTX                          ; Intecept the CHAR2COM routine and 
+	JMP     U1CHAR2COM                      ;  redirect to UART1 if enabled
 CONTTX:
 #ENDIF
 
@@ -443,14 +441,10 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; RegMod: A
 RXCOM: ; 81E6
 
-;#IFDEF REDIRECT
 #IFDEF ENBPD
-;Intecept the RXCOM routine and redirect to UART1 if enabled
-;Used CE158_REG_79FE to determine UART.  0=UART0, 0!=UART1
-	;LDA (CE158_REG_79FE)
     BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
-	BZS     CONTRX
-	JMP     U1RXCOM
+	BZS     CONTRX                          ; Intecept the RXCOM routine 
+	JMP     U1RXCOM                         ;  and redirect to UART1 if enabled
 CONTRX:
 #ENDIF
 
@@ -890,9 +884,7 @@ INSTAT:
 #IFDEF CE158V2
 ; ************ Modified >
     SJP     INSTAT_FIX                      ;
-
 #ELSE
-
     LDA     #(CE158_PRT_A)                  ; 
 ; <************
 #ENDIF
@@ -1447,13 +1439,7 @@ CLOOP:
     STA     #(CE158_UART_MCR0)              ;
 #ENDIF
 
-    ; Step #2 - Send twenty $20 (space) to wake up BPD+
-;     LDI     A,$20                           ; ASCII SPACE character
-;     LDI     XL,$20                          ; Number of times to send
-; WLOOP:
-;     SJP     TXCOM                           ; Send one space character
-;     DEC     XL                              ; Decrement loop counter
-;     BZR     WLOOP                           ; Loop back until send twenty times
+    ; Step #2 - Send $20, $0D (space/cr) to wake BPD+ up
     LDI     A,$20                           ; ASCII SPACE character
     SJP     TXCOM                           ; Send one space character
     LDI     A,$0D                           ; ASCII CR character
@@ -1587,10 +1573,8 @@ INTERCEPT_EXIT:
 ;   NEW                     4->CTS, 5->DSR, 6->Low Battery
 #IFDEF CE158V2
 INSTAT_FIX:
-    LDA    #(CE158_UART_MSR0)               ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
-
-    
-    SJP DSRCTSFIX                           ; Fix CTS/DSR/LBI so they match the existing code base
+    LDA     #(CE158_UART_MSR0)              ; #(CE158_UART_MSR0) is RS232 I/F Ctrl (ME1)
+    SJP     DSRCTSFIX                       ; Fix CTS/DSR/LBI so they match the existing code base
 
     ; SHR
     ; ANI    A,$10                            ; Keep the DSR bit
@@ -1632,34 +1616,40 @@ DSRCTSFIX:
     SHR
     ANI    A,$30                            ; Keep the LBI and DSR bits
     BHR    DSR_CLR_RXCOM                    ; Check Bit 4. If not set skip otherwise set a CTS
-	ORI    A,$04
+	ORI    A,$04                            ;
 
 DSR_CLR_RXCOM:
-	RTN
+	RTN                                     ;
 #ENDIF
 
-;#IFDEF REDIRECT
+
+
 #IFDEF ENBPD
-;UART1 Support   
-;NEW ROUTINES TO SUPPORT UART1
+;------------------------------------------------------------------------------------------------------------
+; UART1 Support - NEW ROUTINES TO SUPPORT UART1
 ;    
-;CHAR2COM FOR UART 1
-;SEC is set on entry
+; CHAR2COM FOR UART 1
+; SEC is set on entry
 U1CHAR2COM:
-    LDI	    A,$40            ; TX Empty                 
-    AND	    #(CE158_UART_LSR1)
-    BZS     EXITTX           
+    LDI	    A,$40                           ; TX Empty                 
+    AND	    #(CE158_UART_LSR1)              ;
+    BZS     EXITTX                          ;
     LDA	    UL                              ; Our original A is in UL. Charecter to send.
-    STA	    #(CE158_UART_THR1)
-	REC	
+    STA	    #(CE158_UART_THR1)              ;
+	REC	                                    ;
 EXITTX:
     POP	    U                               ; Get original U back, affects Z only
-	RTN
+	RTN                                     ;
 	
-;RXCOM FOR UART 1
+
+
+;------------------------------------------------------------------------------------------------------------    
+; RXCOM FOR UART 1
+;    
+; RXCOM FOR UART 1
 U1RXCOM:
     LDA     #(CE158_UART_LSR1)              ; UART status register
-	SEC
+	SEC                                     ;
 	BII	    A,$01                           ; Test Bit1 of A (Bit0 of CE158_UART_LSR1) DR
     BZS     NOCHAR                          ; If NOT set NO CHAR failure exit
 	BII	    A,$0E                           ; Test A for errors (Bit0 of CE158_UART_REGR)
@@ -1674,8 +1664,10 @@ READCHAR:
     RTN                                     ; Carry flag indicates return state
 NOCHAR:
     LDI	    A,$00                           ; Failure type
-	RTN                                        ;
+	RTN                                     ;
 #ENDIF
+
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; TABLE_8888
@@ -1698,17 +1690,10 @@ TABLE_8888:
 ;     .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
 ;     .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
 ;     .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
-;     .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF
-; #ENDIF
-    
-; #IFNDEF CE158V2  
-;     .BYTE                                                         $01,$5B
+;     .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01,$5B
 ;     .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
-;     .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       ; 8998
-;     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB
-; #ENDIF
-    
-;     .BYTE                                     $08,$FF,$00,$FF,$00,$FF,$25 
+;     .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       
+;     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
 ;     .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
 ;     .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
 ;     .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
@@ -1842,17 +1827,17 @@ BRANCH_900A:
 ; Outputs:
 ; RegMod:
 PRINT: ;900D
-    VEJ     (C2)                        ; If not a PRINT# skip ahead
-                ACHR(HASH)              ; Character
-                ABRF(BRANCH_9022)       ; Forward branch to label 
+    VEJ     (C2)                            ; If not a PRINT# skip ahead
+                ACHR(HASH)                  ; Character
+                ABRF(BRANCH_9022)           ; Forward branch to label 
 
-    LDI	    A,$04                       ;
-    STA	    (CASS_FLAG)                 ;
-    VEJ     (C2)                        ; If not '-' skip ahead
-                ACHR(DASH)              ; Character
-                ABRF(BRANCH_9023)       ; Forward branch to label
+    LDI	    A,$04                           ;
+    STA	    (CASS_FLAG)                     ;
+    VEJ     (C2)                            ; If not '-' skip ahead
+                ACHR(DASH)                  ; Character
+                ABRF(BRANCH_9023)           ; Forward branch to label
 
-    BCH 	BRANCH_900A                 ;
+    BCH 	BRANCH_900A                     ;
 
 
 
@@ -1862,7 +1847,7 @@ PRINT: ;900D
 ; Outputs:
 ; RegMod:
 CSAVE: ; 901A
-    REC                                   ; Reset Carry
+    REC                                     ; Reset Carry
 
 
 
@@ -1872,7 +1857,7 @@ CSAVE: ; 901A
 ; Outputs:
 ; RegMod:
 CLOAD: ; 901B
-    REC                                   ; Reset Carry
+    REC                                     ; Reset Carry
 
 
 
@@ -1882,7 +1867,7 @@ CLOAD: ; 901B
 ; Outputs:
 ; RegMod:
 MERGE: ; 901C
-    REC                                   ; Reset Carry
+    REC                                     ; Reset Carry
 
 
 
@@ -2016,6 +2001,7 @@ TABLE_906B:
 CLOAD_SAVE_MERGE: ; $90BB
 
 #IFNDEF ENBPD
+
 CSAVE_ENTRY:
     LDI     A,$20                           ; $90BB - CSAVE entry
     BCH     BRANCH_90C5                     ;
@@ -2044,6 +2030,7 @@ CLOAD_ENTRY:
     JMP     CLOAD_INTERCEPT                 ; $90C3 - CLOAD entry intercept
     NOP
     NOP
+
 #ENDIF
 
 BRANCH_90C8:
@@ -2410,7 +2397,7 @@ BRANCH_92B3: ; branched to from 929D, 92A0, 92A9
 
 BRANCH_92BB: ; branched to from 9254
 #IFNDEF CE158V2
-    SJP      CE158_PRT_B_DIR                ;
+    SJP      INIT_SRCH_PTR                  ; 
 #ENDIF
     VEJ	     (CC)                           ; Loads X-Reg with address at 78(pp) 78(pp+1) BASPRG_END_H
                 ABYT($67)                   ; n1
@@ -3137,7 +3124,6 @@ JMP_9641: ; Jumped to from 92B5
 SEPARATOR_9651:
 #IFNDEF ENBPD
     .BYTE $FF,$00,$FF,$00,$FF,$00,$FF,$00, $FF,$00,$FF,$00,$FF,$00,$FF 
-
 #ELSE
 
 PRNT_NUM8:                                  ; Hack to allow a ML routine to call PRINT#-8
@@ -3153,8 +3139,8 @@ PRNT_NUM8_ML:
     .BYTE $FF,$00,$FF,$00,$FF               ; Remaining filler bytes
 #ENDIF
 
-
-
+; .FILL ($9660 - $)
+; .ORG $9660
 ;--------------------------------------------------------------------------------------------------
 ; INPUT# - Jumped to from 8307 via High Bank
 ; Arguments: XREG = Address, YREG = Token,
@@ -4995,19 +4981,13 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
     RTN                                     ;
 
 
+
+#IFDEF ENBPD
 ;------------------------------------------------------------------------------------------------------------
 ; BUSY BLINK LOAD- Blinks the BUSY annunciator while loading
 ;
-;#IFDEF BUSY
-#IFDEF ENBPD
 ; For HIGHSPEED we need a secondary /N counter
-;#IFDEF HIGHSPEED
-#IFDEF ENBPD
 DIVN EQU $04
-#ELSE
-DIVN EQU $01
-#ENDIF
-
 BUSY_BLINK: ; 9E74
     PSH     A                               ; Save original A
     PSH     X                               ; Save current value in X
@@ -5047,10 +5027,11 @@ BLINK_SKIP:
     SJP	    (OUT_BUF + $4A)                 ; Now do the CLOAD, CSAVE, etc.
     RTN                                     ; 
 
-TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
+
+
+TBL_BUSY: ; Delay after N bytes counts for various baud rates
 #IFDEF CE158V2   
- ;#IFDEF HIGHSPEED ; New 158X HW, 38400 BAUD
- #IFDEF ENBPD
+ #IFDEF ENBPD ; New 158X HW, 38400 BAUD
     ;      4800, 9600,19200,38400,  300,  600, 1200, 2400
     .BYTE   $12,  $25,  $4B,  $96,  $02,  $09,  $25,  $09 
  #ELSE            ; New 158X HW, 2400 BAUD
@@ -5072,7 +5053,6 @@ TBL_BUSY: ; For CE158_48 build (units of 8 bytes)
 ;------------------------------------------------------------------------------------------------------------
 ; SEPARATOR_9E74 - Unused
 SEPARATOR_9E74:
-;#IFNDEF BUSY
 #IFNDEF ENBPD
     .BYTE $00,$FF,$03,$D7,$26,$F7,$00,$FF,  $00,$FF,$00,$BF,$04,$EE,$00,$FF
     .BYTE $00,$FF,$82,$FF,$06,$FE,$00,$FF,  $00,$FF,$09,$FE,$00,$FF,$00,$FF
