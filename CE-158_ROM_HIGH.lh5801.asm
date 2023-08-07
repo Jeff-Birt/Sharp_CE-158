@@ -25,6 +25,7 @@
 #DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
 ;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
 ;#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT to Low Bank to save space
+;#DEFINE SKIP
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -223,7 +224,7 @@ CN23:   EQU $C8 \ CNIB(CN22,CN23) \ .TEXT "TERMINAL" \ .WORD $E883, TERMINAL_V  
 CN24:   EQU $C8 \ CNIB(CN23,CN24) \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V    ; $82D7 - Drops through to MAIN_ENTRY
 CN25:   EQU $D3 \ CNIB(CN24,CN25) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
 
-#IFDEF ENBPD
+#IFDEF SKIP
 LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in UR$
 CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"    \ .WORD $E856, HB_BPD_STR    ; 9DFE
 
@@ -231,7 +232,7 @@ LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in
 CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"   \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
 #ENDIF
 
-#IFNDEF ENBPD
+#IFNDEF SKIP
 LET_U: EQU $00
 LET_Z: EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
 CN26:  EQU $D4 \ CNIB(CN25,CN26)   \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
@@ -246,7 +247,7 @@ B_TBL_8000_END:
 ;------------------------------------------------------------------------------------------------------------
 ; Unused address range 8161-8168 in original ROM
 ; - Used for BPD command in modified ROM
-#IFNDEF ENBPD
+#IFNDEF SKIP
 SEPARATOR_8161:
      .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00    ; FF 00 - Used as seperator / space filler
 #ENDIF
@@ -1322,8 +1323,10 @@ SETDEV_EXT2:
     BZS     EXT2_4                          ; (2) If not skip to exit
     LDA     (SETDEV_REG)                    ; (3) 
     ORI     A,$18                           ; (2) If yes set CI,CO in SETDEV_REG
+    RTN                                     ; (1)
 
 EXT2_4:   
+    LDA     (SETDEV_REG)                    ; (3) we need to return the new SET_DEV in A
     RTN                                     ; (1) Done, need to return value for SETDEV_REG
 
  #ENDIF
@@ -2014,7 +2017,7 @@ LET_L2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'L'. LET_L2= Address
 CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"   \ .WORD $F0B9, LB_LPRINT_2V ; 82DA
 CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"    \ .WORD $F0B8, LB_LLIST_2V  ; 82DB 
 
-#IFDEF ENBPD
+#IFDEF SKIP
 LET_S2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'D'. LET_D2
 CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"    \ .WORD $E987, SETDEV_V     ; $82D5
 
@@ -2022,7 +2025,7 @@ LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in
 CN32:   EQU $D3 \ CNIB(CN31_2,CN32) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM ; 880D
 #ENDIF
 
-#IFNDEF ENBPD
+#IFNDEF SKIP
 LET_S2: EQU $00
 LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
 CN32:   EQU $D3 \ CNIB(CN31,CN32)   \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM ; 880D
@@ -2040,7 +2043,7 @@ _CMD_LST_END:
 ; SEPARATOR_8880 - Unused on original ROM
 ; Used as a jump vector for BPD command on modified ROM
 BPD_8888:
-#IFNDEF ENBPD
+#IFNDEF SKIP
     .BYTE $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00   ; Unused
 #ELSE
     .BYTE $00;,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00   ; Unused
@@ -5319,7 +5322,7 @@ BRANCH_97A7: ; Branched to from 97A1
 
 
 HB_BPD_STR: ; 9A7F - need lable here for EXPORT
-#IFNDEF ENBPD
+#IFNDEF SKIP
 ;------------------------------------------------------------------------------------------------------------
 ;UNKNOWN_97AF:
 UNKNOWN_97AF:

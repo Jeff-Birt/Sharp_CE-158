@@ -23,6 +23,7 @@
 #DEFINE CE158V2                             ; New hardware CE-158X
 ;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
 ;#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT from High Bank to save space
+;#DEFINE SKIP
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -222,7 +223,7 @@ CN23:   EQU $C8 \ CNIB(CN22,CN23)   \ .TEXT "TERMINAL" \ .WORD $E883, TERMINAL_V
 CN24:   EQU $C8 \ CNIB(CN23,CN24)   \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V    ; $82D7 - Drops through to MAIN_ENTRY
 CN25:   EQU $D3 \ CNIB(CN24,CN25)   \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
 
-#IFDEF ENBPD
+#IFDEF SKIP
 LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in UR$
 CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"      \ .WORD $E856, LB_BPD_STR       ; 9DFE
 
@@ -230,7 +231,7 @@ LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in
 CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
 #ENDIF
 
-#IFNDEF ENBPD
+#IFNDEF SKIP
 LET_U:  EQU $00
 LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
 CN26:   EQU $D4 \ CNIB(CN25,CN26)   \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
@@ -245,7 +246,7 @@ B_TBL_8000_END:
 ;------------------------------------------------------------------------------------------------------------
 ; Unused address range 8161-8168 in original ROM
 ; USED for UR$ command in modified ROM
-#IFNDEF ENBPD
+#IFNDEF SKIP
 SEPARATOR_8161:
      .BYTE   $DF,$00,$FF,$00,$FF,$00,$CB,$00 ; - Used as seperator / space filler
 #ENDIF
@@ -1323,7 +1324,7 @@ LET_L2: EQU ($ + 2) ; First keyword starting with 'L'. LET_L2= Address of 'P' in
 CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"  \ .WORD $F0B9, LB_LPRINT_2V  ; 82DA
 CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"   \ .WORD $F0B8, LB_LLIST_2V   ; 82DB 
 
-#IFDEF ENBPD
+#IFDEF SKIP
 LET_S2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'D'. LET_D2
 CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"   \ .WORD $E987, LB_SETUR   ; $82D5
 
@@ -1331,7 +1332,7 @@ LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in
 CN32:   EQU $D3 \ CNIB(CN31_2,CN32) \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; 880D
 #ENDIF
 
-#IFNDEF ENBPD
+#IFNDEF SKIP
 LET_S2: EQU $00
 LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
 CN32:   EQU $D3 \ CNIB(CN31,CN32)   \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; 880D
@@ -1344,7 +1345,7 @@ B_TBL_8800_CMD_LST_END:
 
 
 
-#IFDEF ENBPD
+#IFDEF SKIP
 ;------------------------------------------------------------------------------------------------------------
 ; SETUR - Stub to call SETUR code in high bank
 ; X-REG address of function, Y-REG Token
@@ -1383,55 +1384,57 @@ LB_BPD_STR: ;8A89
     STA     (ARW + $03)                     ; (3) Temp storage in RAM
     JMP     ARW                             ; (3) [23] Switch to code in high bank
 
+#ENDIF
 
 
+#IFDEF ENBPD
 ;------------------------------------------------------------------------------------------------------------
 ; BPD_CMD - CLOAD, CSAVE, MEREGE are intercepted and here we inject PRINT#"L)filename" or PRINT#"S)filename" 
 ;           to signal Backpack of upcoming file use. Then it proceeded with the CLOAD/CSAVE/MERGE
 ; We are using the unused space in TBL_8888 for BPD code
 ; On entering Y points to first " and A=00=CSAVE, A=01=CLOAD or MERGE
 BPD_CMD:
-INJCMD:     EQU (IN_BUF + $40)              ; $7BF0 Start address of injected command
+INJCMD:     EQU (IN_BUF + $30)              ; $7BE0 Start address of injected command
 INJFLAG:    EQU (IN_BUF + $4F)              ; $7BFF Address of flag used to signal injected command
 
-    PSH Y                                   ; On entering Y points to first " after command
-    PSH A                                   ; A=00=CSAVE, A=01=CLOAD or MERGE
+    PSH     Y                               ; On entering Y points to first " after command
+    PSH     A                               ; A=00=CSAVE, A=01=CLOAD or MERGE
 
     ; Step #1 - configure UART - Set values for BPD use
-    LDI A,BPSBP                             ; SETCOM to 2400/4800/19200 depending on config
-    STA (SETCOM_REG)                        ; 
+    LDI     A,BPSBP                         ; SETCOM to 2400/4800/19200 depending on config
+    STA     (SETCOM_REG)                    ; 
 
-    LDA (SETDEV_REG)                        ;
-    ANI A,$E0                               ; clears bits 4-0
-    ORI A,BP                                ; Set both CI and CO bits, make sure we stay in BPD mode
-    STA (SETDEV_REG)                        ;
+    ;LDA     (SETDEV_REG)                    ;
+    ;ANI     A,$E0                           ; clears bits 4-0
+    ORI     (SETDEV_REG),(CI | CO)          ; Set both CI and CO bits, make sure we stay in BPD mode
+    ;STA     (SETDEV_REG)                    ;
 
-    LDI A,$C0                               ; Set OPN to point to CE-158 Basic Tables
-    STA (OPN)                               ; 
+    LDI     A,$C0                           ; Set OPN to point to CE-158 Basic Tables
+    STA     (OPN)                           ; 
 
     ; Copy high bank calling code into RAM
-    LDI XH,HB(ORIGPC)                       ; Copy high bank calling code into RAM
-    LDI XL,LB(ORIGPC)                       ; Set up pointers to copy code into RAM
-    LDI YH,HB(ARW)                          ; which calls functions in High Bank
-    LDI YL,LB(ARW)                          ; $7A28 = AR-W
+    LDI     XH,HB(ORIGPC)                   ; Copy high bank calling code into RAM
+    LDI     XL,LB(ORIGPC)                   ; Set up pointers to copy code into RAM
+    LDI     YH,HB(ARW)                      ; which calls functions in High Bank
+    LDI     YL,LB(ARW)                      ; $7A28 = AR-W
 
 CLOOP:
     TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
-    CPI YL,LB(ARW + $09)                    ; Stop if now at $7A31
-    BZR CLOOP                               ; If XL < $90 keep copying
+    CPI     YL,LB(ARW + $09)                ; Stop if now at $7A31
+    BZR     CLOOP                           ; If XL < $90 keep copying
 
     ; Now call code just POKED in
-    SJP ARW                                 ; Call code we just POKED into RAM
+    SJP     ARW                             ; Call code we just POKED into RAM
 
     ; We do OUTSTAT CFG here as it is simple
-    LDA	(OUTSTAT_REG)                       ; Configure OUTSTAT
-    ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
-    STA (OUTSTAT_REG)                       ; Sets DTR and RTS from calc in 8334? OUTSTAT 7850
+    LDA	    (OUTSTAT_REG)                   ; Configure OUTSTAT
+    ANI     A,$FC                           ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
+    STA     (OUTSTAT_REG)                   ; Sets DTR and RTS from calc in 8334? OUTSTAT 7850
 
 #IFNDEF CE158V2
-    LDA #(CE158_PRT_A)                      ; 
-    ANI A,$FC                               ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
-    STA #(CE158_PRT_A)                      ; Also set DTR/RTS bits on CE-158
+    LDA     #(CE158_PRT_A)                  ; 
+    ANI     A,$FC                           ; clear bits 0-1, DTR, RTS (OUTSTAT 0)
+    STA     #(CE158_PRT_A)                  ; Also set DTR/RTS bits on CE-158
 #ELSE
     EAI     $03                             ; Invert the bits. The TI chip inverts these bits.
     ANI     #(CE158_UART_MCR0),$FC          ; Clear RTS/DTR bits
@@ -1459,7 +1462,7 @@ CLOOP:
 
 CLOOP1:
     TIN                                     ; (Y) = (X) then X = X + 1, Y = Y + 1
-    CPI YL,LBO(INJCMD,$10)                  ; $00
+    CPI YL,LBO(INJCMD,$00)                  ; $00
     BZR CLOOP1                              ; If XL < $00 keep copying
 
     POP A                                   ; $00=CSAVE (char=S), $01=CLOAD or MERGE (char=L)
@@ -1498,6 +1501,7 @@ CLOOP2:
     RET                                     ; Return to _REDIRECT which sets A properly and jumps back to CLOAD/CSAVE/MERGE
 
 
+
 ORIGPC:     EQU $                           ; Save current PC
 .ORG INJCMD                                 ; Set new PC to where this code will be POKE into RAM
 
@@ -1515,15 +1519,15 @@ BPD_ARW:
 
 PRNUM_DAT: ; used by Step #2
     ;     PRINT   #    "   L   $24=$ provides 5 second delay, $29=) provides 30 second delay"
-    .BYTE $F0,$97,$23,$22,$4C,$24,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; 7B80-7B8F PRINT#"$)file"
-
+    .BYTE $F0,$97,$23,$22,$4C,$24,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D ; 7B80-7B8F PRINT#"$)file"
+    .BYTE $0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; $A5 is injected command marker
 
 
 ;------------------------------------------------------------------------------------------------------------    
 ; We intercept the CSAVE, MERGE and CLOAD entries to here
 ; If in BPD mode run BPD set up code first, then jump back to normal command handler
 CSAVE_INTERCEPT: ;  Intercept CSAVE, CLOAD, MERGE
-    BII     (CE158_REG_79DD),$18            ; BPD mode flag
+    BII     (CE158_REG_79DD),$80            ; BPD mode flag
     BZS     CSI_EXIT                        ;
     LDI     A,$00                           ; A=$00=CSAVE was called (for BPD code)
     SJP     BPD_CMD                         ; Configure for BPD use
@@ -1534,7 +1538,7 @@ CSI_EXIT:                                   ; Returns to here and back to CSAVE
 
 
 MERGE_INTERCEPT:
-    BII     (CE158_REG_79DD),$18            ; BPD mode flag
+    BII     (CE158_REG_79DD),$80            ; BPD mode flag
     BZS     MRI_EXIT                        ;
     LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
     SJP     BPD_CMD                         ; Configure for BPD use
@@ -1545,7 +1549,7 @@ MRI_EXIT:                                   ; Returns to here and back to MERGE
 
 
 CLOAD_INTERCEPT:
-    BII     (CE158_REG_79DD),$18            ; BPD mode flag
+    BII     (CE158_REG_79DD),$80            ; BPD mode flag
     BZS     CLI_EXIT                        ;
     LDI     A,$01                           ; A=$01=CLOAD or MERGE was called (for BPD code)
     SJP     BPD_CMD                         ; Configure for BPD use
@@ -2396,9 +2400,7 @@ BRANCH_92B3: ; branched to from 929D, 92A0, 92A9
 
 
 BRANCH_92BB: ; branched to from 9254
-#IFNDEF CE158V2
     SJP      INIT_SRCH_PTR                  ; 
-#ENDIF
     VEJ	     (CC)                           ; Loads X-Reg with address at 78(pp) 78(pp+1) BASPRG_END_H
                 ABYT($67)                   ; n1
     INC	     X                              ;
