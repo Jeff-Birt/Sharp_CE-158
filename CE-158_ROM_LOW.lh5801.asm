@@ -2,12 +2,10 @@
 ; Low Bank of Sharp CE-158 RS232/LPT interface
 ;
 ; Modifications enabled by uncommenting #DEFINEs. Not all defines used in both banks.
-; BUSY      - (LB) Enables a blinking BUSY annunciator while loading and saving
-; E7BUG     - (HB) Fixes bug in HB_CFG_URT_LPT at $8BAC
-; ENBPD     - (LB,HB) Include BPD/BPD$ commands
-; CE158V2   - Build for new hardware CE-158X
-; CE158_48  - Original hardware. Make top baud rate 4800bps, eliminate 50bps
-; HIGHSPEED - (HB) Enables faster baud rates of 4800,9600,19200 & 38400 (38400 uses SETCOM3840 due to signed ints)
+; ENBPD     - (HB,LB) Extends SETDEV, DEV$ to support BP adds higher baud rates for CE-158X
+;                     Fixes bug in HB_CFG_URT_LPT at $8BAC
+; CE158V2   - (HB,LB) Build for new hardware CE-158X
+; CE158_48  - (HB,LB) Original hardware. Make top baud rate 4800bps, eliminate 50bps
 
 #INCLUDE    "lib/PC-1500.lib"
 #INCLUDE    "lib/CE-158.lib"
@@ -17,13 +15,10 @@
 
 #INCLUDE    CE-158_ROM_HIGH.exp             ; Export table from high bank
 
-;#DEFINE BUSY                                ; Enable blinking BUSY annunciator in CLOAD/CSAVE
-#DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
 #DEFINE CE158V2                             ; New hardware CE-158X
-;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
-;#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT from High Bank to save space
-;#DEFINE SKIP
+#DEFINE ENBPD                               ; Include BPD/BPD$ commands
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -223,19 +218,9 @@ CN23:   EQU $C8 \ CNIB(CN22,CN23)   \ .TEXT "TERMINAL" \ .WORD $E883, TERMINAL_V
 CN24:   EQU $C8 \ CNIB(CN23,CN24)   \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V    ; $82D7 - Drops through to MAIN_ENTRY
 CN25:   EQU $D3 \ CNIB(CN24,CN25)   \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
 
-#IFDEF SKIP
-LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in UR$
-CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"      \ .WORD $E856, LB_BPD_STR       ; 9DFE
-
-LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
-CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
-#ENDIF
-
-#IFNDEF SKIP
 LET_U:  EQU $00
 LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
 CN26:   EQU $D4 \ CNIB(CN25,CN26)   \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
-#ENDIF
 
 CN27:  EQU $D0 \ .BYTE CN27
 
@@ -246,10 +231,8 @@ B_TBL_8000_END:
 ;------------------------------------------------------------------------------------------------------------
 ; Unused address range 8161-8168 in original ROM
 ; USED for UR$ command in modified ROM
-#IFNDEF SKIP
 SEPARATOR_8161:
      .BYTE   $DF,$00,$FF,$00,$FF,$00,$CB,$00 ; - Used as seperator / space filler
-#ENDIF
 
 
 
@@ -800,6 +783,8 @@ MAIN_ENTRY: ;82EC
 BRANCH_8302:
     JMP	    ARW                             ; POKED in above, swtiches to HI bank.
 
+
+
 ;------------------------------------------------------------------------------------------------------------
 ; Return from High Bank
 ; 
@@ -1324,67 +1309,15 @@ LET_L2: EQU ($ + 2) ; First keyword starting with 'L'. LET_L2= Address of 'P' in
 CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"  \ .WORD $F0B9, LB_LPRINT_2V  ; 82DA
 CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"   \ .WORD $F0B8, LB_LLIST_2V   ; 82DB 
 
-#IFDEF SKIP
-LET_S2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'D'. LET_D2
-CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"   \ .WORD $E987, LB_SETUR   ; $82D5
-
-LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
-CN32:   EQU $D3 \ CNIB(CN31_2,CN32) \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; 880D
-#ENDIF
-
-#IFNDEF SKIP
 LET_S2: EQU $00
 LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
 CN32:   EQU $D3 \ CNIB(CN31,CN32)   \ .TEXT "TAB"     \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; 880D
-#ENDIF
 
 CN33:   EQU $D0 \ .BYTE CN33 
 
 B_TBL_8800_CMD_LST_END:
 .BYTE $D0
 
-
-
-#IFDEF SKIP
-;------------------------------------------------------------------------------------------------------------
-; SETUR - Stub to call SETUR code in high bank
-; X-REG address of function, Y-REG Token
-; We are using the unused space in TBL_8888 for BPD code
-;   Code to copy into RAM
-;   SPU                                     ; Swtich to low bank
-;   JMP     BPD_STR_H                       ; Address of function in low bank
-LB_SETUR: ;8888
-    LDI     A,$E1                           ; (2) SPU
-    STA     (ARW)                           ; (3) Temp storage in RAM
-    LDI     A,$BA                           ; (2) JMP
-    STA     (ARW + $01)                     ; (3) Temp storage in RAM
-    LDI     A,HB(HB_SETDEV)                 ; (2) HB of BPD_STR_H
-    STA     (ARW + $02)                     ; (3) Temp storage in RAM
-    LDI     A,LB(HB_SETDEV)                 ; (2) LB of BPD_STR_H
-    STA     (ARW + $03)                     ; (3) Temp storage in RAM
-    JMP     ARW                             ; (3) [23] Switch to code in high bank
-
-
-
-;------------------------------------------------------------------------------------------------------------
-; BPD$ - Stub to call BPD$ code in high bank
-; X-REG address of function, Y-REG Token
-; We are using the unused space in TBL_8888 for BPD code
-;   Code to copy into RAM
-;   SPU                                     ; Swtich to low bank
-;   JMP     BPD_STR_H                       ; Address of function in low bank
-LB_BPD_STR: ;8A89
-    LDI     A,$E1                           ; (2) SPU
-    STA     (ARW)                           ; (3) Temp storage in RAM
-    LDI     A,$BA                           ; (2) JMP
-    STA     (ARW + $01)                     ; (3) Temp storage in RAM
-    LDI     A,HB(HB_BPD_STR)                ; (2) HB of BPD_STR_H
-    STA     (ARW + $02)                     ; (3) Temp storage in RAM
-    LDI     A,LB(HB_BPD_STR)                ; (2) LB of BPD_STR_H
-    STA     (ARW + $03)                     ; (3) Temp storage in RAM
-    JMP     ARW                             ; (3) [23] Switch to code in high bank
-
-#ENDIF
 
 
 #IFDEF ENBPD
@@ -1523,6 +1456,7 @@ PRNUM_DAT: ; used by Step #2
     .BYTE $0D,$0D,$0D,$0D,$0D,$0D,$0D,$0D, $0D,$0D,$0D,$0D,$0D,$0D,$0D,$A5 ; $A5 is injected command marker
 
 
+
 ;------------------------------------------------------------------------------------------------------------    
 ; We intercept the CSAVE, MERGE and CLOAD entries to here
 ; If in BPD mode run BPD set up code first, then jump back to normal command handler
@@ -1650,7 +1584,6 @@ EXITTX:
 ;------------------------------------------------------------------------------------------------------------    
 ; RXCOM FOR UART 1
 ;    
-; RXCOM FOR UART 1
 U1RXCOM:
     LDA     #(CE158_UART_LSR1)              ; UART status register
 	SEC                                     ;
@@ -2032,8 +1965,8 @@ MERGE_ENTRY:
     
 CLOAD_ENTRY:   
     JMP     CLOAD_INTERCEPT                 ; $90C3 - CLOAD entry intercept
-    NOP
-    NOP
+    NOP                                     ;
+    NOP                                     ;
 
 #ENDIF
 
@@ -3141,6 +3074,8 @@ PRNT_NUM8_ML:
     .BYTE $FF,$00,$FF,$00,$FF               ; Remaining filler bytes
 #ENDIF
 
+
+
 ; .FILL ($9660 - $)
 ; .ORG $9660
 ;--------------------------------------------------------------------------------------------------
@@ -4229,7 +4164,6 @@ SUB_9B31:
     LIN	    X                               ; A = (X), X = X + 1
 
 SUB_9B32: ; called from 9A95
-;#IFNDEF BUSY
 #IFNDEF ENBPD
     SJP     (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
 #ELSE
@@ -4988,7 +4922,7 @@ BRANCH_9E73: ; branched to from 9E5D, 9E65, 9E6E
 ;------------------------------------------------------------------------------------------------------------
 ; BUSY BLINK LOAD- Blinks the BUSY annunciator while loading
 ;
-; For HIGHSPEED we need a secondary /N counter
+; For higher buad rates we need a secondary /N counter
 DIVN EQU $04
 BUSY_BLINK: ; 9E74
     PSH     A                               ; Save original A

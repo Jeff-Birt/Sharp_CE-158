@@ -3,12 +3,10 @@
 ; To fold: Hightlight Ctrl+K Ctrl+,
 ;
 ; Modifications enabled by uncommenting #DEFINEs. Not all defines used in both banks.
-; BUSY      - (LB) Enables a blinking BUSY annunciator while loading and saving
-; E7BUG     - (HB) Fixes bug in HB_CFG_URT_LPT at $8BAC
-; ENBPD     - (LB,HB) Include BPD/BPD$ commands
-; CE158V2   - Build for new hardware CE-158X
-; CE158_48  - Original hardware. Make top baud rate 4800bps, eliminate 50bps
-; HIGHSPEED - (HB) Enables faster baud rates of 4800,9600,19200 & 38400 (38400 uses SETCOM3840 due to signed ints)
+; ENBPD     - (HB,LB) Extends SETDEV, DEV$ to support BP adds higher baud rates for CE-158X
+;                     Fixes bug in HB_CFG_URT_LPT at $8BAC
+; CE158V2   - (HB,LB) Build for new hardware CE-158X
+; CE158_48  - (HB,LB) Original hardware. Make top baud rate 4800bps, eliminate 50bps
 
 #INCLUDE    "lib/PC-1500.lib"
 #INCLUDE    "lib/CE-150.lib"
@@ -19,13 +17,10 @@
 #INCLUDE    CE-158_ROM_LOW.exp              ; Export table from low bank
 
 
-#DEFINE E7BUG                               ; Fixes bug in HB_CFG_URT_LPT at $8BAC
-#DEFINE ENBPD                               ; Include BPD/BPD$ commands
 ;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 #DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
-;#DEFINE HIGHSPEED                           ; New hardware: Enable up to 38400 BAUD
-;#DEFINE REDIRECT                            ; Redirect CHAR2LPT and TXLPT to Low Bank to save space
-;#DEFINE SKIP
+#DEFINE ENBPD                               ; Include BPD/BPD$ commands
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -57,11 +52,13 @@ BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
 #ENDIF   
 ;------------------------------------------------------------------------------------------------------------
 
+
 ;------------------------------------------------------------------------------------------------------------
 ; Symbols to export to CE-158_ROM_HIGH.exp to be imported into low bank
-.EXPORT HB_JMP_FRM_LB, HB_BPD_STR, HB_CFG_URT_BD, HB_CFG_URT_LPT, HB_SETDEV
+.EXPORT HB_JMP_FRM_LB, HB_CFG_URT_BD, HB_CFG_URT_LPT, HB_SETDEV
 
 .ORG $8000
+
 
 ;------------------------------------------------------------------------------------------------------------
 ; BASIC Table 8000 - (Second table at 8800)
@@ -224,19 +221,9 @@ CN23:   EQU $C8 \ CNIB(CN22,CN23) \ .TEXT "TERMINAL" \ .WORD $E883, TERMINAL_V  
 CN24:   EQU $C8 \ CNIB(CN23,CN24) \ .TEXT "TRANSMIT" \ .WORD $E885, TRANSMIT_V    ; $82D7 - Drops through to MAIN_ENTRY
 CN25:   EQU $D3 \ CNIB(CN24,CN25) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM  ; $880D - Uses 8800 BASIC Table TAB/INPUT# vector
 
-#IFDEF SKIP
-LET_U:  EQU ($ + 2) ; First keyword starting with 'U'. LET_U = Address of 'E' in UR$
-CN25_2: EQU $C3 \ CNIB(CN25,CN25_2) \ .TEXT "UR$"    \ .WORD $E856, HB_BPD_STR    ; 9DFE
-
-LET_Z:  EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
-CN26:   EQU $D4 \ CNIB(CN25_2,CN26) \ .TEXT "ZONE"   \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
-#ENDIF
-
-#IFNDEF SKIP
 LET_U: EQU $00
 LET_Z: EQU ($ + 2) ; First keyword starting with 'Z'. LET_Z = Address of 'O' in ZONE
 CN26:  EQU $D4 \ CNIB(CN25,CN26)   \ .TEXT "ZONE"     \ .WORD $F0B4, ZONE_V        ; $82EB - Drops through to MAIN_ENTRY
-#ENDIF
 
 CN27: EQU $D0 \ .BYTE CN27
 
@@ -247,10 +234,8 @@ B_TBL_8000_END:
 ;------------------------------------------------------------------------------------------------------------
 ; Unused address range 8161-8168 in original ROM
 ; - Used for BPD command in modified ROM
-#IFNDEF SKIP
 SEPARATOR_8161:
      .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00    ; FF 00 - Used as seperator / space filler
-#ENDIF
 
 
 
@@ -702,6 +687,7 @@ BRANCH_82B3: ; Branched to from 8243, 8297
     LDI	    UH,$00                          ; Return value? Failure.
     SEC                                     ; Set Carry Flag
     RTN                                     ;
+
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -2017,19 +2003,9 @@ LET_L2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'L'. LET_L2= Address
 CN30:   EQU $C6 \ CNIB(CN29,CN30)   \ .TEXT "LPRINT"   \ .WORD $F0B9, LB_LPRINT_2V ; 82DA
 CN31:   EQU $D5 \ CNIB(CN30,CN31)   \ .TEXT "LLIST"    \ .WORD $F0B8, LB_LLIST_2V  ; 82DB 
 
-#IFDEF SKIP
-LET_S2: EQU ($ + 2) ; ($ + 2) ; First keyword starting with 'D'. LET_D2
-CN31_2: EQU $D5 \ CNIB(CN31,CN31_2) \ .TEXT "SETUR"    \ .WORD $E987, SETDEV_V     ; $82D5
-
-LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
-CN32:   EQU $D3 \ CNIB(CN31_2,CN32) \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM ; 880D
-#ENDIF
-
-#IFNDEF SKIP
 LET_S2: EQU $00
 LET_T2: EQU ($ + 2) ; First keyword starting with 'T'. LET_T2= Address of 'A' in TAB
 CN32:   EQU $D3 \ CNIB(CN31,CN32)   \ .TEXT "TAB"      \ .WORD $F0BB, B_TBL_8800_INPUT_NUM ; 880D
-#ENDIF
 
 CN33:   EQU $D0 \ .BYTE CN33 
 
@@ -2043,11 +2019,7 @@ _CMD_LST_END:
 ; SEPARATOR_8880 - Unused on original ROM
 ; Used as a jump vector for BPD command on modified ROM
 BPD_8888:
-#IFNDEF SKIP
     .BYTE $00,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00   ; Unused
-#ELSE
-    .BYTE $00;,$FF,$00,$FF,$00,$FF,$00,$FF,$00,$FF,$00   ; Unused
-#ENDIF
 
 
 
@@ -2640,6 +2612,7 @@ BRANCH_8AA0: ; Branched to from 8A79
     BII	    (TRACE),$01                     ; FLAGS = (TRACE) & 01, mask all but bit 0 off
     BZR     HB_CFG_URT_BD                   ; If bit 0 in (TRACE) set, branch fwd
                                             ; Branch fwd, set BAUD rate, then return
+
 
 ;--------------------------------------------------------------------------------------------------
 ; SET_DEFAULT_BAUD - 
@@ -5321,22 +5294,12 @@ BRANCH_97A7: ; Branched to from 97A1
 
 
 
-HB_BPD_STR: ; 9A7F - need lable here for EXPORT
-#IFNDEF SKIP
 ;------------------------------------------------------------------------------------------------------------
-;UNKNOWN_97AF:
+;UNKNOWN_97AF 
 UNKNOWN_97AF:
     .BYTE   $20,$00,$40,$00,$FF,$00,$FF,$00,$00,$00,$00
-#ELSE
 ;------------------------------------------------------------------------------------------------------------
-; X-REG address of function, Y-REG Token
-;HB_BPD_STR: ; 9A7F
-    LDI     A,$01                           ; (2) $00 = COM$, $01 = UR$, $FF= DEV$
-    STA	    (STK_PTR_GSB_FOR)               ; (3) Register for type operation type
-    JMP     BRANCH_889D                     ; (3) [8]
 
-    .BYTE   $20,$00,$40;,$00,$FF,$00,$FF,$00,$00,$00,$00
-#ENDIF
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -5604,8 +5567,9 @@ SUB_98C3:
 SEPARATOR_98D1:
     .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF,$00,  $FF,$00,$FF,$00,$FF,$00,$FF,$00 
     .BYTE   $FF,$00,$FF,$00,$FF,$00,$FF 
-
 #ELSE
+
+
 
 ; Extensinon of SETDEV to handle BPD 
 ; 3rd byte of TBL_SETDEV_TEXT is in A. Values with Bit 7 set are for BPD
@@ -6694,10 +6658,6 @@ ISDEV_STR2:
     LDI     XL,LB(TBL_SETDEV_TEXT)          ; (2) Start search past SETDEV entries
     LDI	    UL,$04                          ; (2) Loop counter, 4-0 all 5 possible SETDEV settings
     RTN                                     ; (1) [5] {29}
-
-    ;.BYTE $00,$FF,$EC,$24,$00,$FF,$00,$FF,  $00,$FF,$00,$FF,$00,$FF,$00,$FF 
-    ;.BYTE $00,$FF;,$00,$FF,$00,$FF,$00,$FF,  $00,$FF,$00,$FF,$00,$FF,$00,$FF 
-    ;.BYTE $00,$FF 
 
 
 .FILL ($9E20 - $)
