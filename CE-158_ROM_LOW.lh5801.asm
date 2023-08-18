@@ -426,9 +426,16 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 RXCOM: ; 81E6
 
 #IFDEF ENBPD
-    BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
-	BZS     CONTRX                          ; Intecept the RXCOM routine 
-	JMP     U1RXCOM                         ;  and redirect to UART1 if enabled
+    JMP     RXTYPE                            ; Figures out if RX shoudl be from COM0, COM1, or LPT
+;     BII     (CE158_REG_79DD),$40            ; (4) PN, 40 = LPT port to input
+;     BZS     RXCOM_1                         ; (2) If we are not in LPT input mode keep going
+;     REC                                     ; (1) Success flag
+;     RTN                                     ; (1) Return, this path only used to simualte RXCOM flush
+
+; RXCOM_1:
+    ; BII     (CE158_REG_79DD),$20            ; (4) Bit6 set = U1
+	; BZS     CONTRX                          ; (2) Intecept the RXCOM routine 
+	; JMP     U1RXCOM                         ; (3) and redirect to UART1 if enabled
 CONTRX:
 #ENDIF
 
@@ -519,8 +526,8 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     RTN                                     ; Carry flag indicates return state
 
 BRANCH_8230: ; Branched to from 81F0
-	SJP   DSRCTSFIX                         ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
-	PSH   A
+	SJP     DSRCTSFIX                       ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
+	PSH     A                               ;
     LDA     #(CE158_UART_RBR0)              ; Read data byte
 ; <************ 
 #ENDIF
@@ -1606,6 +1613,115 @@ NOCHAR:
 
 
 
+;------------------------------------------------------------------------------------------------------------    
+; RXLPT - 
+;    
+;   Set DTR1 to set TI chip data bus to input
+;   Set /SLIN (P17) to signal LPT device that port is an input
+;   If device sets /PE (P12) data is available (device can pull down if not needed)
+;       Read LPT, save to buffer, DEC index, if =0 done
+;       Set /STROBE (Pin1) to signal LPT device that port was read (STROBE I/O)
+;   Else, done
+RXLPT:
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE before we start reading
+    ANI     #(CE158_UART_MCR1),$FE          ; Set DTR1 = 0 to enable LPT input
+    ANI     #(CE158_LPT_CTL_WRITE),$08      ; Set /SLIN to set LPT device to write mode
+
+RXLPT_WAIT:
+    BII	    #(PC1500_IF_REG),$02            ; PC-1500 - IF Register Bit1 PB7 (ON Key)
+    BZR     RXLPT_BRK                       ; If Bit 1 was set branch fwd to an exit (reset) Failure.
+
+    LDA     #(CE158_LPT_STATUS_READ)        ; (ME1) Read LPT control bits
+    ANI     A,$20                           ; If PE is low we have data to read
+    BZR     RXLPT_WAIT                      ; If no data ready loop back and keep trying
+
+RXLPT_READ:
+    SJP     RXLPT_CHAR                      ; Read in a char
+
+    ; Numeric var (7888 == $88) convert to ASCII, save to IN_BUF, set IN_BUF pointer.
+    BII     (LASTVARTYPE),$10               ; String var (7888 == $10) return unaltered                
+    BZR     RXLPT_EXIT                       ; 
+
+    PSH     X                               ; Save state before making calls below
+    PSH     Y                               ;
+    PSH     U                               ;
+    PSH     A                               ; 
+
+    SJP	    INBUF_CLR                       ; Overwrite Input Buffer w/0D 
+
+    LDI     YH,HB(IN_BUF)                   ; Set address of Input buffer in Y
+    LDI     YL,LB(IN_BUF)                   ;
+    LDI     UH,$00                          ;
+    POP     A                               ; Get our A value back
+    STA     UL                              ; Load U with value read in
+
+    CALL    $DD2D                           ; Convert INT value in U to ASCII
+                ABYT($40)                   ; Store to address pointed to by Y
+
+    POP     U                               ;
+    POP     Y                               ;
+    POP     X                               ; X is the IN_BUF pointer
+    LDI     XL,$03                          ; Point to address past last character
+    LDI     A,$0D                           ; Return a /CR in A to signal EOL
+
+    REC                                     ; Set success flag
+
+RXLPT_EXIT:
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET STROBE to default
+    ORI     #(CE158_UART_MCR1),$01          ; Set DTR1 = 1 to disable LPT input
+    ORI     #(CE158_LPT_CTL_WRITE),$08      ; Set /SLIN to set LPT device to read
+    RTN                                     ; Value from port is in A
+
+RXLPT_BRK:
+    LDI	    UH,$00                          ; Return $00 for BRK key pressed failure
+    SEC                                     ; Set Carry Flag
+    BCH     RXLPT_EXIT                      ;
+
+;------------------------------------------------------------------------------------------------------------    
+; RXLPT_CHAR - Read a single char from LPT and toggle strobe
+;    
+RXLPT_CHAR:
+    LDA     #(CE158_LPT_DATA_READ)          ; Read data from parallel port
+    PSH     A                               ; Save what we read in
+
+    RIE                                     ; Disable interrupts
+    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1) 
+    LDI	    A,$80                           ; Set up time delay
+
+RXLPT_CHAR1: ; 
+    DEC	    A                               ; Carry set by first DEC, count 80->0
+    BCS     RXLPT_CHAR1                     ; If Carry set repeat, Carry clear after hitting 0
+
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    LDI	    A,$80                           ; Set up time delay
+
+RXLPT_CHAR2: ; Branched to from 81B5
+    DEC	    A                               ; Carry set by first DEC, count 80->0
+    BCS     RXLPT_CHAR2                     ; If Carry set repeat, Carry clear after hitting 0
+    SIE                                     ; Enable Interrupts
+    POP     A                               ; Get back what we read in
+    RTN                                     ; 
+
+
+;------------------------------------------------------------------------------------------------------------
+; RXTYPE - Figure out which port to RX from
+RXTYPE:
+#IFDEF ENBPD
+    BII     (CE158_REG_79DD),$40            ; (4) PN, 40 = LPT port to input
+    BZS     RXCOM_1                         ; (2) If we are not in LPT input mode keep going
+    REC                                     ; (1) Success flag
+    RTN                                     ; (1) This path only used to simualte RXCOM flush for RXLPT
+
+RXCOM_1:
+    BII     (CE158_REG_79DD),$20            ; (4) Bit6 set = U1
+	BZS     RXCOM_0                         ; (2) Intecept the RXCOM routine 
+	JMP     U1RXCOM                         ; (3) and redirect to UART1 if enabled
+
+RXCOM_0:
+    JMP     CONTRX                          ; We want COM0 after all
+#ENDIF
+
+
 ;------------------------------------------------------------------------------------------------------------
 ; TABLE_8888
 ; Seems like nonsense that is not used, so we use it for BPD
@@ -2058,15 +2174,15 @@ BRANCH_914D:
 
 BRANCH_9150:
     VCR     ($E0)                           ; Display error from UH or carry out 'ON-ERROR routine'.
-    SJP     SUB_98BD                        ; ***BAR Called to read byte from UART
+    SJP     SUB_98BD                        ; Used in KI to call RXCOM for virtual keypresses
     BCR     BRANCH_915A                     ;
 
 BRANCH_9157:
     JMP     BRANCH_962B                     ;
 
 BRANCH_915A:
-    BII     (OUT_BUF + $41),$20             ; ***BAR here on success of reading byte
-    BZS     BRANCH_916D                     ; ***BAR then we branch here
+    BII     (OUT_BUF + $41),$20             ; 
+    BZS     BRANCH_916D                     ; 
     BII     (OUT_BUF + $41),$04             ;
     BZR     BRANCH_917D                     ;
     SJP     SUB_9CEC                        ;
@@ -2074,7 +2190,7 @@ BRANCH_915A:
     BCH     BRANCH_916F                     ;
 
 BRANCH_916D:
-    BCH       SUB_9250                      ; ***BAR and then branch here
+    BCH       SUB_9250                      ; 
 
 
 BRANCH_916F:
@@ -3089,6 +3205,8 @@ INPUT_NUM: ; 9660
     VEJ	    (C2)                            ; If next character is not '%', branch fwd 'n'.
                 ACHR(PERCENT)               ;
                 ABRF(BRANCH_96AE)           ;
+
+    ; This section may handle "%" array inputs
     VEJ	    (CE)                            ; Determines variable pointed to by Y-REG if errors branch fwd
                 ABYT($F1)                   ;
                 ABRF(BRANCH_96E3)           ;
@@ -3115,20 +3233,20 @@ INPUT_NUM: ; 9660
     PSH	    U                               ;
     SJP	    (DELU_FROMX + 1)                ; Deletes U+2 bytes? from X-REG
     LDI	    A,$0C                           ;
-    SJP	    SUB_98C0                        ; No idea
+    SJP	    SUB_98C0                        ; polls RXCOM, perhaps gathers whole array?
     POP	    U                               ;
     POP	    X                               ;
-    SJP	    BRANCH_9AA7                     ; No idea
+    SJP	    BRANCH_9AA7                     ; polls RXCOM
     BCR     BRANCH_96A0                     ;
     CPI	    UH,$42                          ;
     BZS     BRANCH_96A8                     ; No idea
-    JMP	    JMP_9326                        ; No idea
+    JMP	    JMP_9326                        ; Exits through BASIC command RADIAN
 
 
 BRANCH_96A0: ; branched to from 9697
     DEC	    X                               ; X is still in variable?
     LDA	    (X)                             ;
-    CPI	    A,$0D                           ; Looking for CR?
+    CPI	    A,$0D                           ; Looking for CR, end of COM input line?
     BZR     BRANCH_96A8                     ;
     ANI	    (X),$00                         ; Clear address (X)
 
@@ -3137,14 +3255,14 @@ BRANCH_96A8: ; branched to from 969B, 96A4
     VEJ     (E2)                            ; Start of Basic Interpreter
 
 
-BRANCH_96AE: ; branched to from 9665
+BRANCH_96AE: ; branched to from 9665 if not a "%" array input
     VEJ     (C6)                            ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
     LDI	    UH,$1A                          ;
     VEJ     (D8)                            ; Checks if program ends. If so:Z=0
     VZS     ($E0)                           ; If Z=1 CALL (E0). If Z Set Output ERROR 1 if UH != 00
     ANI	    (OUT_BUF + $3F),$00             ;
-    VEJ	    (C2)                            ; If next character is not '$', branch fwd 'n'. 
-                ACHR(DOLLAR)                ;
+    VEJ	    (C2)                            ; If next character is not '$', (string variable) branch fwd 'n'. 
+                ACHR(DOLLAR)                ; This path is used for INPUT$
                 ABRF(BRANCH_96C0)           ;
     VEJ     (C0)                            ; Load next character/token to U-Reg
     ORI	    (OUT_BUF + $3F),$01             ; In output buffer
@@ -3152,8 +3270,8 @@ BRANCH_96AE: ; branched to from 9665
 BRANCH_96C0: ; branched to from 96B8
     VEJ     (C6)                            ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
     SJP	    INBUF_CLR                       ; Inside delete Input_Buffer w/0D
-    VEJ	    (C2)                            ; If next character is not ' " ', branch fwd 'n'. 
-                ACHR(QUOTE)                 ;
+    VEJ	    (C2)                            ; If next character is not quote mark, branch fwd 'n'. 
+                ACHR(QUOTE)                 ; From here to 96E4 is only if displaying a message 
                 ABRF(BRANCH_96E4)           ;
     VMJ	    (0C)                            ; Determine string length, create CSI in AR-X
     PSH	    Y                               ; Y-REG contains end address marker
@@ -3173,18 +3291,19 @@ BRANCH_96C0: ; branched to from 96B8
 
 
 BRANCH_96E3: ; branched to from 9668
-    VEJ     (E0)                            ; Indicates if UH is not "00" error message
+    VEJ     (E0)                            ; Indicates if UH is not "00" error message, error exit.
+
 
 BRANCH_96E4: ; branched to from 96C4
     VEJ     (C6)                            ; Decrements Y-Reg by 2- for tokens in U-Reg/ 1 byte for characters in U-Reg
-    LDI	    A,$3F                           ; '?'
+    LDI	    A,$3F                           ; '?'. Start of the data input section
     STA	    (IN_BUF)                        ;
     BCH 	BRANCH_96EF                     ;
 
 BRANCH_96EC: ; branched to from 96DC
     VEJ     (C4)                            ; Check tokens/char in U-Reg if not ',' branch fwd n
-                ACHR(COMMA)                 ;
-                ABRF(BRANCH_9767)           ;
+                ACHR(COMMA)                 ; Makes sure there is a , preceeding variable?
+                ABRF(BRANCH_9767)           ; Error exit
 BRANCH_96EF: ; branched to from 96EA
     LDI	    A,$B0                           ;
     STA	    (INBUFPTR_L)                    ;
@@ -3198,19 +3317,19 @@ BRANCH_96F6: ; branched to from 96E1
     ANI	    (BREAKPARAM),$00                ;
     VCS     ($E0)                           ; If Carry Set Indicates if UH is not "00" error message
     LDI	    A,$0C                           ;
-    SJP	    SUB_98C0                        ; No idea
-    BCS     BRANCH_976E                     ;
+    SJP	    SUB_98C0                        ; A bunch of bit twiddling based on command calls RXCOM once to flush?
+    BCS     BRANCH_976E                     ; Exit through BASIC command RADIAN
     PSH	    Y                               ;      
     LDI	    YH,$7B                          ;
     LDA	    (INBUFPTR_L)                    ;
     STA	    YL                              ; Y now points to current position in input buffer?
-    SJP	    PRGMDISP                        ; Displays input buffer on LCD
+    SJP	    PRGMDISP                        ; Displays input buffer on LCD, i.e. INPUT "TEXT ON LCD"
 
 BRANCH_971A: ; branched to from 97FA
     POP	    Y                               ;
     VEJ	    (CE)                            ; Determines variable 'n1' address all variable types allowed, if errors continue at P+n2
                 ABYT($58)                   ;
-                ABRF(BRANCH_976E)           ;
+                ABRF(BRANCH_976E)           ; Exit through BASIC command RADIAN
     VEJ     (F6)                            ; Copy U-REG to 7886-87
                 AWRD(LASTVARADD_H)          ;
     INC	    X                               ;
@@ -3226,8 +3345,8 @@ BRANCH_971A: ; branched to from 97FA
     SEC                                     ; Set Carry
     SBC	    XL                              ;
     STA	    UL                              ;
-    SJP	    SUB_9AA5                        ; No idea
-    BCS     BRANCH_9768                     ;
+    SJP	    SUB_9AA5                        ; KI, gets input from RXCOM
+    BCS     BRANCH_9768                     ; KI in loop processing input?
     DEC	    X                               ;
     LDI	    UH,$43                          ;
     LDA	    (X)                             ;
@@ -3263,7 +3382,7 @@ BRANCH_976C: ; branched to from 9744, 9755, 97AA, 9819
     POP	    Y                               ;
 
 BRANCH_976E: ; branched to from 970D, 971C, 97D0, 9817
-    JMP	    JMP_9326                        ; No idea
+    JMP	    JMP_9326                        ; Exit through BASIC command RADIAN
 
 
 BRANCH_9771: ; branched to from 975B
@@ -3272,7 +3391,7 @@ BRANCH_9771: ; branched to from 975B
 
 BRANCH_9774: ; branched to from 9811
     VEJ	    (C2)                            ; If next character is not ',', branch fwd 'n'. 
-                ACHR(COMMA)                 ;
+                ACHR(COMMA)                 ; If there is not another variable after this one
                 ABRF(BRANCH_9786)           ;
     VEJ     (EC)                            ; Clears arithmetic register X
     LDI	    A,$D0                           ;
@@ -3524,22 +3643,22 @@ SUB_98B7:
 
 ;--------- ---------------------------------------------------------------------------------------------------
 ; SUB_98BD - Called from 9152
-; 
+; Seems to be used in KI mode to poll RXCOM
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_98BD: 
     LDA	    (OUT_BUF + $41)                 ; 
 
-SUB_98C0: ; called from 936C, 94EF PRINT#
+SUB_98C0: ; called from 936C, 94EF PRINT#, 970A, 968D
     NOP                                     ; PRINT# A=&08
 
 BRANCH_98C1: ; branched to from 98BB 
     ANI     A,$7F                           ;
     STA	    (OUT_BUF + $41)                 ; PRINT# A=&08
     ANI     #(PC1500_MSK_REG),$FC           ; Clear IRQ and ON Key interrupt mask for PC-1500
-    LDI	    XL,LB(TBL_9887)                 ;
-    LDI	    XH,HB(TBL_9887)                 ; X = Pointer to JMP in TBL_9887 X, used in 9924
+    LDI	    XL,LB(TBL_9887)                 ; X = Pointer to JMP in TBL_9887 X, used in 9924
+    LDI	    XH,HB(TBL_9887)                 ; Seems to be a table of function or return addresses
     PSH	    Y                               ; Y is pointer to location in program line
     LDI	    YL,LBO(OUT_BUF,$46)             ;
     LDI	    YH,HBO(OUT_BUF,$46)             ; Y = $7BA6
@@ -3632,8 +3751,8 @@ BRANCH_9939: ; branched to from 9940
 BRANCH_9943: ; branched to from 9937, 993C
     RTN                                     ; PRINT# return
 
-BRANCH_9944: ; branched to from 9933 ***BAR
-    SJP	    RXCOM                           ; Manipulates LPT/UART registers
+BRANCH_9944: ; branched to from 9933 
+    SJP	    RXCOM                           ; Reads COM port. Flush port
     REC                                     ; Reset Carry
     RTN                                     ;
 
@@ -3999,7 +4118,7 @@ BRANCH_9A9D:
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_9AA5 - Called from 92D4, 9739, 9CF1, 9D76
+; SUB_9AA5 - Called from 92D4, 9739, 9CF1, 9D76, 9AC1
 ; 
 ; Arguments:
 ; Output:
@@ -4011,10 +4130,10 @@ BRANCH_9AA7: ; Jmped to from 9177
     SJP	    SUB_9BE1                        ; Manipulates OUT_BUF
 
 BRANCH_9AAA: ; branched to from 9AC9
-    BCS     SUB_9AC1                        ; No idea
-    SJP	    SUB_9ACF                        ; Copies some stuff in OUT_BUF
-    SJP	    SUB_9AE6                        ; No idea
-    BCS     SUB_9AC1                        ; No idea
+    BCS     SUB_9AC1                        ; Checks and manipulates OUT_BUF
+    SJP	    SUB_9ACF                        ; KI, calls RXCOM polling routine
+    SJP	    SUB_9AE6                        ; More manipulation of 
+    BCS     SUB_9AC1                        ; Checks and manipulates OUT_BUF
     LDA	    (OUT_BUF + $39)                 ;
     STA	    UL                              ;
     LDA	    (OUT_BUF + $38)                 ;
@@ -4028,16 +4147,16 @@ BRANCH_9AC0: ; branched to from
 
 
 ;------------------------------------------------------------------------------------------------------------
-; SUB_9AC1 - Called from 9AAA 9AB2 SUB_9AA5
+; SUB_9AC1 - Called from 9AAA 9AB2
 ; 
 ; Arguments:
 ; Output:
 ; RegMod:
 SUB_9AC1:
-    SJP     SUB_9B5E                        ; REC if UH == 3C, 34, 40, 3A
+    SJP     SUB_9B5E                        ; Checks if ((OUT_BUF + $41) < 1) == 3C, 34, 40, 3A
     BCS     BRANCH_9AC0                     ; If no match, borrow a return
-    SJP     SUB_9C32                        ; Pulls some valuse out of OUT_BUF and saves to XH, XL, UH, UL, A
-    BCH 	BRANCH_9AAA                     ;
+    SJP     SUB_9C32                        ; Pulls some values out of OUT_BUF and saves to XH, XL, UH, UL, A
+    BCH 	BRANCH_9AAA                     ; Jumps back to line after caller
 
 
 
@@ -4052,7 +4171,7 @@ BRANCH_9ACB: ; branched to from 9AE2
     LDI	    UL,$4F                          ;
 
 SUB_9ACF: ; Called from 91B8, 95B6, 95C9, 95E1, 9A9D, 9AAC   branched to from 9AD4
-    SJP     (OUT_BUF + $4D)                 ; ***BAR 9ACF is main load loop for CLOAD?
+    SJP     (OUT_BUF + $4D)                 ; $7BAD. Called for each char rxd except CR. Calls 9B1C, checks of /CE (&0D)
     BCS     BRANCH_9AE5                     ;
     LOP     UL,SUB_9ACF                     ; UL = UL - 1, loop back 'e' if Borrow Flag not set
     BII	    (OUT_BUF + $41),$20             ;
@@ -4130,15 +4249,16 @@ BRANCH_9B10:
 ; All CLOAD operations go through here after the first three bytes.
 ; The CPI A,$0D seems to look for EOL marker, perhaps to know when to tokenize an ASCII load?
 SUB_9B1C:                                   
-;#IFNDEF BUSY
 #IFNDEF ENBPD
-    SJP	    (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
+    SJP	    (OUT_BUF + $4A)                 ; $7BAA in OUT_BUF JMP 828F to RXCOM, returns here after char RXd
 #ELSE
-    SJP	    (BUSY_BLINK)                    ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
+    SJP	    (BUSY_BLINK)                    ; Does BUSY annuciator blink then above line
 #ENDIF
     
-    BCS     BRANCH_9B2F                     ; 
-    CPI	    A,$0D                           ; Detects EOL for CLOAD
+    BCS     BRANCH_9B2F                     ; Error exit?
+    CPI	    A,$0D                           ; Detects EOL for CLOAD, INPUT#
+                                            ; RXLPT can load the whole ASCII value into IN_BUF and then return $0D
+                                            ; What is pointing to next spot in IN_BUF?
     REC                                     ;
     BZR     BRANCH_9B2F                     ;
     BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
@@ -4147,7 +4267,7 @@ SUB_9B1C:
     LDI	    UH,$3E                          ;
 
 BRANCH_9B2F: ; called from 9B1F, 9B24, 9B2A
-    SIN     X                               ; (X) = A. Then X = X + 1
+    SIN     X                               ; Stores value in A from RXCOM into IN_BUF, INC pointer
     RTN                                     ;
 
 
@@ -4165,7 +4285,7 @@ SUB_9B31:
 
 SUB_9B32: ; called from 9A95
 #IFNDEF ENBPD
-    SJP     (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
+    SJP     (OUT_BUF + $4A)                 ; $7BAA in OUT_BUF which is manipualted everywhere!
 #ELSE
     SJP     (BUSY_BLINK)                    ; Jumps to BUSY annunciator blink routine
 #ENDIF
@@ -4960,6 +5080,12 @@ BUSY_BLINK: ; 9E74
 BLINK_SKIP:
     POP     X                               ; Get original X back
     POP     A                               ; Get original A back
+
+    BII     (CE158_REG_79DD),$40            ; PN, 40 = LPT port to input
+    BZS     RXCOM_Y                         ; If we are not in LPT input mode keep going
+    JMP     RXLPT                           ; If we are in LPT input mode call RXLPT instead
+
+RXCOM_Y:
     SJP	    (OUT_BUF + $4A)                 ; Now do the CLOAD, CSAVE, etc.
     RTN                                     ; 
 

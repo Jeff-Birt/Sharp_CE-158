@@ -46,7 +46,7 @@ PO:                 EQU $04                     ;
 CI:                 EQU $08                     ;
 CO:                 EQU $10                     ;
 U1:                 EQU $20                     ; U1, use UART 1 (Bit5=0=UART0, Bit5=1=UART1)
-PI:                 EQU $40                     ; PI, LPT port to input
+PN:                 EQU $40                     ; PN, LPT port to input
 BP:                 EQU $80                     ; BP, enable BDP mode with U0
 
 #define ADDRCHK(add,location)        #if ($ > add)    ; check address

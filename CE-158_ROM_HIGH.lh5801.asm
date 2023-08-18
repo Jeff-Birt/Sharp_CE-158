@@ -1234,7 +1234,7 @@ TBL_SETDEV_END:                             ; Defines beginning of last row of t
 
 #IFDEF ENBPD
     .BYTE $55, $31, U1                      ; U1, 20 = use UART 1 (Bit5=0=UART0, Bit5=1=UART1)
-    .BYTE $50, $49, PI                      ; PI, 40 = LPT port to input
+    .BYTE $50, $4E, PN                      ; PN, 40 = LPT port to input
     .BYTE $42, $50, BP                      ; BP, 80 = enable BDP mode with U0
                                             ; B4-3 set to pass mode mask in LB &903F
 TBL_SETDEV_END:                             ; Defines beginning of last row of table   
