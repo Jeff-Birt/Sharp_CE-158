@@ -273,7 +273,7 @@ CHAR2LPT: ; 8169
 ; ************ Modified >
     BII     #(CE158_LPT_STATUS_READ),$80    ; (ME1)
     BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),~$01     ; Make sure LPT_STROBE HI (ME1) 
 
 BRANCH_8196: ; Branched to from 818F
 
@@ -284,15 +284,15 @@ BRANCH_8196: ; Branched to from 818F
 BRANCH_819C: ; Branched to from 81D9
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     BRANCH_819C                     ; If Carry set repeat, carry clear after hitting 0
-    RIE                                     ; Disable interrupts 
-    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1) 
+    RIE                                     ; Disable interrupts  
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; CLR strobe bit HIGH (ME1)
     LDI	    A,$80                           ; Set up time delay
 
 BRANCH_81A8: ; Branched to from 81A9
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     BRANCH_81A8                     ; If Carry set repeat, Carry clear after hitting 0
 
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),~$01     ; Set LPT_STROBE HI (ME1)
     SIE                                     ; Enable Interrupts
     LDI	    A,$80                           ; Set up time delay
 ; <************
@@ -1269,6 +1269,7 @@ TBL_1854_CFG: ; 83E7 ORG, 83E7 BPD, 83EF BPD+V2
 
 ;------------------------------------------------------------------------------------------------------------
 ; CONFIG_UARTS - Replacement init for TI part
+; Control ports pins have inverted outputs
 CONFIG_UARTS:
 	LDI      A,$03	
 	STA      #(CE158_UART_LCR0)             ; Set 8,N,1 D203
@@ -1287,12 +1288,14 @@ CONFIG_UARTS:
     ORI     #(CE158_UART_IER1),1            ; Enable UART1 Interrupts
     STA     #(CE158_LPT_DATA_WRITE)         ; store in Parallel port output buffer
     STA     #(CE158_LPT_CTL_WRITE)          ; store in Parallel port Control Reg
+    ORI     #(CE158_LPT_CTL_WRITE),$08      ; SLIN default to low
 ;Set Baud Rate UART1
     ORI	    #(CE158_UART_LCR1),$80          ; Set DLAB to point to Divisor Registers
     STA     #(CE158_UART_DLM1)              ; store first byte of divisor
 	LDI     A,$18                           ; A = $18. 19200 BPS, Set UART 1 to 19200,8,N,1                                       
     STA     #(CE158_UART_DLL1)              ; store second byte of divisor;
     ANI	    #(CE158_UART_LCR1),$7F          ; Reset DLAB
+
 	RTN
 ; <************
 #ENDIF
@@ -2510,7 +2513,8 @@ PORTS_UPDATE: ; 8A2A
 ; ************ Modified >
     ORI	    #(CE158_PRT_C),$80              ; Paper Feed key (ME1)
 #ELSE
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    ;ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE LOW (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),~$01      ; SET LPT_STROBE HI (ME1)
 ; <************
 #ENDIF
 

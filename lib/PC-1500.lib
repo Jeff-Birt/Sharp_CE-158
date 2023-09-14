@@ -42,6 +42,7 @@ DISPARAM          = $7880 ; Display Parameter: determines display at READY
 STK_PTR_GSB_FOR   = $7882 ; Stack pointer for GOSUB and FOR
 CURVARADD_H       = $7883 ; Current variable address (H)
 CURVARADD_L       = $7884 ; Current variable address (L)
+CURVARTYPE        = $7885 ; Current variable type
 LASTVARADD_H      = $7886 ; Last variable address (H)
 LASTVARADD_L      = $7887 ; Last variable address (L)
 LASTVARTYPE       = $7888 ; Last variable type

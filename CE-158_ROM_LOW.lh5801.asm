@@ -268,7 +268,8 @@ LB_CHAR2LPT: ; 8169
 ; ************ Modified >
     BII     #(CE158_LPT_STATUS_READ),$80    ; (ME1)
     BZS     BRANCH_822C                     ; If Bit 7 not set (I/F_BUSY) borrow another exit
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    ;ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE LOW (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),~$01     ; Make sure LPT_STROBE HI (ME1) 
 
 BRANCH_8196: ; Branched to from 818F
 
@@ -280,14 +281,16 @@ BRANCH_819C: ; Branched to from 81D9
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     BRANCH_819C                     ; If Carry set repeat, carry clear after hitting 0
     RIE                                     ; Disable interrupts 
-    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1) 
+    ;ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit HI (ME1) 
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; CLR strobe bit HIGH (ME1)
     LDI	    A,$80                           ; Set up time delay
 
 BRANCH_81A8: ; Branched to from 81A9
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     BRANCH_81A8                     ; If Carry set repeat, Carry clear after hitting 0
 
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
+    ;ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE LOW (ME1) 
+    ANI     #(CE158_LPT_CTL_WRITE),~$01     ; Set LPT_STROBE HI (ME1)
     SIE                                     ; Enable Interrupts
     LDI	    A,$80                           ; Set up time delay
 ; <************
@@ -426,7 +429,7 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 RXCOM: ; 81E6
 
 #IFDEF ENBPD
-    JMP     RXTYPE                            ; Figures out if RX shoudl be from COM0, COM1, or LPT
+    JMP     RXTYPE                            ; Figures out if RX should be from COM0, COM1, or LPT
 ;     BII     (CE158_REG_79DD),$40            ; (4) PN, 40 = LPT port to input
 ;     BZS     RXCOM_1                         ; (2) If we are not in LPT input mode keep going
 ;     REC                                     ; (1) Success flag
@@ -1615,17 +1618,18 @@ NOCHAR:
 
 ;------------------------------------------------------------------------------------------------------------    
 ; RXLPT - 
-;    
+;   *NOTES: CE158_LPT_CTL_WRITE has inverted outputs. SETDEV KI,PN to redirect input from LPT
+;   Device will need to pull BUSY (P10) low to enable LPT output, i.e. accept data
 ;   Set DTR1 to set TI chip data bus to input
-;   Set /SLIN (P17) to signal LPT device that port is an input
 ;   If device sets /PE (P12) data is available (device can pull down if not needed)
+;       CE-158X sets SLIN high (P17) to signal LPT device that CE-158X LPT is in read mode
+;       CE-158X sets /STROBE low (Pin1) as an output enable of LPT device
 ;       Read LPT, save to buffer, DEC index, if =0 done
-;       Set /STROBE (Pin1) to signal LPT device that port was read (STROBE I/O)
 ;   Else, done
+;   Reset pins
 RXLPT:
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE before we start reading
-    ANI     #(CE158_UART_MCR1),$FE          ; Set DTR1 = 0 to enable LPT input
-    ANI     #(CE158_LPT_CTL_WRITE),$08      ; Set /SLIN to set LPT device to write mode
+    ANI     #(CE158_UART_MCR1),$FE          ; Set DTR1 = 0 (HI) to enable LPT input
+    ANI     #(CE158_LPT_CTL_WRITE),~$08     ; Set /SLIN HI to set LPT device to write mode
 
 RXLPT_WAIT:
     BII	    #(PC1500_IF_REG),$02            ; PC-1500 - IF Register Bit1 PB7 (ON Key)
@@ -1638,9 +1642,11 @@ RXLPT_WAIT:
 RXLPT_READ:
     SJP     RXLPT_CHAR                      ; Read in a char
 
-    ; Numeric var (7888 == $88) convert to ASCII, save to IN_BUF, set IN_BUF pointer.
-    BII     (LASTVARTYPE),$10               ; String var (7888 == $10) return unaltered                
-    BZR     RXLPT_EXIT                       ; 
+    ; Numeric var (7885 == $88) convert to ASCII, save to IN_BUF, set IN_BUF pointer.
+    ; String var  (7885 == $10) return unaltered 
+    ; Array var   (7885 == $01) return unaltered
+    BII     (CURVARTYPE),$88                ;                 
+    BZS     RXLPT_EXIT                      ;
 
     PSH     X                               ; Save state before making calls below
     PSH     Y                               ;
@@ -1667,9 +1673,9 @@ RXLPT_READ:
     REC                                     ; Set success flag
 
 RXLPT_EXIT:
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET STROBE to default
+    ANI     #(CE158_LPT_CTL_WRITE),~$01     ; SET STROBE/SLIN to default
+    ORI     #(CE158_LPT_CTL_WRITE),$08      ; SLIN to LOW (default)
     ORI     #(CE158_UART_MCR1),$01          ; Set DTR1 = 1 to disable LPT input
-    ORI     #(CE158_LPT_CTL_WRITE),$08      ; Set /SLIN to set LPT device to read
     RTN                                     ; Value from port is in A
 
 RXLPT_BRK:
@@ -1681,19 +1687,19 @@ RXLPT_BRK:
 ; RXLPT_CHAR - Read a single char from LPT and toggle strobe
 ;    
 RXLPT_CHAR:
-    LDA     #(CE158_LPT_DATA_READ)          ; Read data from parallel port
-    PSH     A                               ; Save what we read in
+    RIE                                     ; Disable interrupts   
+    ORI     #(CE158_LPT_CTL_WRITE),$01      ; CLR strobe bit HIGH (ME1)
+    LDI	    A,$20                           ; Set up time delay, set up time for device
 
-    RIE                                     ; Disable interrupts
-    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1) 
-    LDI	    A,$80                           ; Set up time delay
-
-RXLPT_CHAR1: ; 
+RXLPT_CHAR1:   
     DEC	    A                               ; Carry set by first DEC, count 80->0
     BCS     RXLPT_CHAR1                     ; If Carry set repeat, Carry clear after hitting 0
 
-    ORI     #(CE158_LPT_CTL_WRITE),$01      ; SET LPT_STROBE (ME1) 
-    LDI	    A,$80                           ; Set up time delay
+    LDA     #(CE158_LPT_DATA_READ)          ; Read data from parallel port
+    PSH     A                               ; Save what we read in
+
+    ANI     #(CE158_LPT_CTL_WRITE),$FE      ; CLR strobe bit (ME1), disable tri-state
+    LDI	    A,$20                           ; Set up time delay
 
 RXLPT_CHAR2: ; Branched to from 81B5
     DEC	    A                               ; Carry set by first DEC, count 80->0
@@ -1704,13 +1710,19 @@ RXLPT_CHAR2: ; Branched to from 81B5
 
 
 ;------------------------------------------------------------------------------------------------------------
-; RXTYPE - Figure out which port to RX from
-RXTYPE:
+; RX_FLUSH - Figure out which port to RX from
+RX_FLUSH:
 #IFDEF ENBPD
     BII     (CE158_REG_79DD),$40            ; (4) PN, 40 = LPT port to input
     BZS     RXCOM_1                         ; (2) If we are not in LPT input mode keep going
-    REC                                     ; (1) Success flag
     RTN                                     ; (1) This path only used to simualte RXCOM flush for RXLPT
+
+;------------------------------------------------------------------------------------------------------------
+; RXTYPE - Figure out which port to RX from
+RXTYPE:
+    BII     (CE158_REG_79DD),$40            ; (4) PN, 40 = LPT port to input
+    BZS     RXCOM_1                         ; (2) If we are not in LPT input mode keep going
+    JMP     RXLPT                           ; (3) Call LPT input
 
 RXCOM_1:
     BII     (CE158_REG_79DD),$20            ; (4) Bit6 set = U1
@@ -1719,6 +1731,7 @@ RXCOM_1:
 
 RXCOM_0:
     JMP     CONTRX                          ; We want COM0 after all
+
 #ENDIF
 
 
@@ -2843,7 +2856,7 @@ BRANCH_9466: ; branched to 9443, 9462
                 ABRF(BRANCH_9475)           ;
 
 BRANCH_9468: ; branched to from 93AC
-    SJP	    SUB_9B41                        ;
+    SJP	    SUB_9B41                        ; This seems to send the /CR after last char sent to LPT
     BCS     BRANCH_9493                     ;
     SJP	    SUB_9BC1                        ; Manipulates OUT_BUF
     BCS     BRANCH_9493                     ;
@@ -3206,7 +3219,7 @@ INPUT_NUM: ; 9660
                 ACHR(PERCENT)               ;
                 ABRF(BRANCH_96AE)           ;
 
-    ; This section may handle "%" array inputs
+    ; This section handleS "%" array inputs
     VEJ	    (CE)                            ; Determines variable pointed to by Y-REG if errors branch fwd
                 ABYT($F1)                   ;
                 ABRF(BRANCH_96E3)           ;
@@ -3752,7 +3765,11 @@ BRANCH_9943: ; branched to from 9937, 993C
     RTN                                     ; PRINT# return
 
 BRANCH_9944: ; branched to from 9933 
+#IFDEF ENBPD
+    SJP     RX_FLUSH                        ; Skips RXCOM flush if in KI,PN mode
+#ELSE
     SJP	    RXCOM                           ; Reads COM port. Flush port
+#ENDIF   
     REC                                     ; Reset Carry
     RTN                                     ;
 
@@ -4434,7 +4451,7 @@ SUB_9BAA:
     LDA	    (OUT_BUF + $47)                 ;
     BII	    (OUT_BUF + $3E),$04             ;
     BZR     BRANCH_9BBD                     ;   
-    STA	    (CE158_UNDEF1)                  ; Unkown CE-158 register
+    STA	    (CE158_UNDEF1)                  ; UnkNown CE-158 register
     RTN                                     ;
 
 
@@ -5081,11 +5098,6 @@ BLINK_SKIP:
     POP     X                               ; Get original X back
     POP     A                               ; Get original A back
 
-    BII     (CE158_REG_79DD),$40            ; PN, 40 = LPT port to input
-    BZS     RXCOM_Y                         ; If we are not in LPT input mode keep going
-    JMP     RXLPT                           ; If we are in LPT input mode call RXLPT instead
-
-RXCOM_Y:
     SJP	    (OUT_BUF + $4A)                 ; Now do the CLOAD, CSAVE, etc.
     RTN                                     ; 
 
