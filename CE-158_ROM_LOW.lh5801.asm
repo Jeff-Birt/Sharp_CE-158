@@ -15,6 +15,7 @@
 
 #INCLUDE    CE-158_ROM_HIGH.exp             ; Export table from high bank
 
+;#DEFINE BUGFIX                              ; Bug fixes in original ROM
 ;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
 #DEFINE CE158V2                             ; New hardware CE-158X
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
@@ -591,7 +592,7 @@ BRANCH_8265: ; Branched to from 8275, 8279
     BII	    #(PC1500_IF_REG),$02            ; PC-1500 - IF Register Bit1 PB7 (ON Key)
     BZR     BRANCH_82B1                     ; If Bit 1 was set branch fwd to an exit (reset)
     PSH	    A                               ; Save cahracter to TX
-    SJP     LB_CHAR2LPT                        ; Sends charecter in A to LPT, Returns A as failure type
+    SJP     LB_CHAR2LPT                     ; Sends character in A to LPT, Returns A as failure type
     BZR     BRANCH_8280                     ; A = 20 Low Battery, A = 00 is could not send?, C=0=success
     POP	    A                               ; A now original character to send
     LOP     UL,BRANCH_8265                  ; UL = UL - 1, loop back e if Borrow Flag not set
@@ -971,8 +972,8 @@ CONSOLE:
     DEC     Y                               ;
 
 BRANCH_836A: ;branched to from 83CD, 83DF, 83D4
-    LDA	    (OPN)                           ; 79D1 Indicates a basic extension table.
-    CPI     A,$C4                           ;
+    LDA	    (OPN)                           ; Which BASIC extension table is searched first
+    CPI     A,$C4                           ; $60=COM, $C4=LPRT
     BZS     BRANCH_8377                     ; Branch fwd if A = C4
     LDA     UL                              ;
     STA	    (RS232C)                        ; Console 1 RS232C
@@ -1027,8 +1028,8 @@ BRANCH_83A6: ;branched to from 8395
     SHL                                     ; Shift A left, A = A * 2
     ADC	    UL                              ; A = A + UL
     STA	    UL                              ;
-    LDA	    (OPN)                           ; OPN
-    CPI     A,$C4                           ; What does C4 represent?
+    LDA	    (OPN)                           ; Which BASIC extension table is searched first
+    CPI     A,$C4                           ; $60=COM, $C4=LPRT
     BZS     BRANCH_83B1                     ; If A=(79D1)=C4 branch fwd to 83B1
     REC                                     ; Reset carry flag
 
@@ -1615,7 +1616,7 @@ NOCHAR:
 #ENDIF
 
 
-
+#IFDEF ENBPD
 ;------------------------------------------------------------------------------------------------------------    
 ; RXLPT - 
 ;   *NOTES: CE158_LPT_CTL_WRITE has inverted outputs. SETDEV KI,PN to redirect input from LPT
@@ -1707,7 +1708,7 @@ RXLPT_CHAR2: ; Branched to from 81B5
     SIE                                     ; Enable Interrupts
     POP     A                               ; Get back what we read in
     RTN                                     ; 
-
+#ENDIF
 
 ;------------------------------------------------------------------------------------------------------------
 ; RX_FLUSH - Figure out which port to RX from
@@ -1740,132 +1741,135 @@ RXCOM_0:
 ; Seems like nonsense that is not used, so we use it for BPD
 TABLE_8888:
 
-; #IFNDEF ENBPD
-;     .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
-;     .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
-;     .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04,$FF
-;     .BYTE $20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00,$FB 
-;     .BYTE $12,$EE,$00,$FF,$00,$FF,$28,$FB,$00,$AA,$00,$FF,$00,$FF,$00,$77 
-;     .BYTE $A8,$9F,$00,$FF,$00,$FF,$40,$D9,$14,$FF,$00,$FF,$00,$FF,$60,$FF
-;     .BYTE $00,$EF,$00,$FF,$00,$FF,$08,$BF,$E0,$FF,$00,$FF,$00,$FF,$20,$FF
-;     .BYTE $04,$FF,$00,$FF,$00,$FF,$0C,$EF,$41,$EF,$00,$FF,$00,$FF,$42,$F7
-;     .BYTE $4D,$FF,$00,$FF,$00,$FF,$24,$B7,$04,$FE,$00,$FF,$00,$FF,$00,$FF
-;     .BYTE $A3,$7E,$00,$FF,$00,$FF,$80,$EE,$04,$D6,$00,$FF,$00,$FF,$98,$DF
-;     .BYTE $81,$FB,$00,$FF,$00,$FF,$04,$43,$10,$7C,$00,$FF,$00,$FF,$0A,$FF
-;     .BYTE $16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A,$27
-;     .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
-;     .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
-;     .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
-;     .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01,$5B
-;     .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
-;     .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       
-;     .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
-;     .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
-;     .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
-;     .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
-;     .BYTE $CF,$12,$E6,$00,$FF,$00,$FF,$40,$77,$00,$FF,$00,$FF,$00,$FF,$29 
-;     .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09
-;     .BYTE $7E,$9C,$7A,$00,$FF,$00,$FF,$83,$BE,$92,$FF,$00,$FF,$00,$FF,$0A 
-;     .BYTE $DF,$05,$F7,$00,$FF,$00,$FF,$A1,$B9,$46,$F9,$00,$FF,$00,$FF,$07 
-;     .BYTE $DD,$11,$FF,$00,$FF,$00,$FF,$4B,$F7,$C1,$FF,$00,$FF,$00,$FF,$04 
-;     .BYTE $25,$02,$FF,$00,$FF,$00,$FF,$A0,$FF,$41,$F7,$00,$FF,$00,$FF,$84 
-;     .BYTE $FA,$4A,$9C,$00,$FF,$00,$FF,$48,$BF,$10,$AF,$00,$FF,$00,$FF,$06 
-;     .BYTE $FF,$00,$EB,$00,$FF,$00,$FF,$02,$FE,$A1,$DB,$00,$FF,$00,$FF,$2A 
-;     .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$F7,$80,$1F,$00,$FF,$00,$FF,$20 
-;     .BYTE $FF,$18,$76,$00,$FF,$00,$FF,$05,$CD,$00,$9E,$00,$FF,$00,$FF,$01 
-;     .BYTE $E9,$D0,$FF,$00,$FF,$00,$FF,$80,$FF,$28,$9D,$00,$FF,$00,$FF,$04 
-;     .BYTE $EE,$C0,$DF,$00,$FF,$00,$FF,$2D,$F7,$5C,$1D,$00,$FF,$00,$FF,$01 
-;     .BYTE $DA,$70,$E3,$00,$FF,$00,$FF,$42,$EF,$80,$AF,$00,$FF,$00,$FF,$00 
-;     .BYTE $8B,$00,$FF,$00,$FF,$00,$FF,$00,$FD,$A9,$F7,$00,$FF,$00,$FF,$02 
-;     .BYTE $BE,$8D,$BF,$00,$FF,$00,$FF,$09,$FF,$43,$FF,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$84,$FF,$00,$FF,$00,$FF,$40,$E6,$10,$D7,$00,$FF,$00,$FF,$70 
-;     .BYTE $BD,$60,$4F,$00,$FF,$00,$FF,$0A,$33,$07,$FF,$00,$FF,$00,$FF,$09 
-;     .BYTE $FA,$82,$FD,$00,$FF,$00,$FF,$00,$1F,$80,$FF,$00,$FF,$00,$FF,$12 
-;     .BYTE $FD,$39,$B5,$00,$FF,$00,$FF,$00,$17,$BB,$FC,$00,$FF,$00,$FF,$09 
-;     .BYTE $F7,$00,$CE,$00,$FF,$00,$FF,$EA,$69,$1C,$66,$00,$FF,$00,$FF,$00 
-;     .BYTE $9E,$83,$CB,$00,$FF,$00,$FF,$A0,$F7,$01,$1F,$00,$FF,$00,$FF,$29 
-;     .BYTE $FD,$84,$BF,$00,$FF,$00,$FF,$80,$F3,$84,$FA,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$84,$7B,$00,$FF,$00,$FF,$0C,$ED,$E0,$F7,$00,$FF,$00,$FF,$A2 
-;     .BYTE $AF,$AC,$EB,$00,$FF,$00,$FF,$81,$F4,$8A,$4E,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$00,$FA,$00,$FF,$00,$FF,$03,$CE,$A0,$FF,$00,$FF,$00,$FF,$14 
-;     .BYTE $FD,$C2,$7D,$00,$FF,$00,$FF,$04,$FD,$00,$FF,$00,$FF,$00,$FF,$C0 
-;     .BYTE $FE,$04,$E4,$00,$FF,$00,$FF,$B8,$BF,$14,$EF,$00,$FF,$00,$FF,$40 
-;     .BYTE $FF,$81,$FF,$00,$FF,$00,$FF,$08,$FE,$22,$BF,$00,$FF,$00,$FF,$04 
-;     .BYTE $79,$A1,$F7,$00,$FF,$00,$FF,$00,$ED,$55,$F1,$00,$FF,$00,$FF,$C8 
-;     .BYTE $BF,$88,$CD,$00,$FF,$00,$FF,$00,$FF,$04,$7F,$00,$FF,$00,$FF,$10 
-;     .BYTE $FF,$04,$BB,$00,$FF,$00,$FF,$21,$87,$00,$FF,$00,$FF,$00,$FF,$00 
-;     .BYTE $EF,$00,$FB,$00,$FF,$00,$FF,$80,$F7,$28,$EB,$00,$FF,$00,$FF,$20 
-;     .BYTE $3F,$18,$B3,$00,$FF,$00,$FF,$48,$67,$08,$FF,$00,$FF,$00,$FF,$0E 
-;     .BYTE $D9,$8B,$7D,$00,$FF,$00,$FF,$08,$F7,$44,$FE,$00,$FF,$00,$FF,$18 
-;     .BYTE $8C,$8C,$F5,$00,$FF,$00,$FF,$90,$DD,$80,$F1,$00,$FF,$00,$FF,$41 
-;     .BYTE $FF,$20,$F7,$00,$FF,$00,$FF,$00,$EB,$C2,$CF,$00,$FF,$00,$FF,$00 
-;     .BYTE $B7,$03,$CF,$00,$FF,$00,$FF,$48,$FD,$80,$FF,$00,$FF,$00,$FF,$20 
-;     .BYTE $FD,$68,$E7,$00,$FF,$00,$FF,$03,$77,$46,$D7,$00,$FF,$00,$FF,$07 
-;     .BYTE $ED,$30,$F8,$00,$FF,$00,$FF,$18,$EE,$04,$3F,$00,$FF,$00,$FF,$24 
-;     .BYTE $E6,$01,$F5,$00,$FF,$00,$FF,$20,$7D,$01,$FD,$00,$FF,$00,$FF,$00 
-;     .BYTE $E3,$00,$F7,$00,$FF,$00,$FF,$10,$FF,$41,$5F,$00,$FF,$00,$FF,$09 
-;     .BYTE $9B,$1E,$66,$00,$FF,$00,$FF,$02,$C7,$02,$13,$00,$FF,$00,$FF,$02 
-;     .BYTE $FE,$80,$67,$00,$FF,$00,$FF,$11,$1B,$C0,$FC,$00,$FF,$00,$FF,$08 
-;     .BYTE $BE,$20,$E6,$00,$FF,$00,$FF,$00,$FF,$21,$F7,$00,$FF,$00,$FF,$28 
-;     .BYTE $FF,$14,$BB,$00,$FF,$00,$FF,$40,$FF,$13,$ED,$00,$FF,$00,$FF,$80 
-;     .BYTE $C6,$60,$FF,$00,$FF,$00,$FF,$01,$FE,$16,$FF,$00,$FF,$00,$FF,$00 
-;     .BYTE $7F,$40,$F8,$00,$FF,$00,$FF,$01,$BA,$00,$DF,$00,$FF,$00,$FF,$04 
-;     .BYTE $FE,$C9,$6B,$00,$FF,$00,$FF,$A0,$EF,$09,$9E,$00,$FF,$00,$FF,$C0 
-;     .BYTE $FF,$0A,$FF,$00,$FF,$00,$FF,$08,$5B,$02,$3F,$00,$FF,$00,$FF,$8C 
-;     .BYTE $FD,$20,$75,$00,$FF,$00,$FF,$0E,$F7,$50,$FF,$00,$FF,$00,$FF,$74 
-;     .BYTE $F5,$10,$66,$00,$FF,$00,$FF,$80,$B6,$48,$DF,$00,$FF,$00,$FF,$30 
-;     .BYTE $FD,$48,$BF,$00,$FF,$00,$FF,$14,$FA,$02,$86,$00,$FF,$00,$FF,$05 
-;     .BYTE $7B,$00,$5F,$00,$FF,$00,$FF,$A4,$FF,$20,$FB,$00,$FF,$00,$FF,$61 
-;     .BYTE $FF,$95,$76,$00,$FF,$00,$FF,$00,$3F,$06,$FA,$00,$FF,$00,$FF,$04 
-;     .BYTE $BF,$00,$F7,$00,$FF,$00,$FF,$40,$FF,$92,$F7,$00,$FF,$00,$FF,$04 
-;     .BYTE $EF,$80,$FD,$00,$FF,$00,$FF,$02,$FD,$05,$FE,$00,$FF,$00,$FF,$08 
-;     .BYTE $FF,$80,$76,$00,$FF,$00,$FF,$05,$F7,$30,$2F,$00,$FF,$00,$FF,$08 
-;     .BYTE $FF,$01,$EE,$00,$FF,$00,$FF,$52,$FF,$02,$C7,$00,$FF,$00,$FF,$91 
-;     .BYTE $E7,$00,$FD,$00,$FF,$00,$FF,$44,$77,$40,$FF,$00,$FF,$00,$FF,$00 
-;     .BYTE $FD,$B8,$FF,$00,$FF,$00,$FF,$00,$DF,$5A,$FF,$00,$FF,$00,$FF,$84 
-;     .BYTE $FA,$43,$EF,$00,$FF,$00,$FF,$94,$96,$00,$FE,$00,$FF,$00,$FF,$50 
-;     .BYTE $FB,$04,$FF,$00,$FF,$00,$FF,$26,$BF,$C9,$FC,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$80,$BF,$00,$FF,$00,$FF,$80,$FF,$A0,$BB,$00,$FF,$00,$FF,$0C 
-;     .BYTE $B9,$04,$FB,$00,$FF,$00,$FF,$05,$B9,$44,$EF,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$00,$BE,$41,$BB,$00,$FF,$00,$FF,$10 
-;     .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$14,$EF,$AA,$7F,$00,$FF,$00,$FF,$C0 
-;     .BYTE $66,$0C,$F2,$00,$FF,$00,$FF,$40,$FF,$28,$3D,$00,$FF,$00,$FF,$40 
-;     .BYTE $FD,$48,$FF,$00,$FF,$00,$FF,$47,$F7,$08,$FF,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$2A,$FE,$00,$FF,$00,$FF,$41,$A7,$15,$7E,$00,$FF,$00,$FF,$62 
-;     .BYTE $BF,$C0,$FD,$00,$FF,$00,$FF,$00,$FD,$26,$5F,$00,$FF,$00,$FF,$00 
-;     .BYTE $FE,$80,$FC,$00,$FF,$00,$FF,$28,$BF,$08,$FF,$00,$FF,$00,$FF,$46 
-;     .BYTE $1E,$20,$CB,$00,$FF,$00,$FF,$22,$EF,$20,$B5,$00,$FF,$00,$FF,$03 
-;     .BYTE $E3,$08,$1E,$00,$FF,$00,$FF,$0A,$FB,$07,$FE,$00,$FF,$00,$FF,$25 
-;     .BYTE $F7,$07,$DF,$00,$FF,$00,$FF,$04,$6F,$02,$FE,$00,$FF,$00,$FF,$18 
-;     .BYTE $FF,$CC,$BF,$00,$FF,$00,$FF,$23,$7D,$18,$FF,$00,$FF,$00,$FF,$18 
-;     .BYTE $9E,$02,$3F,$00,$FF,$00,$FF,$C0,$FD,$50,$7A,$00,$FF,$00,$FF,$00 
-;     .BYTE $BD,$18,$FF,$00,$FF,$00,$FF,$08,$FD,$04,$FE,$00,$FF,$00,$FF,$20 
-;     .BYTE $DF,$44,$FE,$00,$FF,$00,$FF,$02,$FF,$02,$FD,$00,$FF,$00,$FF,$00 
-;     .BYTE $FF,$00,$DD,$00,$FF,$00,$FF,$9C,$BF,$4C,$5F,$00,$FF,$00,$FF,$00 
-;     .BYTE $EF,$18,$FB,$00,$FF,$00,$FF,$A0,$53,$A0,$DF,$00,$FF,$00,$FF,$34 
-;     .BYTE $77,$80,$F3,$00,$FF,$00,$FF,$04,$EF,$13,$FD,$00,$FF,$00,$FF,$05 
-;     .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$7E,$87,$00,$00,$FF,$00,$DD,$4B 
-;     .BYTE $00,$00,$00,$00,$BF,$00,$7F,$81,$00,$11,$80,$00,$FF,$00,$EF,$00 
-;     .BYTE $40,$21,$04,$00,$FF,$00,$FF,$0E,$00,$21,$00,$00,$FF,$00,$FF,$09 
-;     .BYTE $00,$80,$00,$00,$F7,$00,$DF,$18,$00,$41,$00,$00,$FF,$00,$F7,$25 
-;     .BYTE $00,$31,$00,$00,$BB,$00,$DF,$82,$00,$A8,$00,$00,$FF,$00,$FF,$01 
-;     .BYTE $00,$10,$00,$00,$BF,$00,$FF,$40,$00,$24,$10,$00,$FF,$00,$6F,$84 
-;     .BYTE $00,$80,$00,$00,$7F,$00,$EF,$C4,$00,$18,$00,$00,$FF,$00,$FB,$28 
-;     .BYTE $00,$40,$00,$00,$FF,$00,$B7,$24,$00,$10,$00,$00,$D7,$00,$FF,$B0
-;     .BYTE $00,$26,$00,$00,$EF,$00,$3F,$00,$00,$10,$00,$00,$FF,$00,$FF,$10 
-;     .BYTE $00,$18,$00,$00,$FF,$00,$A3,$04,$00,$06,$08,$00,$FF,$00,$FF,$80 
-;     .BYTE $00,$80,$00,$00,$E5,$00,$7B,$20,$00,$82,$00,$00,$7F,$00,$7F,$00 
-;     .BYTE $00,$04,$00,$00,$FF,$00,$FF,$80,$00,$C0,$00,$00,$A7,$00,$FF,$30 
-;     .BYTE $00,$2A,$02,$00,$FF,$00,$7F,$90,$00,$00,$02,$00,$B7,$00,$FF,$42 
-;     .BYTE $04,$26,$00,$00,$F7,$00,$FF,$24,$00,$28,$04,$00,$7F,$00,$FF,$10 
-;     .BYTE $00,$03,$00,$00,$FF,$00,$FD,$00,$00,$18,$00,$00,$FE,$00,$9B,$03 
-;     .BYTE $00,$00,$00,$00,$67,$00,$EF,$44,$00,$0B,$00,$00,$FF,$00,$DF,$C0 
-;     .BYTE $00,$00,$00,$00,$3F,$00,$F9,$C5
+#IFNDEF ENBPD ; If we have neither option selected use original table
+ #IFNDEF CE158V2
+    .BYTE $00,$FF,$00,$FF,$00,$FF,$04,$FD,$90,$FD,$00,$FF,$00,$FF,$00,$FD 
+    .BYTE $82,$FF,$00,$FF,$00,$FF,$A0,$EF,$10,$6F,$00,$FF,$00,$FF,$00,$DF
+    .BYTE $04,$FF,$00,$FF,$00,$FF,$82,$FE,$82,$F7,$00,$FF,$00,$FF,$04,$FF
+    .BYTE $20,$FF,$00,$FF,$00,$FF,$00,$BF,$23,$C7,$00,$FF,$00,$FF,$00,$FB 
+    .BYTE $12,$EE,$00,$FF,$00,$FF,$28,$FB,$00,$AA,$00,$FF,$00,$FF,$00,$77 
+    .BYTE $A8,$9F,$00,$FF,$00,$FF,$40,$D9,$14,$FF,$00,$FF,$00,$FF,$60,$FF
+    .BYTE $00,$EF,$00,$FF,$00,$FF,$08,$BF,$E0,$FF,$00,$FF,$00,$FF,$20,$FF
+    .BYTE $04,$FF,$00,$FF,$00,$FF,$0C,$EF,$41,$EF,$00,$FF,$00,$FF,$42,$F7
+    .BYTE $4D,$FF,$00,$FF,$00,$FF,$24,$B7,$04,$FE,$00,$FF,$00,$FF,$00,$FF
+    .BYTE $A3,$7E,$00,$FF,$00,$FF,$80,$EE,$04,$D6,$00,$FF,$00,$FF,$98,$DF
+    .BYTE $81,$FB,$00,$FF,$00,$FF,$04,$43,$10,$7C,$00,$FF,$00,$FF,$0A,$FF
+    .BYTE $16,$E6,$00,$FF,$00,$FF,$06,$FB,$80,$BF,$00,$FF,$00,$FF,$2A,$27
+    .BYTE $44,$BF,$00,$FF,$00,$FF,$02,$DA,$32,$7F,$00,$FF,$00,$FF,$01,$7A
+    .BYTE $5C,$FF,$00,$FF,$00,$FF,$2C,$3E,$80,$83,$00,$FF,$00,$FF,$80,$FC
+    .BYTE $21,$EB,$00,$FF,$00,$FF,$05,$DF,$40,$4B,$00,$FF,$00,$FF,$00,$DF
+    .BYTE $11,$7F,$00,$FF,$00,$FF,$47,$EF,$14,$BF,$00,$FF,$00,$FF,$01,$5B
+    .BYTE $A4,$1B,$00,$FF,$00,$FF,$02,$FE,$C0,$EE,$00,$FF,$00,$FF,$01,$6F
+    .BYTE $18,$BB,$00,$FF,$00,$FF,$A8,$7E,$00,$67,$00,$FF,$00,$FF,$00       
+    .BYTE $EF,$00,$FE,$00,$FF,$00,$FF,$00,$BB,$08,$FF,$00,$FF,$00,$FF,$25 
+    .BYTE $EF,$08,$DE,$00,$FF,$00,$FF,$41,$FF,$80,$D7,$00,$FF,$00,$FF,$0E 
+    .BYTE $DB,$08,$FE,$00,$FF,$00,$FF,$00,$F3,$28,$7F,$00,$FF,$00,$FF,$51 
+    .BYTE $FF,$00,$BB,$00,$FF,$00,$FF,$90,$F7,$C1,$B7,$00,$FF,$00,$FF,$A1 
+    .BYTE $CF,$12,$E6,$00,$FF,$00,$FF,$40,$77,$00,$FF,$00,$FF,$00,$FF,$29 
+    .BYTE $BB,$10,$EB,$00,$FF,$00,$FF,$46,$F7,$08,$1B,$00,$FF,$00,$FF,$09
+    .BYTE $7E,$9C,$7A,$00,$FF,$00,$FF,$83,$BE,$92,$FF,$00,$FF,$00,$FF,$0A 
+    .BYTE $DF,$05,$F7,$00,$FF,$00,$FF,$A1,$B9,$46,$F9,$00,$FF,$00,$FF,$07 
+    .BYTE $DD,$11,$FF,$00,$FF,$00,$FF,$4B,$F7,$C1,$FF,$00,$FF,$00,$FF,$04 
+    .BYTE $25,$02,$FF,$00,$FF,$00,$FF,$A0,$FF,$41,$F7,$00,$FF,$00,$FF,$84 
+    .BYTE $FA,$4A,$9C,$00,$FF,$00,$FF,$48,$BF,$10,$AF,$00,$FF,$00,$FF,$06 
+    .BYTE $FF,$00,$EB,$00,$FF,$00,$FF,$02,$FE,$A1,$DB,$00,$FF,$00,$FF,$2A 
+    .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$F7,$80,$1F,$00,$FF,$00,$FF,$20 
+    .BYTE $FF,$18,$76,$00,$FF,$00,$FF,$05,$CD,$00,$9E,$00,$FF,$00,$FF,$01 
+    .BYTE $E9,$D0,$FF,$00,$FF,$00,$FF,$80,$FF,$28,$9D,$00,$FF,$00,$FF,$04 
+    .BYTE $EE,$C0,$DF,$00,$FF,$00,$FF,$2D,$F7,$5C,$1D,$00,$FF,$00,$FF,$01 
+    .BYTE $DA,$70,$E3,$00,$FF,$00,$FF,$42,$EF,$80,$AF,$00,$FF,$00,$FF,$00 
+    .BYTE $8B,$00,$FF,$00,$FF,$00,$FF,$00,$FD,$A9,$F7,$00,$FF,$00,$FF,$02 
+    .BYTE $BE,$8D,$BF,$00,$FF,$00,$FF,$09,$FF,$43,$FF,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$84,$FF,$00,$FF,$00,$FF,$40,$E6,$10,$D7,$00,$FF,$00,$FF,$70 
+    .BYTE $BD,$60,$4F,$00,$FF,$00,$FF,$0A,$33,$07,$FF,$00,$FF,$00,$FF,$09 
+    .BYTE $FA,$82,$FD,$00,$FF,$00,$FF,$00,$1F,$80,$FF,$00,$FF,$00,$FF,$12 
+    .BYTE $FD,$39,$B5,$00,$FF,$00,$FF,$00,$17,$BB,$FC,$00,$FF,$00,$FF,$09 
+    .BYTE $F7,$00,$CE,$00,$FF,$00,$FF,$EA,$69,$1C,$66,$00,$FF,$00,$FF,$00 
+    .BYTE $9E,$83,$CB,$00,$FF,$00,$FF,$A0,$F7,$01,$1F,$00,$FF,$00,$FF,$29 
+    .BYTE $FD,$84,$BF,$00,$FF,$00,$FF,$80,$F3,$84,$FA,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$84,$7B,$00,$FF,$00,$FF,$0C,$ED,$E0,$F7,$00,$FF,$00,$FF,$A2 
+    .BYTE $AF,$AC,$EB,$00,$FF,$00,$FF,$81,$F4,$8A,$4E,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$00,$FA,$00,$FF,$00,$FF,$03,$CE,$A0,$FF,$00,$FF,$00,$FF,$14 
+    .BYTE $FD,$C2,$7D,$00,$FF,$00,$FF,$04,$FD,$00,$FF,$00,$FF,$00,$FF,$C0 
+    .BYTE $FE,$04,$E4,$00,$FF,$00,$FF,$B8,$BF,$14,$EF,$00,$FF,$00,$FF,$40 
+    .BYTE $FF,$81,$FF,$00,$FF,$00,$FF,$08,$FE,$22,$BF,$00,$FF,$00,$FF,$04 
+    .BYTE $79,$A1,$F7,$00,$FF,$00,$FF,$00,$ED,$55,$F1,$00,$FF,$00,$FF,$C8 
+    .BYTE $BF,$88,$CD,$00,$FF,$00,$FF,$00,$FF,$04,$7F,$00,$FF,$00,$FF,$10 
+    .BYTE $FF,$04,$BB,$00,$FF,$00,$FF,$21,$87,$00,$FF,$00,$FF,$00,$FF,$00 
+    .BYTE $EF,$00,$FB,$00,$FF,$00,$FF,$80,$F7,$28,$EB,$00,$FF,$00,$FF,$20 
+    .BYTE $3F,$18,$B3,$00,$FF,$00,$FF,$48,$67,$08,$FF,$00,$FF,$00,$FF,$0E 
+    .BYTE $D9,$8B,$7D,$00,$FF,$00,$FF,$08,$F7,$44,$FE,$00,$FF,$00,$FF,$18 
+    .BYTE $8C,$8C,$F5,$00,$FF,$00,$FF,$90,$DD,$80,$F1,$00,$FF,$00,$FF,$41 
+    .BYTE $FF,$20,$F7,$00,$FF,$00,$FF,$00,$EB,$C2,$CF,$00,$FF,$00,$FF,$00 
+    .BYTE $B7,$03,$CF,$00,$FF,$00,$FF,$48,$FD,$80,$FF,$00,$FF,$00,$FF,$20 
+    .BYTE $FD,$68,$E7,$00,$FF,$00,$FF,$03,$77,$46,$D7,$00,$FF,$00,$FF,$07 
+    .BYTE $ED,$30,$F8,$00,$FF,$00,$FF,$18,$EE,$04,$3F,$00,$FF,$00,$FF,$24 
+    .BYTE $E6,$01,$F5,$00,$FF,$00,$FF,$20,$7D,$01,$FD,$00,$FF,$00,$FF,$00 
+    .BYTE $E3,$00,$F7,$00,$FF,$00,$FF,$10,$FF,$41,$5F,$00,$FF,$00,$FF,$09 
+    .BYTE $9B,$1E,$66,$00,$FF,$00,$FF,$02,$C7,$02,$13,$00,$FF,$00,$FF,$02 
+    .BYTE $FE,$80,$67,$00,$FF,$00,$FF,$11,$1B,$C0,$FC,$00,$FF,$00,$FF,$08 
+    .BYTE $BE,$20,$E6,$00,$FF,$00,$FF,$00,$FF,$21,$F7,$00,$FF,$00,$FF,$28 
+    .BYTE $FF,$14,$BB,$00,$FF,$00,$FF,$40,$FF,$13,$ED,$00,$FF,$00,$FF,$80 
+    .BYTE $C6,$60,$FF,$00,$FF,$00,$FF,$01,$FE,$16,$FF,$00,$FF,$00,$FF,$00 
+    .BYTE $7F,$40,$F8,$00,$FF,$00,$FF,$01,$BA,$00,$DF,$00,$FF,$00,$FF,$04 
+    .BYTE $FE,$C9,$6B,$00,$FF,$00,$FF,$A0,$EF,$09,$9E,$00,$FF,$00,$FF,$C0 
+    .BYTE $FF,$0A,$FF,$00,$FF,$00,$FF,$08,$5B,$02,$3F,$00,$FF,$00,$FF,$8C 
+    .BYTE $FD,$20,$75,$00,$FF,$00,$FF,$0E,$F7,$50,$FF,$00,$FF,$00,$FF,$74 
+    .BYTE $F5,$10,$66,$00,$FF,$00,$FF,$80,$B6,$48,$DF,$00,$FF,$00,$FF,$30 
+    .BYTE $FD,$48,$BF,$00,$FF,$00,$FF,$14,$FA,$02,$86,$00,$FF,$00,$FF,$05 
+    .BYTE $7B,$00,$5F,$00,$FF,$00,$FF,$A4,$FF,$20,$FB,$00,$FF,$00,$FF,$61 
+    .BYTE $FF,$95,$76,$00,$FF,$00,$FF,$00,$3F,$06,$FA,$00,$FF,$00,$FF,$04 
+    .BYTE $BF,$00,$F7,$00,$FF,$00,$FF,$40,$FF,$92,$F7,$00,$FF,$00,$FF,$04 
+    .BYTE $EF,$80,$FD,$00,$FF,$00,$FF,$02,$FD,$05,$FE,$00,$FF,$00,$FF,$08 
+    .BYTE $FF,$80,$76,$00,$FF,$00,$FF,$05,$F7,$30,$2F,$00,$FF,$00,$FF,$08 
+    .BYTE $FF,$01,$EE,$00,$FF,$00,$FF,$52,$FF,$02,$C7,$00,$FF,$00,$FF,$91 
+    .BYTE $E7,$00,$FD,$00,$FF,$00,$FF,$44,$77,$40,$FF,$00,$FF,$00,$FF,$00 
+    .BYTE $FD,$B8,$FF,$00,$FF,$00,$FF,$00,$DF,$5A,$FF,$00,$FF,$00,$FF,$84 
+    .BYTE $FA,$43,$EF,$00,$FF,$00,$FF,$94,$96,$00,$FE,$00,$FF,$00,$FF,$50 
+    .BYTE $FB,$04,$FF,$00,$FF,$00,$FF,$26,$BF,$C9,$FC,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$80,$BF,$00,$FF,$00,$FF,$80,$FF,$A0,$BB,$00,$FF,$00,$FF,$0C 
+    .BYTE $B9,$04,$FB,$00,$FF,$00,$FF,$05,$B9,$44,$EF,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$00,$BE,$41,$BB,$00,$FF,$00,$FF,$10 
+    .BYTE $FF,$00,$7D,$00,$FF,$00,$FF,$14,$EF,$AA,$7F,$00,$FF,$00,$FF,$C0 
+    .BYTE $66,$0C,$F2,$00,$FF,$00,$FF,$40,$FF,$28,$3D,$00,$FF,$00,$FF,$40 
+    .BYTE $FD,$48,$FF,$00,$FF,$00,$FF,$47,$F7,$08,$FF,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$2A,$FE,$00,$FF,$00,$FF,$41,$A7,$15,$7E,$00,$FF,$00,$FF,$62 
+    .BYTE $BF,$C0,$FD,$00,$FF,$00,$FF,$00,$FD,$26,$5F,$00,$FF,$00,$FF,$00 
+    .BYTE $FE,$80,$FC,$00,$FF,$00,$FF,$28,$BF,$08,$FF,$00,$FF,$00,$FF,$46 
+    .BYTE $1E,$20,$CB,$00,$FF,$00,$FF,$22,$EF,$20,$B5,$00,$FF,$00,$FF,$03 
+    .BYTE $E3,$08,$1E,$00,$FF,$00,$FF,$0A,$FB,$07,$FE,$00,$FF,$00,$FF,$25 
+    .BYTE $F7,$07,$DF,$00,$FF,$00,$FF,$04,$6F,$02,$FE,$00,$FF,$00,$FF,$18 
+    .BYTE $FF,$CC,$BF,$00,$FF,$00,$FF,$23,$7D,$18,$FF,$00,$FF,$00,$FF,$18 
+    .BYTE $9E,$02,$3F,$00,$FF,$00,$FF,$C0,$FD,$50,$7A,$00,$FF,$00,$FF,$00 
+    .BYTE $BD,$18,$FF,$00,$FF,$00,$FF,$08,$FD,$04,$FE,$00,$FF,$00,$FF,$20 
+    .BYTE $DF,$44,$FE,$00,$FF,$00,$FF,$02,$FF,$02,$FD,$00,$FF,$00,$FF,$00 
+    .BYTE $FF,$00,$DD,$00,$FF,$00,$FF,$9C,$BF,$4C,$5F,$00,$FF,$00,$FF,$00 
+    .BYTE $EF,$18,$FB,$00,$FF,$00,$FF,$A0,$53,$A0,$DF,$00,$FF,$00,$FF,$34 
+    .BYTE $77,$80,$F3,$00,$FF,$00,$FF,$04,$EF,$13,$FD,$00,$FF,$00,$FF,$05 
+    .BYTE $BF,$82,$FE,$00,$FF,$00,$FF,$00,$7E,$87,$00,$00,$FF,$00,$DD,$4B 
+    .BYTE $00,$00,$00,$00,$BF,$00,$7F,$81,$00,$11,$80,$00,$FF,$00,$EF,$00 
+    .BYTE $40,$21,$04,$00,$FF,$00,$FF,$0E,$00,$21,$00,$00,$FF,$00,$FF,$09 
+    .BYTE $00,$80,$00,$00,$F7,$00,$DF,$18,$00,$41,$00,$00,$FF,$00,$F7,$25 
+    .BYTE $00,$31,$00,$00,$BB,$00,$DF,$82,$00,$A8,$00,$00,$FF,$00,$FF,$01 
+    .BYTE $00,$10,$00,$00,$BF,$00,$FF,$40,$00,$24,$10,$00,$FF,$00,$6F,$84 
+    .BYTE $00,$80,$00,$00,$7F,$00,$EF,$C4,$00,$18,$00,$00,$FF,$00,$FB,$28 
+    .BYTE $00,$40,$00,$00,$FF,$00,$B7,$24,$00,$10,$00,$00,$D7,$00,$FF,$B0
+    .BYTE $00,$26,$00,$00,$EF,$00,$3F,$00,$00,$10,$00,$00,$FF,$00,$FF,$10 
+    .BYTE $00,$18,$00,$00,$FF,$00,$A3,$04,$00,$06,$08,$00,$FF,$00,$FF,$80 
+    .BYTE $00,$80,$00,$00,$E5,$00,$7B,$20,$00,$82,$00,$00,$7F,$00,$7F,$00 
+    .BYTE $00,$04,$00,$00,$FF,$00,$FF,$80,$00,$C0,$00,$00,$A7,$00,$FF,$30 
+    .BYTE $00,$2A,$02,$00,$FF,$00,$7F,$90,$00,$00,$02,$00,$B7,$00,$FF,$42 
+    .BYTE $04,$26,$00,$00,$F7,$00,$FF,$24,$00,$28,$04,$00,$7F,$00,$FF,$10 
+    .BYTE $00,$03,$00,$00,$FF,$00,$FD,$00,$00,$18,$00,$00,$FE,$00,$9B,$03 
+    .BYTE $00,$00,$00,$00,$67,$00,$EF,$44,$00,$0B,$00,$00,$FF,$00,$DF,$C0 
+    .BYTE $00,$00,$00,$00,$3F,$00,$F9,$C5
+ #ENDIF
+#ENDIF
 
-
-
+#IFDEF CE158V2
 .FILL ($8FFF - $),$FF
 .ORG $8FFF
+#ENDIF
 ;------------------------------------------------------------------------------------------------------------
 ; INPUT - Jumped to from 8307 via High Bank
 ; Arguments: X-REG address of function, Y-REG Token
@@ -4313,7 +4317,7 @@ SUB_9B32: ; called from 9A95
     SBC	    (OUT_BUF + $47)                 ; A = A - (pp)
     BCS     BRANCH_9B58                     ;
 
-SUB_9B41: ; called from  9209, 9239
+SUB_9B41: ; called from  9209, 9239         ; Sends trailing /LF for LPT?
     LDA	    (OUT_BUF + $49)                 ;
     SJP     (OUT_BUF + $4A)                 ; Great, this is calling a sub poked into OUT_BUF which is manipualted everywhere!
     BCS     BRANCH_9B57                     ;

@@ -16,7 +16,7 @@
 
 #INCLUDE    CE-158_ROM_LOW.exp              ; Export table from low bank
 
-
+;#DEFINE BUGFIX                              ; Bug fixes in original ROM
 ;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 #DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
@@ -1139,28 +1139,30 @@ FILLER_83A4:
 
 ;-------------------------------------------------------------------------------------------------------------
 ; CE158_IOREG_INIT - Used in PORTS_UPDATE:BRANCH_8A93 
-; Copied to D00F-D008 (Reverse order) to inialize CE-158 lh5801 I/O registers
+; Copied to D00F-D007 (Reverse order) to inialize CE-158 lh5801 I/O registers
 CE158_IOREG_INIT: ; 83B0 ORG, 83A4 BPD
 #IFNDEF CE158V2
-    .BYTE	$FF,$FF,$7F,$03,$00,$00,$00,$A0  
+    ;.BYTE	$FF,$FF,$7F,$03,$00,$00,$00,$A0
+    .BYTE	$FF,$FF,$7F,$03,$00,$00,$00,$A0,$00 
 #ELSE
-    .BYTE   $08,$03,$FF,$FF,$FF,$FF,$FF,$FF
+    ;.BYTE   $08,$03,$FF,$FF,$FF,$FF,$FF,$FF
+    .BYTE   $08,$03,$FF,$FF,$FF,$FF,$FF,$FF,$FF
 #ENDIF
 
 
 
 ;-------------------------------------------------------------------------------------------------------------
-; CE158_IO_REG_INIT2 - Used in SUB_9F75
-; Copied to (reverse order) 7852-Console 1 (//), 7853-Undefined, 7854-Undefined, 7855-(MAIN_ENTRY), 7856-ZONE
-CE158_IO_REG_INIT2: ; 83B8 ORG, 83AC BPD
-    .BYTE	$00,$0D,$18,$00,$00 
-
+; CE158_IOREG_INI2 - Used in SUB_9F75
+; Copied to (reverse order) 7856->7851
+CE158_IOREG_INI2: ; 83B8 ORG, 83AC BPD
+    ;.BYTE	$00,$0D,$18,$00,$00,$4F,$00,$7F
+    .BYTE	$0D,$18,$00,$00,$4F,$00,$7F
 
 
 ;-------------------------------------------------------------------------------------------------------------
 ; UNKNOWN_83BD -  Not sure where used
-UNKNOWN_83BD: ; 83BD ORG, 83B1 BPD
-    .BYTE   $4F,$00,$7F 
+; UNKNOWN_83BD: ; 83BD ORG, 83B1 BPD
+;     .BYTE   $4F,$00,$7F 
 
 
 
@@ -1872,11 +1874,13 @@ CE158_48_EXT:
     STA     #(CE158_PRT_A)                  ; (4) Write A back to PortA
     RET                                     ; (1) [12]
 #ELSE
+ #IFDEF ENBPD
 SETDEV_EXT0:
     AND	    (SETDEV_REG),$E0                ; (4) (SETDEV_REG) = (SETDEV_REG) & E0, clears bits 4-0
     AND     (CE158_REG_79DD),$00            ; (4)
     RTN                                     ; (1) [9]
     NOP \ NOP \ NOP
+ #ENDIF
 #ENDIF
 
 
@@ -2574,8 +2578,8 @@ BRANCH_8A58: ; Branched to from 8A54        ; Bit6=1=CE-150, Bit6=0=/CE-150, Bit
     BCH     BRANCH_8AA0                     ; Unconditional fwd branch
 
 
-.FILL ($8A7B - $),$FF
-.ORG $8A7B
+; .FILL ($8A7B - $),$FF
+; .ORG $8A7B
 BRANCH_8A7B:  ; Branched to from 8A60       ; UH=D0, UL=Command code
     ORI	    (CE158_REG_79DE),$10            ; Set bit 4
     LDI	    A,$FE                           ; FE used by BZR+ branch
@@ -2598,18 +2602,23 @@ BRANCH_8A8A: ; Branched to from 8A83
 BRANCH_8A93:  ; Branched to from 8A99       ; Sets default state of #(D00F~D008) copied backwards
     LIN	    X                               ; A = (X) &then X = X + 1. X=83B1
     STA     #(U)                            ; (U) = A. U = D00F
-    DEC	    UL                              ; Copies 8 bytes from X = 83B0-83B7 to U = D00F-D008   
+    DEC	    UL                              ; Copies 8 bytes from X = 83B0-83B7 to U = D00F-D008  
+#IFNDEF BUGFIX 
     CPI	    UL,$07                          ;  Inits CE-158 lh5811 IO registers. Bytes: FF FF 7F 03 00 00 00 A0
-    BCS     BRANCH_8A93                     ; If UL > 07 branch back, = 7 we are done
+#ELSE    
+    CPI	    UL,$08                          ;  Inits CE-158 lh5811 IO registers. Bytes: FF FF 7F 03 00 00 00 A0
+#ENDIF
+    BCS     BRANCH_8A93                     ; If UL > 07 branch back, = 7 we are done (On exit X=83B9, U=D007)
 #ELSE
 ;Replacement init for TI part
     ORI	    #(CE158_UART_SCR0),$FF          ; CE-158 (Scratch register)
     SJP     CONFIG_UARTS                    ; Configure the UARTS
+    LDI	    XL,LB(CE158_IOREG_INI2)         ; If stock CE-158, X would be 83D8 before taking branch to SUB_9F75
+    LDI	    XH,HB(CE158_IOREG_INI2)         ; Set X = 83B9 = CE158_IOREG_INI2 for CE-158X instead
 ; <************
 #ENDIF
-
-   LDI	    UL,LB($D056)                    ; U = D056, X = 83B8 (83B8 value not used yet) 
-   SJP	    SUB_9F75                        ; Initializes some CE-158 registers
+    LDI	    UL,LB($D056)                    ; U = D056, X = 83B9 (83B8 value not used yet) 
+    SJP	    SUB_9F75                        ; Initializes some CE-158 registers
 
 BRANCH_8AA0: ; Branched to from 8A79
     SJP	    SET_DTR_RTS                     ; Sets DTR/RTS based on OUTSTAT_REG
@@ -2633,7 +2642,8 @@ SET_DEFAULT_BAUD: ; Jumped to from to from 8910
     BCH     BRANCH_8B3A                     ; Branch fwd, set BAUD rate, then return
 
 
-
+.FILL ($8AAD - $),$FF
+.ORG $8AAD
 ;.ORG $8AAD
 ;--------------------------------------------------------------------------------------------------
 ; PORTS_UPDATE_ALT_E2 - Called from SUB_8D04:8EDA
@@ -2954,14 +2964,18 @@ BRANCH_8BAC: ; Branched to from 8B87        ; Must calculate index into  TBL_185
     LDA	    (X)                             ; A = (X)
     BII	    (STK_PTR_GSB_FOR),$08           ; Test Bit3
     BZR     BRANCH_8BA7                     ; If Bit3 in (STK_PTR_GSB_FOR) was set
-    ORI	    A,$60                           ; A = A | 60
+#IFNDEF BUGFIX
+    ORI	    A,$60                           ; A = A | 60 'E7BUG'
+#ELSE
+    ORI	    A,$40                           ; A = A | 60 CHANGED FROM $60 to $40 'E7BUG'
+#ENDIF
     BCH     BRANCH_8BA7                     ; Unconditional back branch
 
 BRANCH_8BBB: ; Branched to from 8B7D
     LDA	    (SETCOM_REG)                    ; A = (SETCOM_REG)
     ANI	    A,$1F                           ; A = A & 1F. Mask off bits 7-5, Baud
 
-    BII	    (STK_PTR_GSB_FOR),$D            ; FLAGS = (STK_PTR_GSB_FOR) & 0D
+    BII	    (STK_PTR_GSB_FOR),$0D           ; FLAGS = (STK_PTR_GSB_FOR) & 0D
     BZS     BRANCH_8BC8                     ; If all bits 0,2,3 are clear branch fwd
     ORI	    A,$40                           ; A = A | 40. Set bit 3
 
@@ -2974,7 +2988,7 @@ BRANCH_8BC8: ; Branched to from 8BC4
     LDA	    (X)                             ; A = (X)
     BII	    (STK_PTR_GSB_FOR),$08           ; Test Bit3
     BZR     BRANCH_8BA7                     ; If Bit3 in (STK_PTR_GSB_FOR) was set
-;   ORI	    A,$40                           ; A = A | 60 CHANGED FROM $60 to $40
+;   ORI	    A,$40                           ; A = A | 60 CHANGED FROM $60 to $40 'E7BUG'
 ;	LDI     A,$03                           ; Set Default 8,N,1
     BCH     BRANCH_8BA7                     ; Unconditional back branch
 
@@ -6975,7 +6989,7 @@ UNKNOWN_9F6E:
 
 ;------------------------------------------------------------------------------------------------------------
 ; SUB_9F75 - Called from 8AD9
-; Arguments: U = D056, X = 83B8 = CE158_IO_REG_INIT2 00 0D 18 00 00 
+; Arguments: U = D056, X = 83B9 = CE158_IOREG_INI2 $0D,$18,$00,$00,$4F,$00,$7F
 ; Does some initialization of the CE-158 registers
 ; Arguments: 
 ; Output: 
@@ -6985,22 +6999,33 @@ SUB_9F75:
     BZR     BRANCH_9F8E                     ; If Bit 0 was set, skip ahead
     LDI	    UH,HB(ZONE_REG)                 ; U = 7856 = ZONE_REG. 
     ANI	    (U),$60                         ; Keep Bits 6-5
-    LIN	     X                              ; A = (83B8) = 0, then X=83B9
+    LIN	     X                              ; A = (83B9) = 0D, then X=83BA
     ORA	    (U)                             ; A = A | (ZONE_REG) 
     BCH     BRANCH_9F84                     ; Branch fwd unconditional
 
 
 ; This section indexs through ; X 83B8 -> 83BC, U 7856 -> 7851. Inits:
-; 7852-Console 1 (//), 7853-Undefined, 7854-Undefined, 7855-(MAIN_ENTRY), 7856-ZONE
+; 7852-CONSOLE2 (//), 7853-Undefined, 7854-Undefined, 7855-CRLF_REG, 7856-ZONE_REG
+; PC-2/CE-158  read after boot: 7851:00, 7852:4F, 7853:00, 7854:00, 7855:18, 7856:0D
+; SIM/CE-158X  read after boot: 7851:XX, 7852:00, 7853:00, 7854:00, 7855:00, 7856:00
+; SIM/CE-158X  fix  after boot: 7851:00, 7852:4F, 7853:00, 7854:00, 7855:18, 7856:0D
+; COM                                            LPT (OPN"LPRT")
+; CONSOLE 0,0   &7855=&10, 0b0001 0000, CR    -- CONSOLE 0,0   &7855=&00, 0b0000 0000, CR
+; CONSOLE 0,1   &7855=&11, 0b0001 0001 ,LF    -- CONSOLE 0,1   &7855=&10, 0b0001 0000, LF
+; CONSOLE 0,0,0 &7855=&12, 0b0001 0010, CR CR -- CONSOLE 0,0,0 &7855=&20, 0b0010 0000, CR CR
+; CONSOLE 0,0,1 &7855=&14, 0b0001 0100, CR LF -- CONSOLE 0,0,1 &7855=&40, 0b0100 0000, CR LF
+; CONSOLE 0,1,0 &7855=&13, 0b0001 0011, LF CR -- CONSOLE 0,1,0 &7855=&30, 0b0011 0000, LF CR
+; CONSOLE 0,1,1 &7855=&15, 0b0001 0101 ,LF LF -- CONSOLE 0,1,1 &7855=&50, 0b0101 0000 ,LF LF
+; CONSOLE 0 $7851=0, CONSOLE 16 &7851=15, CONSOLE 128 &7851=127
 BRANCH_9F83:                                            
     LIN	    X                               ; A = (83B9) = 0D then X=83BA
 
 BRANCH_9F84: ; X = 83B9 U = 7856 on first entering
     STA	    (U)                             ; U = X read above
     DEC	    UL                              ; DEC pointer.
-    CPI	    UL,$51                          ; 
+    CPI	    UL,$51                          ; U=7851 is end of copy (UL >= 51)
     BCS     BRANCH_9F83                     ; If UL > 51 branch back
-    ANI	    (U),$0F                         ; (U) = (U) & 0F, here U = 7851 = Console 1 (RS232C)
+    ANI	    (U),$0F                         ; (U) = (U) & 0F, here U=7850, X=83BF
     ORI	    (U),$03                         ; (U) = (U) | 03
 
 BRANCH_9F8E: ; X = 83B8 U = D056 on entering
