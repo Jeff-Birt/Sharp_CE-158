@@ -462,13 +462,17 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Arguments: None
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
-RXCOM: 
+RXCOM: ; ***!!!
 #IFDEF ENBPD
     BII     (CE158_REG_79DD),$20            ; Bit6 set = U1
 	BZS     CONTRX                          ; Intecept the RXCOM routine 
 	JMP     U1RXCOM                         ;  and redirect to UART1 if enabled
 CONTRX:
 #ENDIF
+
+#IFDEF CE158V2
+    CALL    SET_RTS                         ; Sets RTS if it shoudl be set
+#ENDIF  
 
 #IFNDEF CE158V2
 ; ************ Modified >
@@ -732,7 +736,25 @@ NOCHAR:
 
 
 
-ADDRCHK($82B8,"COM_TBL_INIT")
+;ADDRCHK($82B8,"COM_TBL_INIT")
+;***!!!
+SET_RTS:
+#IFDEF CE158V2
+    PSH     A
+    LDA 	(OUTSTAT_REG)	                ; Get user settings for handshaking lines
+    ANI 	A,~$03 			                ; mask off all but RTS
+    EAI     $03                             ; invert
+    ;ORA	    #(CE158_PRT_A)		            ; set bit on UART if set in OUTSTAT_REG (orig CE158)
+ 	ANI #(CE158_UART_MCR0),$FC              ; Clear the bits
+ 
+ 	ORA #(CE158_UART_MCR0)                  ; OR in correct settings
+ 	STA #(CE158_UART_MCR0)                  ; Store to register
+ 	POP	    A                               ; Get original A back
+
+    RTN
+#ENDIF  
+
+
 .FILL ($82B8 - $),$FF
 .ORG $82B8
 ;------------------------------------------------------------------------------------------------------------
@@ -3365,7 +3387,7 @@ BRANCH_8D09: ; Branched to from 8CF7
 
 SUB_8D04_ALT_E1: ; Called from 8FC1:8EE1
     ANI	    #(PC1500_MSK_REG),$FC           ; PC-1500 - Clear mask for IRQ and PB7 (ON button)
-    SJP	    SET_DTR_RTS                        ; Sets DTR/RTS based on OUTSTAT_REG
+    SJP	    SET_DTR_RTS                     ; Sets DTR/RTS based on OUTSTAT_REG
     PSH	    A                               ;
     LDI	    A,$9A                           ;
     STA	    (CE158_REG_79FA)                ;

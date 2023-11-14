@@ -427,7 +427,7 @@ BRANCH_81E3: ; Branched to from 81CA, 81DB
 ; Arguments: None
 ; Outputs: REC = Success, A = Failure type or UART data read
 ; RegMod: A
-RXCOM: ; 81E6
+RXCOM: ; 81E6 ***!!!
 
 #IFDEF ENBPD
     JMP     RXTYPE                            ; Figures out if RX should be from COM0, COM1, or LPT
@@ -442,6 +442,10 @@ RXCOM: ; 81E6
 	; JMP     U1RXCOM                         ; (3) and redirect to UART1 if enabled
 CONTRX:
 #ENDIF
+
+#IFDEF CE158V2
+    CALL    SET_RTS                         ; Sets RTS if it shoudl be set
+#ENDIF  
 
 #IFNDEF CE158V2
 ; ************ Modified >
@@ -931,7 +935,6 @@ OUTSTAT:
 
 BRANCH_8356: ; branched to from 8334, 8336
     VEJ     (E0)                            ; Indicates if UH is not "00" error message
-
 
 
 .FILL ($8357 - $),$FF
@@ -4282,7 +4285,12 @@ SUB_9B1C:
                                             ; What is pointing to next spot in IN_BUF?
     REC                                     ;
     BZR     BRANCH_9B2F                     ;
+#IFDEF CE158V2
+    CALL    CLEAR_RTS                       ; ***!!! drop RTS after each /CR for line processing time
+    NOP
+#ELSE 
     BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
+#ENDIF  
     BZS     BRANCH_9B2F                     ;
     SEC                                     ;
     LDI	    UH,$3E                          ;
@@ -5106,6 +5114,32 @@ BLINK_SKIP:
     RTN                                     ; 
 
 
+;***!!!
+CLEAR_RTS:
+#IFDEF CE158V2
+    ;ANI	    #(CE158_PRT_A),~$02		        ; Clear RTS on UART to give line processing time
+    ORI     #(CE158_UART_MCR0),$02          ; Clear RTS (inverted in TI part)
+    BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
+    RTN                                     ;
+#ENDIF
+
+
+;***!!!
+SET_RTS:
+#IFDEF CE158V2
+    PSH     A
+    LDA 	(OUTSTAT_REG)	                ; Get user settings for handshaking lines
+    ANI 	A,~$03 			                ; mask off all but RTS
+    EAI     $03                             ; invert
+    ;ORA	    #(CE158_PRT_A)		            ; set bit on UART if set in OUTSTAT_REG (orig CE158)
+ 	ANI     #(CE158_UART_MCR0),$FC          ; Clear the bits
+ 
+ 	ORA     #(CE158_UART_MCR0)              ; OR in correct settings
+ 	STA     #(CE158_UART_MCR0)              ; Store to register
+ 	POP	    A                               ; Get original A back
+
+    RTN
+#ENDIF  
 
 TBL_BUSY: ; Delay after N bytes counts for various baud rates
 #IFDEF CE158V2   
