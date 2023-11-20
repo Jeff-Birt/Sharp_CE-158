@@ -20,6 +20,7 @@
 ;#DEFINE CE158_48                            ; Make top baud rate 4800bps, eliminate 50bps
 #DEFINE CE158V2                             ; New hardware CE-158XBuild for new hardware CE-158X
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
+#DEFINE HANDSHAKE                           ;
 
 
 ;------------------------------------------------------------------------------------------------------------
@@ -57,9 +58,8 @@ BPSBP EQU $F9                               ; 2400bps for Backpack w/o CE158_48
 ; Symbols to export to CE-158_ROM_HIGH.exp to be imported into low bank
 .EXPORT HB_JMP_FRM_LB, HB_CFG_URT_BD, HB_CFG_URT_LPT, HB_SETDEV
 
+
 .ORG $8000
-
-
 ;------------------------------------------------------------------------------------------------------------
 ; BASIC Table 8000 - (Second table at 8800)
 ; Basically a copy of the low bank table. Special equates below to get it to build same as low bank
@@ -470,8 +470,8 @@ RXCOM: ; ***!!!
 CONTRX:
 #ENDIF
 
-#IFDEF CE158V2
-    CALL    SET_RTS                         ; Sets RTS if it shoudl be set
+#IFDEF HANDSHAKE
+    CALL    SET_RTS                         ; Sets RTS if it should be set
 #ENDIF  
 
 #IFNDEF CE158V2
@@ -549,9 +549,15 @@ BRANCH_8230: ; Branched to from 81F0
     PSH     A
     LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register  
 #ELSE
+ #IFDEF HANDSHAKE
+    JMP     CLEAR_RTS                       ; ***!!! Reads byte into A and does HS test
+    ;NOP
+    ;NOP
+ #ELSE
     LDA     #(CE158_UART_RBR0)              ; Read data byte
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
+ #ENDIF
 
 BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     LDI	    A,$00                           ; Failure type
@@ -561,6 +567,7 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
 BRANCH_8230: ; Branched to from 81F0
 	SJP     DSRCTSFIX                       ; A = #(PORTA_IO) & 3C (Bits 5-2), failure type?
 	PSH     A                               ; 
+    NOP
     LDA     #(CE158_UART_RBR0)              ; Read data byte
 ; <************ 
 #ENDIF
@@ -735,26 +742,33 @@ NOCHAR:
 #ENDIF
 
 
+;***!!!
+CLEAR_RTS:
+#IFDEF HANDSHAKE
+    LDA     #(CE158_UART_RBR0)              ; Read data byte 
+    CPI	    A,$0D                           ; Detects EOL for CLOAD handshaking
+    BZR     CLEAR_RTS_SKIP                  ;
+    ANI     #(CE158_UART_MCR0),~$02         ; Clear RTS, TI part is inverted
+    
+CLEAR_RTS_SKIP:
+    REC                                     ; REC = Success
+    RTN                                     ;
+#ENDIF
 
-;ADDRCHK($82B8,"COM_TBL_INIT")
+
 ;***!!!
 SET_RTS:
-#IFDEF CE158V2
-    PSH     A
-    LDA 	(OUTSTAT_REG)	                ; Get user settings for handshaking lines
-    ANI 	A,~$03 			                ; mask off all but RTS
-    EAI     $03                             ; invert
-    ;ORA	    #(CE158_PRT_A)		            ; set bit on UART if set in OUTSTAT_REG (orig CE158)
- 	ANI #(CE158_UART_MCR0),$FC              ; Clear the bits
- 
- 	ORA #(CE158_UART_MCR0)                  ; OR in correct settings
- 	STA #(CE158_UART_MCR0)                  ; Store to register
- 	POP	    A                               ; Get original A back
+#IFDEF HANDSHAKE
+    BII 	(OUTSTAT_REG),$02	            ; Get user settings for handshaking lines
+    BZS     SETRTS_SKIP                     ;
+    ORI     #(CE158_UART_MCR0),$02          ; Clear RTS (inverted in TI part)
 
+SETRTS_SKIP:
     RTN
 #ENDIF  
 
 
+ADDRCHK($82B8,"COM_TBL_INIT")
 .FILL ($82B8 - $),$FF
 .ORG $82B8
 ;------------------------------------------------------------------------------------------------------------
@@ -1106,13 +1120,13 @@ SEPARATOR_8373:
 ; Fix CTS/DSR/LBI so they match the existing code base
 #IFDEF CE158V2
 DSRCTSFIX:
-    SHR
-    ANI    A,$30                            ; Keep the LBI and DSR bits
-    BHR    DSR_CLR_RXCOM                    ; Check Bit 4. If not set skip otherwise set a CTS
-	ORI    A,$04
+    SHR                                     ;
+    ANI     A,$30                           ; Keep the LBI and DSR bits
+    BHR     DSR_CLR_RXCOM                   ; Check Bit 4. If not set skip otherwise set a CTS
+	ORI     A,$04                           ;
 
 DSR_CLR_RXCOM:
-	RTN
+	RTN                                     ;
 ; <************ 
 #ENDIF
 
@@ -2666,7 +2680,6 @@ SET_DEFAULT_BAUD: ; Jumped to from to from 8910
 
 .FILL ($8AAD - $),$FF
 .ORG $8AAD
-;.ORG $8AAD
 ;--------------------------------------------------------------------------------------------------
 ; PORTS_UPDATE_ALT_E2 - Called from SUB_8D04:8EDA
 ; Not sure what this does. Searches through TBL_BAUD at $83C0

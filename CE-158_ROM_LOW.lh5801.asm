@@ -19,7 +19,7 @@
 ;#DEFINE CE158_48                            ; Origninal Hardware: T baud rate 4800 BAUD
 #DEFINE CE158V2                             ; New hardware CE-158X
 #DEFINE ENBPD                               ; Include BPD/BPD$ commands
-
+#DEFINE HANDSHAKE                           ;
 
 ;------------------------------------------------------------------------------------------------------------
 ; Define default BAUD rate based on configuration
@@ -443,8 +443,11 @@ RXCOM: ; 81E6 ***!!!
 CONTRX:
 #ENDIF
 
-#IFDEF CE158V2
-    CALL    SET_RTS                         ; Sets RTS if it shoudl be set
+#IFDEF HANDSHAKE
+    CALL    SET_RTS                         ; Sets RTS if it should be set
+    NOP
+    NOP
+    NOP
 #ENDIF  
 
 #IFNDEF CE158V2
@@ -519,14 +522,19 @@ BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     RTN                                     ; Carry flag indicates return state
 
 BRANCH_8230: ; Branched to from 81F0
-    PSH   A
-    LDA     #(CE158_UART_DATAR)            ; A = Data read from UART (ME1), clear Rx register  
+    PSH     A
+    LDA     #(CE158_UART_DATAR)             ; A = Data read from UART (ME1), clear Rx register  
 
 #ELSE
-
-    LDA     #(CE158_UART_RBR0)              ; Read data byte
+ #IFDEF HANDSHAKE
+    JMP     CLEAR_RTS                       ; ***!!! Reads byte into A and does HS test
+    NOP
+    NOP
+ #ELSE
+    LDA     #(CE158_UART_RBR0)              ; Read data byte 
     REC                                     ; REC = Success
     RTN                                     ; Carry flag indicates return state
+ #ENDIF
 
 BRANCH_822C: ; Branched to bfrom 8185, 81FF ; OE Error
     LDI	    A,$00                           ; Failure type
@@ -4285,12 +4293,12 @@ SUB_9B1C:
                                             ; What is pointing to next spot in IN_BUF?
     REC                                     ;
     BZR     BRANCH_9B2F                     ;
-#IFDEF CE158V2
-    CALL    CLEAR_RTS                       ; ***!!! drop RTS after each /CR for line processing time
-    NOP
-#ELSE 
+; #IFDEF HANDSHAKE
+;     CALL    CLEAR_RTS                       ; ***!!! drop RTS after each /CR for line processing time
+;     NOP
+; #ELSE 
     BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
-#ENDIF  
+;#ENDIF  
     BZS     BRANCH_9B2F                     ;
     SEC                                     ;
     LDI	    UH,$3E                          ;
@@ -5116,28 +5124,26 @@ BLINK_SKIP:
 
 ;***!!!
 CLEAR_RTS:
-#IFDEF CE158V2
-    ;ANI	    #(CE158_PRT_A),~$02		        ; Clear RTS on UART to give line processing time
-    ORI     #(CE158_UART_MCR0),$02          ; Clear RTS (inverted in TI part)
-    BII	    (OUT_BUF + $41),$04             ; Drops through here for EOL could blink here?
+#IFDEF HANDSHAKE
+    LDA     #(CE158_UART_RBR0)              ; Read data byte 
+    CPI	    A,$0D                           ; Detects EOL for CLOAD handshaking
+    BZR     CLEARRTS_SKIP                  ;
+    ANI     #(CE158_UART_MCR0),~$02         ; Clear RTS, TI part is inverted
+    
+CLEARRTS_SKIP:
+    REC                                     ; REC = Success
     RTN                                     ;
 #ENDIF
 
 
-;***!!!
+;***!!! OUTSTAT_REG Bit 1 is RTS
 SET_RTS:
-#IFDEF CE158V2
-    PSH     A
-    LDA 	(OUTSTAT_REG)	                ; Get user settings for handshaking lines
-    ANI 	A,~$03 			                ; mask off all but RTS
-    EAI     $03                             ; invert
-    ;ORA	    #(CE158_PRT_A)		            ; set bit on UART if set in OUTSTAT_REG (orig CE158)
- 	ANI     #(CE158_UART_MCR0),$FC          ; Clear the bits
- 
- 	ORA     #(CE158_UART_MCR0)              ; OR in correct settings
- 	STA     #(CE158_UART_MCR0)              ; Store to register
- 	POP	    A                               ; Get original A back
+#IFDEF HANDSHAKE
+    BII 	(OUTSTAT_REG),$02	            ; Get user settings for handshaking lines
+    BZR     SETRTS_SKIP                     ;
+    ORI     #(CE158_UART_MCR0),$02          ; Clear RTS (inverted in TI part)
 
+SETRTS_SKIP:
     RTN
 #ENDIF  
 
