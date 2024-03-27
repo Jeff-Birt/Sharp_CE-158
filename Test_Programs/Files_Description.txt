@@ -1,0 +1,17 @@
+File Name	Type		On uSD	Name		Description
+BAT.BAS		Tokenized		Bathyscape	Game
+BATHY.ASC	ASCII		Y	Bathyscape	Game
+BATHY.BAS	Toekenized	Y	Bathyscape	Game
+DUN		Tokenized		Dungeon Quest	Game, saved as "DUN"
+DunQuest.ASC	ASCII			Dungeon Quest	Game
+HEY.ASC		ASCII			Hey Birt	Prints "Hey Birt!"
+LDTEST.ASC	ASCII			Load Test	To test loading long lines
+LPT_PRT_TST.ASC ASCII			LPRT Test PLJ	Tests LPT on Plain Jane builds
+LPTTSTN.ASC	ASCII			LPT I/O Test	Tests LPT on BPD builds
+REGTSTN.ASC	ASCII			Register Test	Tests CE-158 keywords/reg. BPA/BPB
+REGTSTP.ASC	ASCII			Register Test	Tests CE-158 keywords/reg. PJA/PJB
+
+
+
+
+

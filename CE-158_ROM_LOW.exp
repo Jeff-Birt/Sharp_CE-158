@@ -10,4 +10,4 @@ LB_LLIST_V       .EQU  $82e5
 LB_LPRINT_2V     .EQU  $82da
 LB_LPRINT_V      .EQU  $82e4
 LB_RTN_FRM_HB    .EQU  $8305
-LB_TXLPT         .EQU  $825b
+LB_TXLPT         .EQU  $8250

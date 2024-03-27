@@ -1,0 +1,20 @@
+DIP SW [F], [E]
+
+1) Physical
+   - LEDs OK?
+   - Foam in place?
+2) Load/Run REGTSTN.ASC
+   - Config: SETDEV CI,CO  SETCOM 19200  OUTSTAT 0
+3) Load/Run LPTTSTN.ASC [F], LPT_PRT_TST.ASC [E]
+4) Load/Save DUN 19,200 w/U1
+   - Binary compare?
+5) Check BPD Load/Save using BPD PC
+
+
+DIP SW [C], [D]
+1) 2400 Max [C], 19200 [D]
+2) Load/Run REGTSTP.ASC
+   - Config: SETDEV CI,CO  SETCOM 19200[D],2400[C]  OUTSTAT 0
+3) Load/Run LPT_PRT_TST.ASC
+4) Load/Save DUN 19200[D], 2400[C]
+   - Binary compare?

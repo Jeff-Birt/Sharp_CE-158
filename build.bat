@@ -26,7 +26,9 @@ IF "%~1" == "-l" (
     del CE-158_ROM_HIGH.bin
     ren CE-158_ROM_HIGH.obj CE-158_ROM_HIGH.bin
 
-    copy CE-158_ROM_LOW.bin/b + CE-158_ROM_HIGH.bin/b CE-158_ROM.bin/b
+    echo "CE-158_ROM_%~2.bin"
+
+    copy CE-158_ROM_LOW.bin/b + CE-158_ROM_HIGH.bin/b "CE-158_ROM_%~2.bin"/b
 ) ELSE ( 
     @echo Unknown command )
 

@@ -1,0 +1,7 @@
+Ver   SW
+BPB - [F]
+BPA - [E]
+PJB - [D]
+PJA - [C]
+Banks merged into CE-158_ROM_DAR.bin
+
